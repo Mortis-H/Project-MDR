@@ -1,0 +1,5 @@
+cmake -S llvm -B build -G Ninja \
+  -DLLVM_ENABLE_PROJECTS="mlir;clang" \
+  -DLLVM_TARGETS_TO_BUILD="AMDGPU;X86" \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DLLVM_ENABLE_ASSERTIONS=ON
