@@ -25,15 +25,22 @@ def generate_mlir_module() -> str:
         module attributes {gpu.container_module} {
           gpu.module @kernels {
             gpu.func @print_hex(%arg0: i32) kernel {
-              llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v31, 31", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15},~{v16},~{v17},~{v18},~{v19},~{v20},~{v21},~{v22},~{v23},~{v24},~{v25},~{v26},~{v27},~{v28},~{v29},~{v30},~{31}": () -> ()
-              %val31 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v31", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15},~{v16},~{v17},~{v18},~{v19},~{v20},~{v21},~{v22},~{v23},~{v24},~{v25},~{v26},~{v27},~{v28},~{v29},~{v30},~{31}": () -> i32
+              // User assembly codes
+              llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v31, 31", "~{v[0:31]}": () -> ()
 
+              // Value binding to read the register in the user logic
+              %val31 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v31", "=v,~{v[0:31]}": () -> i32
+
+              // Register clobbing begin
               %reserved = llvm.inline_asm has_side_effects asm_dialect = att "", "={v[0:31]}": () -> vector<32xi32>
 
+              // Print logic
               gpu.printf "vgpr = 0x%x\n", %val31 : i32
               gpu.printf "kernarg = 0x%x\n", %arg0 : i32
 
+              // Register clobbing end
               llvm.inline_asm has_side_effects asm_dialect = att "", "{v[0:31]}" %reserved : (vector<32xi32>)-> ()
+
               gpu.return
             }
           }
