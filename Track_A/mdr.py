@@ -25,102 +25,15 @@ def generate_mlir_module() -> str:
         module attributes {gpu.container_module} {
           gpu.module @kernels {
             gpu.func @print_hex(%arg0: i32) kernel {
-              llvm.inline_asm has_side_effects asm_dialect = att "blah:", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15},~{v16},~{v17},~{v18},~{v19},~{v20},~{v21},~{v22},~{v23},~{v24},~{v25},~{v26},~{v27},~{v28},~{v29},~{v30},~{31}": () -> ()
               llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v31, 31", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15},~{v16},~{v17},~{v18},~{v19},~{v20},~{v21},~{v22},~{v23},~{v24},~{v25},~{v26},~{v27},~{v28},~{v29},~{v30},~{31}": () -> ()
               %val31 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v31", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15},~{v16},~{v17},~{v18},~{v19},~{v20},~{v21},~{v22},~{v23},~{v24},~{v25},~{v26},~{v27},~{v28},~{v29},~{v30},~{31}": () -> i32
+
+              %reserved = llvm.inline_asm has_side_effects asm_dialect = att "", "={v[0:31]}": () -> vector<32xi32>
+
               gpu.printf "vgpr = 0x%x\n", %val31 : i32
+              gpu.printf "kernarg = 0x%x\n", %arg0 : i32
 
-              //%a = arith.addi %arg0, %arg0: i32
-              //%b = arith.addi %a, %arg0: i32
-
-              // Plain inline asm works
-              //llvm.inline_asm has_side_effects asm_dialect = att "s_nop 0", "" : () -> ()
-
-              // Test register clobbing
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v0, 0", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v1, 1", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v2, 2", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v3, 3", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v4, 4", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v5, 5", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v6, 6", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v7, 7", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v8, 8", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v9, 9", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v10, 10", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v11, 11", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v12, 12", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v13, 13", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v14, 14", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v15, 15", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}": () -> ()
-
-              // bring VGPR to a value
-              //%val0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v0", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v1", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val2 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v2", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val3 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v3", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val4 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v4", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val5 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v5", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val6 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v6", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val7 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v7", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val8 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v8", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val9 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v9", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val10 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v10", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val11 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v11", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val12 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v12", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val13 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v13", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val14 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v14", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //%val15 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v15", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val15 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val14 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val13 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val12 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val11 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val10 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val9 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val8 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val7 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val6 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val5 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val4 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val3 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val2 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val1 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-              //gpu.printf "vgpr = 0x%x\n", %val0 : i32
-              //llvm.inline_asm has_side_effects asm_dialect = att "", "~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> () 
-
-              // store kernel argument into a VGPR
-              //llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32_e32 v0, $0", "v,~{v0}" %arg0 : (i32) -> ()
-              // retrieve kernarg via VGPR
-              //%kernarg = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v0", "=v,~{v0},~{v1},~{v2},~{v3},~{v4},~{v5},~{v6},~{v7},~{v8},~{v9},~{v10},~{v11},~{v12},~{v13},~{v14},~{v15}" : () -> i32
-              //gpu.printf "kernarg = 0x%x\n", %kernarg : i32
-
-              // printf with kernel argument works
-              gpu.printf "arg = 0x%x\n", %arg0 : i32
-
-              // printf with computed values work
-              //%a = arith.addi %arg0, %arg0: i32
-              //%b = arith.addi %a, %arg0: i32
-              //gpu.printf "arg = 0x%x\n", %a : i32
-              //gpu.printf "arg = 0x%x\n", %b : i32
-
+              llvm.inline_asm has_side_effects asm_dialect = att "", "{v[0:31]}" %reserved : (vector<32xi32>)-> ()
               gpu.return
             }
           }
