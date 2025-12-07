@@ -54,4 +54,32 @@ def AMDISA_InstOp : AMDISA_Op<"inst", [Pure]> {
   let assemblyFormat = "attr-dict";
 }
 
+// ---- LabelOp ----
+//
+// Represents a label from the .s file, such as:
+//   L1:
+//   .Ltmp3:
+//   .LBB0_2:
+//
+// This op acts as a placeholder marker, but has no semantics.
+//
+def AMDISA_LabelOp : AMDISA_Op<"label", [Pure]> {
+  let summary = ".s label wrapper";
+  let description = [{
+    A label defined in the .s file (e.g., `L1:` or `.LBB0_3:`).
+
+    Example:
+      amdisa.label { name = "L1" }
+  }];
+
+  let arguments = (ins
+    StrAttr:$name
+  );
+
+  let results = (outs);
+
+  // Just print attributes, no operands.
+  let assemblyFormat = "attr-dict";
+}
+
 #endif // AMDISA_OPS
