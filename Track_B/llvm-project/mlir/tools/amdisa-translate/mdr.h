@@ -54,6 +54,17 @@ private:
                  std::string &rawText) const;
 };
 
+static bool isLabel(llvm::StringRef line) {
+  line = line.trim();
+  if (line.empty())
+    return false;
+  if (!line.ends_with(":"))
+    return false;
+  llvm::StringRef name = line.drop_back().trim();
+  return !name.empty();
+}
+
+
 //===----------------------------------------------------------------------===//
 // Utility: Trim + clean line
 //===----------------------------------------------------------------------===//
@@ -124,6 +135,16 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
     line = cleanLine(line);
     if (line.empty())
       continue;
+
+    if (isLabel(line)) {
+      StringRef labelName = line.drop_back().trim();  // remove ':'
+      auto loc = builder.getUnknownLoc();
+      auto nameAttr = builder.getStringAttr(labelName);
+
+      builder.setInsertionPointToEnd(module.getBody());
+      builder.create<LabelOp>(loc, nameAttr);
+      continue;
+    }
 
     std::string mnemonic, raw;
     llvm::SmallVector<std::string, 8> ops;
