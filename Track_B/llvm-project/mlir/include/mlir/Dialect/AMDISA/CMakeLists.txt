@@ -1,1 +1,5 @@
 add_subdirectory(IR)
+set(LLVM_TARGET_DEFINITIONS Passes.td)
+mlir_tablegen(Passes.h.inc -gen-pass-decls -name AMDISA)
+add_mlir_dialect_tablegen_target(MLIRAMDISAPassIncGen)
+add_mlir_doc(Passes AMDISAPasses ./ -gen-pass-doc)

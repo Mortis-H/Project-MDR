@@ -48,6 +48,7 @@
 #include "mlir/Dialect/XeGPU/Transforms/Passes.h"
 #include "mlir/Target/LLVMIR/Transforms/Passes.h"
 #include "mlir/Transforms/Passes.h"
+#include "mlir/Dialect/AMDISA/Passes.h"
 
 // This function may be called to register the MLIR passes with the
 // global registry.
@@ -94,6 +95,7 @@ void mlir::registerAllPasses() {
   arm_sve::registerArmSVEPasses();
   emitc::registerEmitCPasses();
   xegpu::registerXeGPUPasses();
+  amdisa::registerAMDISAPasses();
 
   // Dialect pipelines
   bufferization::registerBufferizationPipelines();
