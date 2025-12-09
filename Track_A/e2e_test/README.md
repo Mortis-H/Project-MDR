@@ -1,6 +1,12 @@
 A simple e2e example of MDR.
 ============================
 
+## 0. Env setup
+
+```bash
+source ../src.env
+```
+
 ## 1. Build the client application and run it.
 
 ```bash
