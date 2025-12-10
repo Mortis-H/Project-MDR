@@ -29,6 +29,8 @@
 #include <string>
 
 #include "ParsedProgram.h"
+#include "AMDGPUMetadata.h"
+#include "AMDGCNAssembly.h"
 
 using namespace llvm;
 
@@ -65,18 +67,30 @@ static cl::opt<bool>
                  cl::desc("Hide comment lines from output"),
                  cl::init(false));
 
+static cl::opt<bool>
+    ShowMetadata("show-metadata",
+                 cl::desc("Show parsed AMD GPU metadata information"),
+                 cl::init(false));
+
+static cl::opt<bool>
+    MetadataOnly("metadata-only",
+                 cl::desc("Only parse and display metadata (skip instruction parsing)"),
+                 cl::init(false));
+
+static cl::opt<bool>
+    DetailedAnalysis("detailed-analysis",
+                     cl::desc("Show detailed analysis using unified API"),
+                     cl::init(false));
+
+static cl::opt<bool>
+    API_Demo("api-demo",
+             cl::desc("Run API usage demonstration"),
+             cl::init(false));
+
 // -----------------------------------------------------------------------------
-// Line kind
+// Line kind (use the enum from AMDGCNAssembly.h)
 // -----------------------------------------------------------------------------
-enum class LineKind {
-  Unknown,
-  Label,
-  Instruction,
-  Directive,
-  Comment,
-  Metadata,
-  KernelName,
-};
+// enum class LineKind is defined in AMDGCNAssembly.h
 
 static StringRef kindToPrefix(LineKind K) {
   switch (K) {
@@ -318,15 +332,21 @@ int main(int argc, char **argv) {
   // Store instruction information for each line
   SmallVector<InstructionInfo, 0> InstructionInfos;
   InstructionInfos.resize(Lines.size());
+  
+  // AMD GPU Metadata storage
+  AMDGPUMetadata metadata;
 
   // 3. Build a "sanitized" text for MCAsmParser:
   //    - Same number of lines
   //    - But certain problematic directives are replaced by comment lines
+  //    - Also extract metadata YAML content
   std::string ParsedText;
   ParsedText.reserve(OrigRef.size());
 
   bool inMetadataBlock = false;
   size_t lineIdx = 0;
+  size_t metadataStartLine = 0;
+  std::string metadataYAML;
 
   for (auto L : Lines) {
     StringRef Line = L;
@@ -337,11 +357,20 @@ int main(int argc, char **argv) {
     // Track if we're inside a .amdgpu_metadata block
     if (Trimmed.starts_with(".amdgpu_metadata")) {
       inMetadataBlock = true;
+      metadataStartLine = lineIdx;
+      metadataYAML.clear();
     }
 
     // Mark lines that are inside metadata blocks
     if (inMetadataBlock) {
       InMetadata[lineIdx] = true;
+      
+      // Extract YAML content (skip the .amdgpu_metadata and .end_amdgpu_metadata lines)
+      if (!Trimmed.starts_with(".amdgpu_metadata") && 
+          !Trimmed.starts_with(".end_amdgpu_metadata")) {
+        metadataYAML += Line.str();
+        metadataYAML += "\n";
+      }
     }
 
     // Strip out directives that may cause parsing issues
@@ -361,6 +390,11 @@ int main(int argc, char **argv) {
     // Check if we're exiting a metadata block
     if (Trimmed.starts_with(".end_amdgpu_metadata")) {
       inMetadataBlock = false;
+      
+      // Parse the extracted metadata
+      if (!metadataYAML.empty()) {
+        MetadataParser::parse(metadataYAML, metadataStartLine, lineIdx, metadata);
+      }
     }
 
     lineIdx++;
@@ -514,7 +548,17 @@ int main(int argc, char **argv) {
       Kinds[I] = LineKind::Directive;
   }
 
-  // 7. output: prefix + original line content
+  // 7. Check if we should only display metadata
+  if (MetadataOnly) {
+    if (!metadata.isEmpty()) {
+      metadata.printSummary(outs());
+    } else {
+      errs() << "No AMD GPU metadata found in the input file.\n";
+    }
+    return 0;
+  }
+
+  // 8. output: prefix + original line content
   //    (可選：顯示操作數類型)
   for (size_t I = 0, E = Lines.size(); I != E; ++I) {
     StringRef Line = Lines[I];
@@ -577,10 +621,134 @@ int main(int argc, char **argv) {
     }
   }
 
-  // 8. 可選：顯示解析摘要
+  // 9. 可選：顯示解析摘要
   if (ShowSummary) {
     errs() << "\n";
     program.printSummary(errs());
+  }
+
+  // 10. 可選：顯示 Metadata 資訊
+  if (ShowMetadata) {
+    errs() << "\n";
+    if (!metadata.isEmpty()) {
+      metadata.printSummary(errs());
+    } else {
+      errs() << "No AMD GPU metadata found in the input file.\n";
+    }
+  }
+
+  // 11. 構建統一的 AMDGCNAssembly API 對象
+  AMDGCNAssembly assembly;
+  assembly.setFilename(InputFilename);
+  assembly.setParsedProgram(program);
+  assembly.setMetadata(metadata);
+  
+  // 填充行資訊
+  for (size_t I = 0; I < Lines.size(); ++I) {
+    LineInfo lineInfo;
+    lineInfo.lineNumber = I + 1;
+    lineInfo.text = Lines[I].str();
+    lineInfo.kind = Kinds[I];
+    
+    // 如果是指令，添加詳細資訊
+    if (lineInfo.kind == ::LineKind::Instruction && !InstructionInfos[I].isEmpty()) {
+      ParsedInstruction inst;
+      inst.opcode = InstructionInfos[I].opcode;
+      inst.lineNumber = I + 1;
+      inst.originalText = Lines[I].str();
+      
+      // 從 program 中取得完整的操作數資訊
+      const ParsedInstruction *programInst = program.getInstructionAtLine(I + 1);
+      if (programInst) {
+        inst.operands = programInst->operands;
+      } else {
+        // 如果沒有，只填充文本
+        for (const auto &op : InstructionInfos[I].operands) {
+          Operand operand(op, detectOperandType(op));
+          inst.operands.push_back(operand);
+        }
+      }
+      
+      lineInfo.instruction = inst;
+    }
+    
+    assembly.addLine(lineInfo);
+  }
+  
+  // 構建 Label Blocks（建立 label 和指令的關係）
+  assembly.buildLabelBlocks();
+  
+  // 12. 可選：顯示詳細分析
+  if (DetailedAnalysis) {
+    errs() << "\n";
+    assembly.printDetailed(errs());
+  }
+  
+  // 13. 可選：API Demo
+  if (API_Demo) {
+    errs() << "\n";
+    errs() << "╔═══════════════════════════════════════════════════════════════╗\n";
+    errs() << "║                    API Usage Demonstration                   ║\n";
+    errs() << "╚═══════════════════════════════════════════════════════════════╝\n";
+    errs() << "\n";
+    
+    // 示例 1: 基本查詢
+    errs() << "1. Basic Queries:\n";
+    errs() << "   Total lines: " << assembly.getLineCount() << "\n";
+    errs() << "   Instructions: " << assembly.getInstructionCount() << "\n";
+    errs() << "   Kernels: " << assembly.getKernelCount() << "\n";
+    errs() << "\n";
+    
+    // 示例 2: 查詢特定行
+    if (assembly.getLineCount() >= 10) {
+      errs() << "2. Query specific line (line 10):\n";
+      if (const LineInfo *line = assembly.getLine(10)) {
+        errs() << "   Type: ";
+        switch (line->kind) {
+          case ::LineKind::Instruction: errs() << "Instruction"; break;
+          case ::LineKind::Label: errs() << "Label"; break;
+          case ::LineKind::Directive: errs() << "Directive"; break;
+          case ::LineKind::Comment: errs() << "Comment"; break;
+          default: errs() << "Other"; break;
+        }
+        errs() << "\n";
+        errs() << "   Text: " << line->text << "\n";
+      }
+      errs() << "\n";
+    }
+    
+    // 示例 3: 查找特定指令
+    errs() << "3. Find instructions by opcode (s_load_*):\n";
+    auto loadInsts = assembly.findInstructionsByOpcodePrefix("s_load_");
+    errs() << "   Found " << loadInsts.size() << " s_load_* instructions\n";
+    if (!loadInsts.empty()) {
+      errs() << "   First: " << loadInsts[0]->opcode 
+             << " at line " << loadInsts[0]->lineNumber << "\n";
+    }
+    errs() << "\n";
+    
+    // 示例 4: Metadata 查詢
+    if (assembly.hasMetadata()) {
+      errs() << "4. Metadata Query:\n";
+      errs() << "   Target: " << assembly.getTargetTriple() << "\n";
+      const auto &meta = assembly.getMetadata();
+      if (!meta.kernels.empty()) {
+        const auto &k = meta.kernels[0];
+        errs() << "   First kernel: " << k.name << "\n";
+        errs() << "   AGPR: " << k.agprCount << ", SGPR: " << k.sgprCount 
+               << ", VGPR: " << k.vgprCount << "\n";
+      }
+      errs() << "\n";
+    }
+    
+    // 示例 5: 統計
+    errs() << "5. Statistics:\n";
+    auto stats = assembly.getStatistics();
+    errs() << "   Scalar instructions: " << stats.scalarInstructions << "\n";
+    errs() << "   Vector instructions: " << stats.vectorInstructions << "\n";
+    errs() << "   Memory instructions: " << stats.memoryInstructions << "\n";
+    errs() << "   Branch instructions: " << stats.branchInstructions << "\n";
+    errs() << "\n";
   }
 
   return 0;

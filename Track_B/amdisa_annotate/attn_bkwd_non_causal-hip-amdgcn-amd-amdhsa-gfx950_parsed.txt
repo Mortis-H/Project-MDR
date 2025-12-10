@@ -1,0 +1,156 @@
+AMDGCNAssembly API 使用示範
+
+檔案: attn_bkwd_non_causal-hip-amdgcn-amd-amdhsa-gfx950.s
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Metadata 資訊
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Kernel Symbol: _Z23attend_bwd_combined_kerILi128EEv25attn_bwd_combined_globalsIXT_EE.kd
+Kernel Name:   _Z23attend_bwd_combined_kerILi128EEv25attn_bwd_combined_globalsIXT_EE
+SGPR Count:    85
+AGPR Count:    256
+VGPR Count:    512
+
+Arguments (1 個):
+  [0] offset=0, size=440, value_kind=by_value,
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. Labels
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+總共有 4 個 Labels:
+
+  [0] Line 8: _Z23attend_bwd_combined_kerILi128EEv25attn_bwd_combined_globalsIXT_EE
+  [1] Line 5153: .LBB0_1
+  [2] Line 13920: .Lfunc_end0
+  [3] Line 13971: __hip_cuid_d4519934d15c1d39
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. 前 30 行的 Instructions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+總共有 4885 個指令
+顯示前 30 個:
+
+[0] Line 10:
+  指令: s_load_dwordx2
+  操作數 (3 個): s[50:51], s[0:1], 0x0
+[1] Line 11:
+  指令: s_load_dwordx4
+  操作數 (3 個): s[20:23], s[0:1], 0x10
+[2] Line 12:
+  指令: s_load_dword
+  操作數 (3 個): s33, s[0:1], 0x20
+[3] Line 13:
+  指令: s_load_dwordx2
+  操作數 (3 個): s[6:7], s[0:1], 0x30
+[4] Line 14:
+  指令: s_load_dwordx4
+  操作數 (3 個): s[28:31], s[0:1], 0x40
+[5] Line 15:
+  指令: s_lshl_b32
+  操作數 (3 個): s61, s2, 3
+[6] Line 16:
+  指令: s_waitcnt
+  操作數 (1 個): lgkmcnt(0)
+[7] Line 17:
+  指令: s_load_dword
+  操作數 (3 個): s21, s[0:1], 0x50
+[8] Line 18:
+  指令: s_load_dwordx8
+  操作數 (3 個): s[8:15], s[0:1], 0x60
+[9] Line 19:
+  指令: s_cmp_lg_u32
+  操作數 (2 個): 0, -1
+[10] Line 20:
+  指令: s_mov_b64
+  操作數 (2 個): s[34:35], src_shared_base
+[11] Line 21:
+  指令: s_waitcnt
+  操作數 (1 個): lgkmcnt(0)
+[12] Line 22:
+  指令: s_cselect_b32
+  操作數 (3 個): s13, 0, 0
+[13] Line 23:
+  指令: s_cselect_b32
+  操作數 (3 個): s5, s35, 0
+[14] Line 24:
+  指令: s_and_b32
+  操作數 (3 個): s58, s13, 15
+[15] Line 25:
+  指令: s_and_b32
+  操作數 (3 個): s15, s13, -16
+[16] Line 26:
+  指令: s_load_dword
+  操作數 (3 個): s11, s[0:1], 0x80
+[17] Line 27:
+  指令: s_load_dwordx2
+  操作數 (3 個): s[52:53], s[0:1], 0x90
+[18] Line 28:
+  指令: s_load_dwordx4
+  操作數 (3 個): s[24:27], s[0:1], 0xa0
+[19] Line 29:
+  指令: s_load_dword
+  操作數 (3 個): s60, s[0:1], 0xb0
+[20] Line 30:
+  指令: s_load_dwordx2
+  操作數 (3 個): s[54:55], s[0:1], 0x150
+[21] Line 31:
+  指令: s_load_dword
+  操作數 (3 個): s63, s[0:1], 0x170
+[22] Line 32:
+  指令: s_load_dwordx4
+  操作數 (3 個): s[36:39], s[0:1], 0x160
+[23] Line 33:
+  指令: s_load_dword
+  操作數 (3 個): s65, s[0:1], 0x1a0
+[24] Line 34:
+  指令: s_load_dwordx2
+  操作數 (3 個): s[56:57], s[0:1], 0x180
+[25] Line 35:
+  指令: s_load_dwordx4
+  操作數 (3 個): s[16:19], s[0:1], 0x190
+[26] Line 36:
+  指令: s_add_u32
+  操作數 (3 個): s15, s15, 16
+[27] Line 37:
+  指令: s_mov_b32
+  操作數 (2 個): s59, 0
+[28] Line 38:
+  指令: s_waitcnt
+  操作數 (1 個): lgkmcnt(0)
+[29] Line 39:
+  指令: s_addc_u32
+  操作數 (3 個): s17, s5, 0
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. Label Blocks（Label 和 Instructions 的關係）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+總共有 4 個 Label Blocks
+
+Label Block [0]: _Z23attend_bwd_combined_kerILi128EEv25attn_bwd_combined_globalsIXT_EE
+  範圍: Line 8 - 5152 (5145 行)
+  指令數: 1724
+  前 3 個指令:
+    Line 10: s_load_dwordx2
+    Line 11: s_load_dwordx4
+    Line 12: s_load_dword
+
+Label Block [1]: .LBB0_1
+  範圍: Line 5153 - 13919 (8767 行)
+  指令數: 3161
+  前 3 個指令:
+    Line 5154: s_add_i32
+    Line 5155: s_and_b32
+    Line 5156: s_and_b32
+
+Label Block [2]: .Lfunc_end0
+  範圍: Line 13920 - 13970 (51 行)
+  指令數: 0
+
+Label Block [3]: __hip_cuid_d4519934d15c1d39
+  範圍: Line 13971 - 14013 (43 行)
+  指令數: 0
+

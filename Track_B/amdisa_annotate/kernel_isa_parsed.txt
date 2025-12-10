@@ -1,0 +1,532 @@
+AMDGCNAssembly API 使用示範
+
+檔案: kernel_isa.s
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Metadata 資訊
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Kernel Symbol: vec_add.kd
+Kernel Name:   vec_add
+SGPR Count:    18
+AGPR Count:    0
+VGPR Count:    52
+
+Arguments (18 個):
+  [0] address_space=generic, offset=0, size=8, value_kind=global_buffer,
+  [1] address_space=generic, offset=8, size=8, value_kind=global_buffer,
+  [2] address_space=generic, offset=16, size=8, value_kind=global_buffer,
+  [3] offset=24, size=4, value_kind=by_value,
+  [4] offset=32, size=4, value_kind=hidden_block_count_x,
+  [5] offset=36, size=4, value_kind=hidden_block_count_y,
+  [6] offset=40, size=4, value_kind=hidden_block_count_z,
+  [7] offset=44, size=2, value_kind=hidden_group_size_x,
+  [8] offset=46, size=2, value_kind=hidden_group_size_y,
+  [9] offset=48, size=2, value_kind=hidden_group_size_z,
+  [10] offset=50, size=2, value_kind=hidden_remainder_x,
+  [11] offset=52, size=2, value_kind=hidden_remainder_y,
+  [12] offset=54, size=2, value_kind=hidden_remainder_z,
+  [13] offset=72, size=8, value_kind=hidden_global_offset_x,
+  [14] offset=80, size=8, value_kind=hidden_global_offset_y,
+  [15] offset=88, size=8, value_kind=hidden_global_offset_z,
+  [16] offset=96, size=2, value_kind=hidden_grid_dims,
+  [17] offset=112, size=8, value_kind=hidden_hostcall_buffer,
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. Labels
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+總共有 45 個 Labels:
+
+  [0] Line 7: vec_add
+  [1] Line 75: .LBB0_2
+  [2] Line 116: .LBB0_3
+  [3] Line 140: .LBB0_5
+  [4] Line 142: .LBB0_6
+  [5] Line 167: .LBB0_8
+  [6] Line 214: .LBB0_11
+  [7] Line 228: .LBB0_12
+  [8] Line 243: .LBB0_14
+  [9] Line 258: .LBB0_16
+  [10] Line 262: .LBB0_17
+  [11] Line 270: .LBB0_19
+  [12] Line 272: .LBB0_20
+  [13] Line 281: .LBB0_22
+  [14] Line 317: .LBB0_24
+  [15] Line 331: .LBB0_25
+  [16] Line 363: .LBB0_28
+  [17] Line 387: .LBB0_30
+  [18] Line 389: .LBB0_31
+  [19] Line 413: .LBB0_33
+  [20] Line 467: .LBB0_36
+  [21] Line 481: .LBB0_37
+  [22] Line 496: .LBB0_39
+  [23] Line 511: .LBB0_41
+  [24] Line 515: .LBB0_42
+  [25] Line 523: .LBB0_44
+  [26] Line 525: .LBB0_45
+  [27] Line 534: .LBB0_47
+  [28] Line 570: .LBB0_49
+  [29] Line 584: .LBB0_50
+  [30] Line 616: .LBB0_53
+  [31] Line 640: .LBB0_55
+  [32] Line 642: .LBB0_56
+  [33] Line 666: .LBB0_58
+  [34] Line 712: .LBB0_61
+  [35] Line 726: .LBB0_62
+  [36] Line 741: .LBB0_64
+  [37] Line 756: .LBB0_66
+  [38] Line 759: .LBB0_67
+  [39] Line 767: .LBB0_69
+  [40] Line 769: .LBB0_70
+  [41] Line 778: .LBB0_72
+  [42] Line 813: .LBB0_74
+  [43] Line 827: .LBB0_75
+  [44] Line 874: .Lfunc_end0
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. 前 30 行的 Instructions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+總共有 729 個指令
+顯示前 30 個:
+
+[0] Line 9:
+  指令: s_load_dword
+  操作數 (3 個): s3, s[0:1], 0x2c
+[1] Line 12:
+  指令: s_load_dword
+  操作數 (3 個): s4, s[0:1], 0x18
+[2] Line 15:
+  指令: s_waitcnt
+  操作數 (1 個): lgkmcnt(0)
+[3] Line 18:
+  指令: s_and_b32
+  操作數 (3 個): s3, s3, 0xffff
+[4] Line 21:
+  指令: s_mul_i32
+  操作數 (3 個): s2, s2, s3
+[5] Line 24:
+  指令: v_add_u32_e32
+  操作數 (3 個): v0, s2, v0
+[6] Line 27:
+  指令: v_cmp_gt_i32_e32
+  操作數 (3 個): vcc, s4, v0
+[7] Line 30:
+  指令: s_and_saveexec_b64
+  操作數 (2 個): s[2:3], vcc
+[8] Line 33:
+  指令: s_cbranch_execz
+  操作數 (1 個): .LBB0_2
+[9] Line 36:
+  指令: s_load_dwordx4
+  操作數 (3 個): s[4:7], s[0:1], 0x0
+[10] Line 39:
+  指令: s_load_dwordx2
+  操作數 (3 個): s[2:3], s[0:1], 0x10
+[11] Line 42:
+  指令: v_ashrrev_i32_e32
+  操作數 (3 個): v1, 31, v0
+[12] Line 45:
+  指令: v_lshlrev_b64
+  操作數 (3 個): v[0:1], 2, v[0:1]
+[13] Line 48:
+  指令: s_waitcnt
+  操作數 (1 個): lgkmcnt(0)
+[14] Line 51:
+  指令: v_lshl_add_u64
+  操作數 (4 個): v[4:5], s[4:5], 0, v[0:1]
+[15] Line 54:
+  指令: v_lshl_add_u64
+  操作數 (4 個): v[2:3], s[6:7], 0, v[0:1]
+[16] Line 57:
+  指令: global_load_dword
+  操作數 (3 個): v6, v[4:5], off
+[17] Line 60:
+  指令: global_load_dword
+  操作數 (3 個): v7, v[2:3], off
+[18] Line 63:
+  指令: v_lshl_add_u64
+  操作數 (4 個): v[0:1], s[2:3], 0, v[0:1]
+[19] Line 66:
+  指令: s_waitcnt
+  操作數 (1 個): vmcnt(0)
+[20] Line 69:
+  指令: v_add_f32_e32
+  操作數 (3 個): v2, v6, v7
+[21] Line 72:
+  指令: global_store_dword
+  操作數 (3 個): v[0:1], v2, off
+[22] Line 78:
+  指令: v_mov_b32
+  操作數 (2 個): v43, v2
+[23] Line 80:
+  指令: v_mbcnt_lo_u32_b32
+  操作數 (3 個): v32, -1, 0
+[24] Line 83:
+  指令: s_load_dwordx2
+  操作數 (3 個): s[2:3], s[0:1], 0x70
+[25] Line 84:
+  指令: v_mbcnt_hi_u32_b32
+  操作數 (3 個): v42, -1, v32
+[26] Line 85:
+  指令: v_mov_b64_e32
+  操作數 (2 個): v[36:37], 0
+[27] Line 86:
+  指令: v_readfirstlane_b32
+  操作數 (2 個): s0, v42
+[28] Line 87:
+  指令: s_nop
+  操作數 (1 個): 1
+[29] Line 88:
+  指令: v_cmp_eq_u32_e64
+  操作數 (3 個): s[0:1], s0, v42
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. Label Blocks（Label 和 Instructions 的關係）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+總共有 45 個 Label Blocks
+
+Label Block [0]: vec_add
+  範圍: Line 7 - 74 (68 行)
+  指令數: 22
+  前 3 個指令:
+    Line 9: s_load_dword
+    Line 12: s_load_dword
+    Line 15: s_waitcnt
+
+Label Block [1]: .LBB0_2
+  範圍: Line 75 - 115 (41 行)
+  指令數: 35
+  前 3 個指令:
+    Line 78: v_mov_b32
+    Line 80: v_mbcnt_lo_u32_b32
+    Line 83: s_load_dwordx2
+
+Label Block [2]: .LBB0_3
+  範圍: Line 116 - 139 (24 行)
+  指令數: 23
+  前 3 個指令:
+    Line 117: s_sleep
+    Line 118: global_load_dwordx2
+    Line 119: global_load_dwordx2
+
+Label Block [3]: .LBB0_5
+  範圍: Line 140 - 141 (2 行)
+  指令數: 1
+  前 1 個指令:
+    Line 141: s_or_b64
+
+Label Block [4]: .LBB0_6
+  範圍: Line 142 - 166 (25 行)
+  指令數: 24
+  前 3 個指令:
+    Line 143: s_or_b64
+    Line 144: v_mov_b32_e32
+    Line 145: s_waitcnt
+
+Label Block [5]: .LBB0_8
+  範圍: Line 167 - 213 (47 行)
+  指令數: 46
+  前 3 個指令:
+    Line 168: s_or_b64
+    Line 169: s_lshl_b64
+    Line 170: v_lshl_add_u64
+
+Label Block [6]: .LBB0_11
+  範圍: Line 214 - 227 (14 行)
+  指令數: 13
+  前 3 個指令:
+    Line 215: s_sleep
+    Line 216: global_store_dwordx2
+    Line 217: v_mov_b32_e32
+
+Label Block [7]: .LBB0_12
+  範圍: Line 228 - 242 (15 行)
+  指令數: 14
+  前 3 個指令:
+    Line 229: s_or_b64
+    Line 230: v_mov_b32_e32
+    Line 231: global_load_dwordx2
+
+Label Block [8]: .LBB0_14
+  範圍: Line 243 - 257 (15 行)
+  指令數: 14
+  前 3 個指令:
+    Line 244: s_or_b64
+    Line 245: s_waitcnt
+    Line 246: global_load_dwordx2
+
+Label Block [9]: .LBB0_16
+  範圍: Line 258 - 261 (4 行)
+  指令數: 3
+  前 3 個指令:
+    Line 259: s_or_b64
+    Line 260: v_lshl_add_u64
+    Line 261: s_branch
+
+Label Block [10]: .LBB0_17
+  範圍: Line 262 - 269 (8 行)
+  指令數: 7
+  前 3 個指令:
+    Line 263: s_or_b64
+    Line 264: v_readfirstlane_b32
+    Line 265: s_cmp_eq_u32
+
+Label Block [11]: .LBB0_19
+  範圍: Line 270 - 271 (2 行)
+  指令數: 1
+  前 1 個指令:
+    Line 271: s_branch
+
+Label Block [12]: .LBB0_20
+  範圍: Line 272 - 280 (9 行)
+  指令數: 8
+  前 3 個指令:
+    Line 273: v_mov_b32_e32
+    Line 274: s_and_saveexec_b64
+    Line 275: s_cbranch_execz
+
+Label Block [13]: .LBB0_22
+  範圍: Line 281 - 316 (36 行)
+  指令數: 35
+  前 3 個指令:
+    Line 282: global_load_dwordx2
+    Line 283: s_and_saveexec_b64
+    Line 284: s_cbranch_execz
+
+Label Block [14]: .LBB0_24
+  範圍: Line 317 - 330 (14 行)
+  指令數: 13
+  前 3 個指令:
+    Line 318: s_sleep
+    Line 319: global_store_dwordx2
+    Line 320: v_mov_b32_e32
+
+Label Block [15]: .LBB0_25
+  範圍: Line 331 - 362 (32 行)
+  指令數: 31
+  前 3 個指令:
+    Line 332: s_or_b64
+    Line 333: v_readfirstlane_b32
+    Line 334: v_mov_b64_e32
+
+Label Block [16]: .LBB0_28
+  範圍: Line 363 - 386 (24 行)
+  指令數: 23
+  前 3 個指令:
+    Line 364: s_sleep
+    Line 365: global_load_dwordx2
+    Line 366: global_load_dwordx2
+
+Label Block [17]: .LBB0_30
+  範圍: Line 387 - 388 (2 行)
+  指令數: 1
+  前 1 個指令:
+    Line 388: s_or_b64
+
+Label Block [18]: .LBB0_31
+  範圍: Line 389 - 412 (24 行)
+  指令數: 23
+  前 3 個指令:
+    Line 390: s_or_b64
+    Line 391: v_mov_b32_e32
+    Line 392: global_load_dwordx2
+
+Label Block [19]: .LBB0_33
+  範圍: Line 413 - 466 (54 行)
+  指令數: 53
+  前 3 個指令:
+    Line 414: s_or_b64
+    Line 415: s_lshl_b64
+    Line 416: v_lshl_add_u64
+
+Label Block [20]: .LBB0_36
+  範圍: Line 467 - 480 (14 行)
+  指令數: 13
+  前 3 個指令:
+    Line 468: s_sleep
+    Line 469: global_store_dwordx2
+    Line 470: v_mov_b32_e32
+
+Label Block [21]: .LBB0_37
+  範圍: Line 481 - 495 (15 行)
+  指令數: 14
+  前 3 個指令:
+    Line 482: s_or_b64
+    Line 483: v_mov_b32_e32
+    Line 484: global_load_dwordx2
+
+Label Block [22]: .LBB0_39
+  範圍: Line 496 - 510 (15 行)
+  指令數: 14
+  前 3 個指令:
+    Line 497: s_or_b64
+    Line 498: s_waitcnt
+    Line 499: global_load_dwordx2
+
+Label Block [23]: .LBB0_41
+  範圍: Line 511 - 514 (4 行)
+  指令數: 3
+  前 3 個指令:
+    Line 512: s_or_b64
+    Line 513: v_lshl_add_u64
+    Line 514: s_branch
+
+Label Block [24]: .LBB0_42
+  範圍: Line 515 - 522 (8 行)
+  指令數: 7
+  前 3 個指令:
+    Line 516: s_or_b64
+    Line 517: v_readfirstlane_b32
+    Line 518: s_cmp_eq_u32
+
+Label Block [25]: .LBB0_44
+  範圍: Line 523 - 524 (2 行)
+  指令數: 1
+  前 1 個指令:
+    Line 524: s_branch
+
+Label Block [26]: .LBB0_45
+  範圍: Line 525 - 533 (9 行)
+  指令數: 8
+  前 3 個指令:
+    Line 526: v_mov_b32_e32
+    Line 527: s_and_saveexec_b64
+    Line 528: s_cbranch_execz
+
+Label Block [27]: .LBB0_47
+  範圍: Line 534 - 569 (36 行)
+  指令數: 35
+  前 3 個指令:
+    Line 535: global_load_dwordx2
+    Line 536: s_and_saveexec_b64
+    Line 537: s_cbranch_execz
+
+Label Block [28]: .LBB0_49
+  範圍: Line 570 - 583 (14 行)
+  指令數: 13
+  前 3 個指令:
+    Line 571: s_sleep
+    Line 572: global_store_dwordx2
+    Line 573: v_mov_b32_e32
+
+Label Block [29]: .LBB0_50
+  範圍: Line 584 - 615 (32 行)
+  指令數: 31
+  前 3 個指令:
+    Line 585: s_or_b64
+    Line 586: v_readfirstlane_b32
+    Line 587: v_mov_b64_e32
+
+Label Block [30]: .LBB0_53
+  範圍: Line 616 - 639 (24 行)
+  指令數: 23
+  前 3 個指令:
+    Line 617: s_sleep
+    Line 618: global_load_dwordx2
+    Line 619: global_load_dwordx2
+
+Label Block [31]: .LBB0_55
+  範圍: Line 640 - 641 (2 行)
+  指令數: 1
+  前 1 個指令:
+    Line 641: s_or_b64
+
+Label Block [32]: .LBB0_56
+  範圍: Line 642 - 665 (24 行)
+  指令數: 23
+  前 3 個指令:
+    Line 643: s_or_b64
+    Line 644: v_mov_b32_e32
+    Line 645: global_load_dwordx2
+
+Label Block [33]: .LBB0_58
+  範圍: Line 666 - 711 (46 行)
+  指令數: 45
+  前 3 個指令:
+    Line 667: s_or_b64
+    Line 668: s_lshl_b64
+    Line 669: v_lshl_add_u64
+
+Label Block [34]: .LBB0_61
+  範圍: Line 712 - 725 (14 行)
+  指令數: 13
+  前 3 個指令:
+    Line 713: s_sleep
+    Line 714: global_store_dwordx2
+    Line 715: v_mov_b32_e32
+
+Label Block [35]: .LBB0_62
+  範圍: Line 726 - 740 (15 行)
+  指令數: 14
+  前 3 個指令:
+    Line 727: s_or_b64
+    Line 728: v_mov_b32_e32
+    Line 729: global_load_dwordx2
+
+Label Block [36]: .LBB0_64
+  範圍: Line 741 - 755 (15 行)
+  指令數: 14
+  前 3 個指令:
+    Line 742: s_or_b64
+    Line 743: s_waitcnt
+    Line 744: global_load_dwordx2
+
+Label Block [37]: .LBB0_66
+  範圍: Line 756 - 758 (3 行)
+  指令數: 2
+  前 2 個指令:
+    Line 757: s_or_b64
+    Line 758: s_branch
+
+Label Block [38]: .LBB0_67
+  範圍: Line 759 - 766 (8 行)
+  指令數: 7
+  前 3 個指令:
+    Line 760: s_or_b64
+    Line 761: v_readfirstlane_b32
+    Line 762: s_cmp_eq_u32
+
+Label Block [39]: .LBB0_69
+  範圍: Line 767 - 768 (2 行)
+  指令數: 1
+  前 1 個指令:
+    Line 768: s_branch
+
+Label Block [40]: .LBB0_70
+  範圍: Line 769 - 777 (9 行)
+  指令數: 8
+  前 3 個指令:
+    Line 770: v_mov_b32_e32
+    Line 771: s_and_saveexec_b64
+    Line 772: s_cbranch_execz
+
+Label Block [41]: .LBB0_72
+  範圍: Line 778 - 812 (35 行)
+  指令數: 34
+  前 3 個指令:
+    Line 779: s_and_saveexec_b64
+    Line 780: s_cbranch_execz
+    Line 781: v_mov_b32_e32
+
+Label Block [42]: .LBB0_74
+  範圍: Line 813 - 826 (14 行)
+  指令數: 13
+  前 3 個指令:
+    Line 814: s_sleep
+    Line 815: global_store_dwordx2
+    Line 816: v_mov_b32_e32
+
+Label Block [43]: .LBB0_75
+  範圍: Line 827 - 873 (47 行)
+  指令數: 2
+  前 2 個指令:
+    Line 828: s_or_b64
+    Line 831: s_endpgm
+
+Label Block [44]: .Lfunc_end0
+  範圍: Line 874 - 979 (106 行)
+  指令數: 0
+
