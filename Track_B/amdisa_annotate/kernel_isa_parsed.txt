@@ -191,340 +191,442 @@ Arguments (18 個):
 Label Block [0]: vec_add
   範圍: Line 7 - 74 (68 行)
   指令數: 22
-  前 3 個指令:
-    Line 9: s_load_dword
-    Line 12: s_load_dword
-    Line 15: s_waitcnt
+  前 5 個指令:
+    [0] Line 9: s_load_dword "s3":reg, "s[0:1]":reg, "0x2c":imm
+    [1] Line 12: s_load_dword "s4":reg, "s[0:1]":reg, "0x18":imm
+    [2] Line 15: s_waitcnt "lgkmcnt(0)":expr
+    [3] Line 18: s_and_b32 "s3":reg, "s3":reg, "0xffff":imm
+    [4] Line 21: s_mul_i32 "s2":reg, "s2":reg, "s3":reg
+    ... 還有 17 個指令
 
 Label Block [1]: .LBB0_2
   範圍: Line 75 - 115 (41 行)
   指令數: 35
-  前 3 個指令:
-    Line 78: v_mov_b32
-    Line 80: v_mbcnt_lo_u32_b32
-    Line 83: s_load_dwordx2
+  前 5 個指令:
+    [0] Line 78: v_mov_b32 "v43":reg, "v2":reg
+    [1] Line 80: v_mbcnt_lo_u32_b32 "v32":reg, "-1":imm, "0":imm
+    [2] Line 83: s_load_dwordx2 "s[2:3]":reg, "s[0:1]":reg, "0x70":imm
+    [3] Line 84: v_mbcnt_hi_u32_b32 "v42":reg, "-1":imm, "v32":reg
+    [4] Line 85: v_mov_b64_e32 "v[36:37]":reg, "0":imm
+    ... 還有 30 個指令
 
 Label Block [2]: .LBB0_3
   範圍: Line 116 - 139 (24 行)
   指令數: 23
-  前 3 個指令:
-    Line 117: s_sleep
-    Line 118: global_load_dwordx2
-    Line 119: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 117: s_sleep "1":imm
+    [1] Line 118: global_load_dwordx2 "v[32:33]":reg, "v38":reg, "s[2:3] offset:40":reg
+    [2] Line 119: global_load_dwordx2 "v[34:35]":reg, "v38":reg, "s[2:3]":reg
+    [3] Line 120: s_waitcnt "vmcnt(1)":expr
+    [4] Line 121: v_and_b32_e32 "v32":reg, "v32":reg, "v36":reg
+    ... 還有 18 個指令
 
 Label Block [3]: .LBB0_5
   範圍: Line 140 - 141 (2 行)
   指令數: 1
   前 1 個指令:
-    Line 141: s_or_b64
+    [0] Line 141: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
 
 Label Block [4]: .LBB0_6
   範圍: Line 142 - 166 (25 行)
   指令數: 24
-  前 3 個指令:
-    Line 143: s_or_b64
-    Line 144: v_mov_b32_e32
-    Line 145: s_waitcnt
+  前 5 個指令:
+    [0] Line 143: s_or_b64 "exec":label, "exec":label, "s[4:5]":reg
+    [1] Line 144: v_mov_b32_e32 "v39":reg, "0":imm
+    [2] Line 145: s_waitcnt "lgkmcnt(0)":expr
+    [3] Line 146: global_load_dwordx2 "v[40:41]":reg, "v39":reg, "s[2:3] offset:40":reg
+    [4] Line 147: global_load_dwordx4 "v[32:35]":reg, "v39":reg, "s[2:3]":reg
+    ... 還有 19 個指令
 
 Label Block [5]: .LBB0_8
   範圍: Line 167 - 213 (47 行)
   指令數: 46
-  前 3 個指令:
-    Line 168: s_or_b64
-    Line 169: s_lshl_b64
-    Line 170: v_lshl_add_u64
+  前 5 個指令:
+    [0] Line 168: s_or_b64 "exec":label, "exec":label, "s[10:11]":reg
+    [1] Line 169: s_lshl_b64 "s[6:7]":reg, "s[8:9]":reg, "12":imm
+    [2] Line 170: v_lshl_add_u64 "v[40:41]":reg, "v[34:35]":reg, "0":imm, "s[6:7]":reg
+    [3] Line 171: s_mov_b32 "s8":reg, "0":imm
+    [4] Line 172: v_lshlrev_b32_e32 "v38":reg, "6":imm, "v42":reg
+    ... 還有 41 個指令
 
 Label Block [6]: .LBB0_11
   範圍: Line 214 - 227 (14 行)
   指令數: 13
-  前 3 個指令:
-    Line 215: s_sleep
-    Line 216: global_store_dwordx2
-    Line 217: v_mov_b32_e32
+  前 5 個指令:
+    [0] Line 215: s_sleep "1":imm
+    [1] Line 216: global_store_dwordx2 "v[44:45]":reg, "v[34:35]":reg, "off":label
+    [2] Line 217: v_mov_b32_e32 "v32":reg, "s4":reg
+    [3] Line 218: v_mov_b32_e32 "v33":reg, "s5":reg
+    [4] Line 219: buffer_wbl2 "sc0 sc1":label
+    ... 還有 8 個指令
 
 Label Block [7]: .LBB0_12
   範圍: Line 228 - 242 (15 行)
   指令數: 14
-  前 3 個指令:
-    Line 229: s_or_b64
-    Line 230: v_mov_b32_e32
-    Line 231: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 229: s_or_b64 "exec":label, "exec":label, "s[8:9]":reg
+    [1] Line 230: v_mov_b32_e32 "v35":reg, "0":imm
+    [2] Line 231: global_load_dwordx2 "v[32:33]":reg, "v35":reg, "s[2:3] offset:16":reg
+    [3] Line 232: s_mov_b64 "s[8:9]":reg, "exec":label
+    [4] Line 233: v_mbcnt_lo_u32_b32 "v34":reg, "s8":reg, "0":imm
+    ... 還有 9 個指令
 
 Label Block [8]: .LBB0_14
   範圍: Line 243 - 257 (15 行)
   指令數: 14
-  前 3 個指令:
-    Line 244: s_or_b64
-    Line 245: s_waitcnt
-    Line 246: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 244: s_or_b64 "exec":label, "exec":label, "s[10:11]":reg
+    [1] Line 245: s_waitcnt "vmcnt(0)":expr
+    [2] Line 246: global_load_dwordx2 "v[34:35]":reg, "v[32:33]":reg, "off offset:16":expr
+    [3] Line 247: s_waitcnt "vmcnt(0)":expr
+    [4] Line 248: v_cmp_eq_u64_e32 "vcc":label, "0":imm, "v[34:35]":reg
+    ... 還有 9 個指令
 
 Label Block [9]: .LBB0_16
   範圍: Line 258 - 261 (4 行)
   指令數: 3
   前 3 個指令:
-    Line 259: s_or_b64
-    Line 260: v_lshl_add_u64
-    Line 261: s_branch
+    [0] Line 259: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
+    [1] Line 260: v_lshl_add_u64 "v[32:33]":reg, "v[40:41]":reg, "0":imm, "v[38:39]":reg
+    [2] Line 261: s_branch ".LBB0_20":label
 
 Label Block [10]: .LBB0_17
   範圍: Line 262 - 269 (8 行)
   指令數: 7
-  前 3 個指令:
-    Line 263: s_or_b64
-    Line 264: v_readfirstlane_b32
-    Line 265: s_cmp_eq_u32
+  前 5 個指令:
+    [0] Line 263: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
+    [1] Line 264: v_readfirstlane_b32 "s6":reg, "v34":reg
+    [2] Line 265: s_cmp_eq_u32 "s6":reg, "0":imm
+    [3] Line 266: s_cbranch_scc1 ".LBB0_19":label
+    [4] Line 267: s_sleep "1":imm
+    ... 還有 2 個指令
 
 Label Block [11]: .LBB0_19
   範圍: Line 270 - 271 (2 行)
   指令數: 1
   前 1 個指令:
-    Line 271: s_branch
+    [0] Line 271: s_branch ".LBB0_22":label
 
 Label Block [12]: .LBB0_20
   範圍: Line 272 - 280 (9 行)
   指令數: 8
-  前 3 個指令:
-    Line 273: v_mov_b32_e32
-    Line 274: s_and_saveexec_b64
-    Line 275: s_cbranch_execz
+  前 5 個指令:
+    [0] Line 273: v_mov_b32_e32 "v34":reg, "1":imm
+    [1] Line 274: s_and_saveexec_b64 "s[6:7]":reg, "s[0:1]":reg
+    [2] Line 275: s_cbranch_execz ".LBB0_17":label
+    [3] Line 276: global_load_dword "v34":reg, "v[36:37]":reg, "off offset:20 sc0 sc1":expr
+    [4] Line 277: s_waitcnt "vmcnt(0)":expr
+    ... 還有 3 個指令
 
 Label Block [13]: .LBB0_22
   範圍: Line 281 - 316 (36 行)
   指令數: 35
-  前 3 個指令:
-    Line 282: global_load_dwordx2
-    Line 283: s_and_saveexec_b64
-    Line 284: s_cbranch_execz
+  前 5 個指令:
+    [0] Line 282: global_load_dwordx2 "v[32:33]":reg, "v[32:33]":reg, "off":label
+    [1] Line 283: s_and_saveexec_b64 "s[6:7]":reg, "s[0:1]":reg
+    [2] Line 284: s_cbranch_execz ".LBB0_25":label
+    [3] Line 285: v_mov_b32_e32 "v40":reg, "0":imm
+    [4] Line 286: global_load_dwordx2 "v[34:35]":reg, "v40":reg, "s[2:3] offset:40":reg
+    ... 還有 30 個指令
 
 Label Block [14]: .LBB0_24
   範圍: Line 317 - 330 (14 行)
   指令數: 13
-  前 3 個指令:
-    Line 318: s_sleep
-    Line 319: global_store_dwordx2
-    Line 320: v_mov_b32_e32
+  前 5 個指令:
+    [0] Line 318: s_sleep "1":imm
+    [1] Line 319: global_store_dwordx2 "v[38:39]":reg, "v[36:37]":reg, "off":label
+    [2] Line 320: v_mov_b32_e32 "v34":reg, "s0":reg
+    [3] Line 321: v_mov_b32_e32 "v35":reg, "s1":reg
+    [4] Line 322: buffer_wbl2 "sc0 sc1":label
+    ... 還有 8 個指令
 
 Label Block [15]: .LBB0_25
   範圍: Line 331 - 362 (32 行)
   指令數: 31
-  前 3 個指令:
-    Line 332: s_or_b64
-    Line 333: v_readfirstlane_b32
-    Line 334: v_mov_b64_e32
+  前 5 個指令:
+    [0] Line 332: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
+    [1] Line 333: v_readfirstlane_b32 "s0":reg, "v42":reg
+    [2] Line 334: v_mov_b64_e32 "v[40:41]":reg, "0":imm
+    [3] Line 335: s_nop "0":imm
+    [4] Line 336: v_cmp_eq_u32_e64 "s[0:1]":reg, "s0":reg, "v42":reg
+    ... 還有 26 個指令
 
 Label Block [16]: .LBB0_28
   範圍: Line 363 - 386 (24 行)
   指令數: 23
-  前 3 個指令:
-    Line 364: s_sleep
-    Line 365: global_load_dwordx2
-    Line 366: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 364: s_sleep "1":imm
+    [1] Line 365: global_load_dwordx2 "v[34:35]":reg, "v36":reg, "s[2:3] offset:40":reg
+    [2] Line 366: global_load_dwordx2 "v[38:39]":reg, "v36":reg, "s[2:3]":reg
+    [3] Line 367: s_waitcnt "vmcnt(1)":expr
+    [4] Line 368: v_and_b32_e32 "v34":reg, "v34":reg, "v40":reg
+    ... 還有 18 個指令
 
 Label Block [17]: .LBB0_30
   範圍: Line 387 - 388 (2 行)
   指令數: 1
   前 1 個指令:
-    Line 388: s_or_b64
+    [0] Line 388: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
 
 Label Block [18]: .LBB0_31
   範圍: Line 389 - 412 (24 行)
   指令數: 23
-  前 3 個指令:
-    Line 390: s_or_b64
-    Line 391: v_mov_b32_e32
-    Line 392: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 390: s_or_b64 "exec":label, "exec":label, "s[4:5]":reg
+    [1] Line 391: v_mov_b32_e32 "v45":reg, "0":imm
+    [2] Line 392: global_load_dwordx2 "v[34:35]":reg, "v45":reg, "s[2:3] offset:40":reg
+    [3] Line 393: global_load_dwordx4 "v[36:39]":reg, "v45":reg, "s[2:3]":reg
+    [4] Line 394: v_readfirstlane_b32 "s5":reg, "v41":reg
+    ... 還有 18 個指令
 
 Label Block [19]: .LBB0_33
   範圍: Line 413 - 466 (54 行)
   指令數: 53
-  前 3 個指令:
-    Line 414: s_or_b64
-    Line 415: s_lshl_b64
-    Line 416: v_lshl_add_u64
+  前 5 個指令:
+    [0] Line 414: s_or_b64 "exec":label, "exec":label, "s[10:11]":reg
+    [1] Line 415: s_lshl_b64 "s[6:7]":reg, "s[8:9]":reg, "12":imm
+    [2] Line 416: v_lshl_add_u64 "v[38:39]":reg, "v[38:39]":reg, "0":imm, "s[6:7]":reg
+    [3] Line 417: v_and_b32_e32 "v32":reg, "0xffffff1f":imm, "v32":reg
+    [4] Line 418: v_or_b32_e32 "v32":reg, "0xa0":imm, "v32":reg
+    ... 還有 48 個指令
 
 Label Block [20]: .LBB0_36
   範圍: Line 467 - 480 (14 行)
   指令數: 13
-  前 3 個指令:
-    Line 468: s_sleep
-    Line 469: global_store_dwordx2
-    Line 470: v_mov_b32_e32
+  前 5 個指令:
+    [0] Line 468: s_sleep "1":imm
+    [1] Line 469: global_store_dwordx2 "v[36:37]":reg, "v[34:35]":reg, "off":label
+    [2] Line 470: v_mov_b32_e32 "v32":reg, "s4":reg
+    [3] Line 471: v_mov_b32_e32 "v33":reg, "s5":reg
+    [4] Line 472: buffer_wbl2 "sc0 sc1":label
+    ... 還有 8 個指令
 
 Label Block [21]: .LBB0_37
   範圍: Line 481 - 495 (15 行)
   指令數: 14
-  前 3 個指令:
-    Line 482: s_or_b64
-    Line 483: v_mov_b32_e32
-    Line 484: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 482: s_or_b64 "exec":label, "exec":label, "s[8:9]":reg
+    [1] Line 483: v_mov_b32_e32 "v35":reg, "0":imm
+    [2] Line 484: global_load_dwordx2 "v[32:33]":reg, "v35":reg, "s[2:3] offset:16":reg
+    [3] Line 485: s_mov_b64 "s[8:9]":reg, "exec":label
+    [4] Line 486: v_mbcnt_lo_u32_b32 "v34":reg, "s8":reg, "0":imm
+    ... 還有 9 個指令
 
 Label Block [22]: .LBB0_39
   範圍: Line 496 - 510 (15 行)
   指令數: 14
-  前 3 個指令:
-    Line 497: s_or_b64
-    Line 498: s_waitcnt
-    Line 499: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 497: s_or_b64 "exec":label, "exec":label, "s[10:11]":reg
+    [1] Line 498: s_waitcnt "vmcnt(0)":expr
+    [2] Line 499: global_load_dwordx2 "v[34:35]":reg, "v[32:33]":reg, "off offset:16":expr
+    [3] Line 500: s_waitcnt "vmcnt(0)":expr
+    [4] Line 501: v_cmp_eq_u64_e32 "vcc":label, "0":imm, "v[34:35]":reg
+    ... 還有 9 個指令
 
 Label Block [23]: .LBB0_41
   範圍: Line 511 - 514 (4 行)
   指令數: 3
   前 3 個指令:
-    Line 512: s_or_b64
-    Line 513: v_lshl_add_u64
-    Line 514: s_branch
+    [0] Line 512: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
+    [1] Line 513: v_lshl_add_u64 "v[32:33]":reg, "v[38:39]":reg, "0":imm, "v[44:45]":reg
+    [2] Line 514: s_branch ".LBB0_45":label
 
 Label Block [24]: .LBB0_42
   範圍: Line 515 - 522 (8 行)
   指令數: 7
-  前 3 個指令:
-    Line 516: s_or_b64
-    Line 517: v_readfirstlane_b32
-    Line 518: s_cmp_eq_u32
+  前 5 個指令:
+    [0] Line 516: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
+    [1] Line 517: v_readfirstlane_b32 "s6":reg, "v34":reg
+    [2] Line 518: s_cmp_eq_u32 "s6":reg, "0":imm
+    [3] Line 519: s_cbranch_scc1 ".LBB0_44":label
+    [4] Line 520: s_sleep "1":imm
+    ... 還有 2 個指令
 
 Label Block [25]: .LBB0_44
   範圍: Line 523 - 524 (2 行)
   指令數: 1
   前 1 個指令:
-    Line 524: s_branch
+    [0] Line 524: s_branch ".LBB0_47":label
 
 Label Block [26]: .LBB0_45
   範圍: Line 525 - 533 (9 行)
   指令數: 8
-  前 3 個指令:
-    Line 526: v_mov_b32_e32
-    Line 527: s_and_saveexec_b64
-    Line 528: s_cbranch_execz
+  前 5 個指令:
+    [0] Line 526: v_mov_b32_e32 "v34":reg, "1":imm
+    [1] Line 527: s_and_saveexec_b64 "s[6:7]":reg, "s[0:1]":reg
+    [2] Line 528: s_cbranch_execz ".LBB0_42":label
+    [3] Line 529: global_load_dword "v34":reg, "v[40:41]":reg, "off offset:20 sc0 sc1":expr
+    [4] Line 530: s_waitcnt "vmcnt(0)":expr
+    ... 還有 3 個指令
 
 Label Block [27]: .LBB0_47
   範圍: Line 534 - 569 (36 行)
   指令數: 35
-  前 3 個指令:
-    Line 535: global_load_dwordx2
-    Line 536: s_and_saveexec_b64
-    Line 537: s_cbranch_execz
+  前 5 個指令:
+    [0] Line 535: global_load_dwordx2 "v[32:33]":reg, "v[32:33]":reg, "off":label
+    [1] Line 536: s_and_saveexec_b64 "s[6:7]":reg, "s[0:1]":reg
+    [2] Line 537: s_cbranch_execz ".LBB0_50":label
+    [3] Line 538: v_mov_b32_e32 "v40":reg, "0":imm
+    [4] Line 539: global_load_dwordx2 "v[34:35]":reg, "v40":reg, "s[2:3] offset:40":reg
+    ... 還有 30 個指令
 
 Label Block [28]: .LBB0_49
   範圍: Line 570 - 583 (14 行)
   指令數: 13
-  前 3 個指令:
-    Line 571: s_sleep
-    Line 572: global_store_dwordx2
-    Line 573: v_mov_b32_e32
+  前 5 個指令:
+    [0] Line 571: s_sleep "1":imm
+    [1] Line 572: global_store_dwordx2 "v[38:39]":reg, "v[36:37]":reg, "off":label
+    [2] Line 573: v_mov_b32_e32 "v34":reg, "s0":reg
+    [3] Line 574: v_mov_b32_e32 "v35":reg, "s1":reg
+    [4] Line 575: buffer_wbl2 "sc0 sc1":label
+    ... 還有 8 個指令
 
 Label Block [29]: .LBB0_50
   範圍: Line 584 - 615 (32 行)
   指令數: 31
-  前 3 個指令:
-    Line 585: s_or_b64
-    Line 586: v_readfirstlane_b32
-    Line 587: v_mov_b64_e32
+  前 5 個指令:
+    [0] Line 585: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
+    [1] Line 586: v_readfirstlane_b32 "s0":reg, "v42":reg
+    [2] Line 587: v_mov_b64_e32 "v[40:41]":reg, "0":imm
+    [3] Line 588: s_nop "0":imm
+    [4] Line 589: v_cmp_eq_u32_e64 "s[0:1]":reg, "s0":reg, "v42":reg
+    ... 還有 26 個指令
 
 Label Block [30]: .LBB0_53
   範圍: Line 616 - 639 (24 行)
   指令數: 23
-  前 3 個指令:
-    Line 617: s_sleep
-    Line 618: global_load_dwordx2
-    Line 619: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 617: s_sleep "1":imm
+    [1] Line 618: global_load_dwordx2 "v[34:35]":reg, "v36":reg, "s[2:3] offset:40":reg
+    [2] Line 619: global_load_dwordx2 "v[38:39]":reg, "v36":reg, "s[2:3]":reg
+    [3] Line 620: s_waitcnt "vmcnt(1)":expr
+    [4] Line 621: v_and_b32_e32 "v34":reg, "v34":reg, "v40":reg
+    ... 還有 18 個指令
 
 Label Block [31]: .LBB0_55
   範圍: Line 640 - 641 (2 行)
   指令數: 1
   前 1 個指令:
-    Line 641: s_or_b64
+    [0] Line 641: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
 
 Label Block [32]: .LBB0_56
   範圍: Line 642 - 665 (24 行)
   指令數: 23
-  前 3 個指令:
-    Line 643: s_or_b64
-    Line 644: v_mov_b32_e32
-    Line 645: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 643: s_or_b64 "exec":label, "exec":label, "s[4:5]":reg
+    [1] Line 644: v_mov_b32_e32 "v42":reg, "0":imm
+    [2] Line 645: global_load_dwordx2 "v[34:35]":reg, "v42":reg, "s[2:3] offset:40":reg
+    [3] Line 646: global_load_dwordx4 "v[36:39]":reg, "v42":reg, "s[2:3]":reg
+    [4] Line 647: v_readfirstlane_b32 "s5":reg, "v41":reg
+    ... 還有 18 個指令
 
 Label Block [33]: .LBB0_58
   範圍: Line 666 - 711 (46 行)
   指令數: 45
-  前 3 個指令:
-    Line 667: s_or_b64
-    Line 668: s_lshl_b64
-    Line 669: v_lshl_add_u64
+  前 5 個指令:
+    [0] Line 667: s_or_b64 "exec":label, "exec":label, "s[10:11]":reg
+    [1] Line 668: s_lshl_b64 "s[6:7]":reg, "s[8:9]":reg, "12":imm
+    [2] Line 669: v_lshl_add_u64 "v[38:39]":reg, "v[38:39]":reg, "0":imm, "s[6:7]":reg
+    [3] Line 670: s_movk_i32 "s6":reg, "0xff1d":imm
+    [4] Line 671: s_mov_b32 "s8":reg, "0":imm
+    ... 還有 40 個指令
 
 Label Block [34]: .LBB0_61
   範圍: Line 712 - 725 (14 行)
   指令數: 13
-  前 3 個指令:
-    Line 713: s_sleep
-    Line 714: global_store_dwordx2
-    Line 715: v_mov_b32_e32
+  前 5 個指令:
+    [0] Line 713: s_sleep "1":imm
+    [1] Line 714: global_store_dwordx2 "v[36:37]":reg, "v[34:35]":reg, "off":label
+    [2] Line 715: v_mov_b32_e32 "v32":reg, "s4":reg
+    [3] Line 716: v_mov_b32_e32 "v33":reg, "s5":reg
+    [4] Line 717: buffer_wbl2 "sc0 sc1":label
+    ... 還有 8 個指令
 
 Label Block [35]: .LBB0_62
   範圍: Line 726 - 740 (15 行)
   指令數: 14
-  前 3 個指令:
-    Line 727: s_or_b64
-    Line 728: v_mov_b32_e32
-    Line 729: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 727: s_or_b64 "exec":label, "exec":label, "s[8:9]":reg
+    [1] Line 728: v_mov_b32_e32 "v35":reg, "0":imm
+    [2] Line 729: global_load_dwordx2 "v[32:33]":reg, "v35":reg, "s[2:3] offset:16":reg
+    [3] Line 730: s_mov_b64 "s[8:9]":reg, "exec":label
+    [4] Line 731: v_mbcnt_lo_u32_b32 "v34":reg, "s8":reg, "0":imm
+    ... 還有 9 個指令
 
 Label Block [36]: .LBB0_64
   範圍: Line 741 - 755 (15 行)
   指令數: 14
-  前 3 個指令:
-    Line 742: s_or_b64
-    Line 743: s_waitcnt
-    Line 744: global_load_dwordx2
+  前 5 個指令:
+    [0] Line 742: s_or_b64 "exec":label, "exec":label, "s[10:11]":reg
+    [1] Line 743: s_waitcnt "vmcnt(0)":expr
+    [2] Line 744: global_load_dwordx2 "v[34:35]":reg, "v[32:33]":reg, "off offset:16":expr
+    [3] Line 745: s_waitcnt "vmcnt(0)":expr
+    [4] Line 746: v_cmp_eq_u64_e32 "vcc":label, "0":imm, "v[34:35]":reg
+    ... 還有 9 個指令
 
 Label Block [37]: .LBB0_66
   範圍: Line 756 - 758 (3 行)
   指令數: 2
   前 2 個指令:
-    Line 757: s_or_b64
-    Line 758: s_branch
+    [0] Line 757: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
+    [1] Line 758: s_branch ".LBB0_70":label
 
 Label Block [38]: .LBB0_67
   範圍: Line 759 - 766 (8 行)
   指令數: 7
-  前 3 個指令:
-    Line 760: s_or_b64
-    Line 761: v_readfirstlane_b32
-    Line 762: s_cmp_eq_u32
+  前 5 個指令:
+    [0] Line 760: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
+    [1] Line 761: v_readfirstlane_b32 "s6":reg, "v32":reg
+    [2] Line 762: s_cmp_eq_u32 "s6":reg, "0":imm
+    [3] Line 763: s_cbranch_scc1 ".LBB0_69":label
+    [4] Line 764: s_sleep "1":imm
+    ... 還有 2 個指令
 
 Label Block [39]: .LBB0_69
   範圍: Line 767 - 768 (2 行)
   指令數: 1
   前 1 個指令:
-    Line 768: s_branch
+    [0] Line 768: s_branch ".LBB0_72":label
 
 Label Block [40]: .LBB0_70
   範圍: Line 769 - 777 (9 行)
   指令數: 8
-  前 3 個指令:
-    Line 770: v_mov_b32_e32
-    Line 771: s_and_saveexec_b64
-    Line 772: s_cbranch_execz
+  前 5 個指令:
+    [0] Line 770: v_mov_b32_e32 "v32":reg, "1":imm
+    [1] Line 771: s_and_saveexec_b64 "s[6:7]":reg, "s[0:1]":reg
+    [2] Line 772: s_cbranch_execz ".LBB0_67":label
+    [3] Line 773: global_load_dword "v32":reg, "v[40:41]":reg, "off offset:20 sc0 sc1":expr
+    [4] Line 774: s_waitcnt "vmcnt(0)":expr
+    ... 還有 3 個指令
 
 Label Block [41]: .LBB0_72
   範圍: Line 778 - 812 (35 行)
   指令數: 34
-  前 3 個指令:
-    Line 779: s_and_saveexec_b64
-    Line 780: s_cbranch_execz
-    Line 781: v_mov_b32_e32
+  前 5 個指令:
+    [0] Line 779: s_and_saveexec_b64 "s[6:7]":reg, "s[0:1]":reg
+    [1] Line 780: s_cbranch_execz ".LBB0_75":label
+    [2] Line 781: v_mov_b32_e32 "v38":reg, "0":imm
+    [3] Line 782: global_load_dwordx2 "v[32:33]":reg, "v38":reg, "s[2:3] offset:40":reg
+    [4] Line 783: global_load_dwordx2 "v[42:43]":reg, "v38":reg, "s[2:3] offset:24 sc0 sc1":reg
+    ... 還有 29 個指令
 
 Label Block [42]: .LBB0_74
   範圍: Line 813 - 826 (14 行)
   指令數: 13
-  前 3 個指令:
-    Line 814: s_sleep
-    Line 815: global_store_dwordx2
-    Line 816: v_mov_b32_e32
+  前 5 個指令:
+    [0] Line 814: s_sleep "1":imm
+    [1] Line 815: global_store_dwordx2 "v[36:37]":reg, "v[34:35]":reg, "off":label
+    [2] Line 816: v_mov_b32_e32 "v32":reg, "s0":reg
+    [3] Line 817: v_mov_b32_e32 "v33":reg, "s1":reg
+    [4] Line 818: buffer_wbl2 "sc0 sc1":label
+    ... 還有 8 個指令
 
 Label Block [43]: .LBB0_75
   範圍: Line 827 - 873 (47 行)
   指令數: 2
   前 2 個指令:
-    Line 828: s_or_b64
-    Line 831: s_endpgm
+    [0] Line 828: s_or_b64 "exec":label, "exec":label, "s[6:7]":reg
+    [1] Line 831: s_endpgm
 
 Label Block [44]: .Lfunc_end0
   範圍: Line 874 - 979 (106 行)
