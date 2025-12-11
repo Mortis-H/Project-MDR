@@ -16,6 +16,7 @@
 #include "parse_utils.h"
 #include "AMDGCNAssembly.h"
 #include "AMDGPUMetadata.h"
+#include "ParsedProgram.h"
 
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/raw_ostream.h"
@@ -23,6 +24,18 @@
 #include <iostream>
 
 using namespace llvm;
+
+// 輔助函數：將 OperandType 轉換為字串
+static const char* operandTypeToString(OperandType type) {
+  switch (type) {
+    case OperandType::Register:   return "reg";
+    case OperandType::Immediate:  return "imm";
+    case OperandType::Label:      return "label";
+    case OperandType::Expression: return "expr";
+    case OperandType::Unknown:    return "unknown";
+    default:                      return "?";
+  }
+}
 
 int main(int argc, char **argv) {
   InitLLVM X(argc, argv);
@@ -190,12 +203,32 @@ int main(int argc, char **argv) {
            << " (" << block.getLineCount() << " 行)\n";
     outs() << "  指令數: " << block.instructions.size() << "\n";
     
-    // 顯示前 3 個指令
+    // 顯示前 5 個指令（含詳細資訊）
     if (!block.instructions.empty()) {
-      outs() << "  前 " << std::min(size_t(3), block.instructions.size()) << " 個指令:\n";
-      for (size_t j = 0; j < std::min(size_t(3), block.instructions.size()); ++j) {
+      size_t displayCount = std::min(size_t(5), block.instructions.size());
+      outs() << "  前 " << displayCount << " 個指令:\n";
+      
+      for (size_t j = 0; j < displayCount; ++j) {
         const auto *inst = block.instructions[j];
-        outs() << "    Line " << inst->lineNumber << ": " << inst->opcode << "\n";
+        
+        // 顯示行號和 opcode
+        outs() << "    [" << j << "] Line " << inst->lineNumber << ": " << inst->opcode;
+        
+        // 顯示操作數
+        if (!inst->operands.empty()) {
+          outs() << " ";
+          for (size_t k = 0; k < inst->operands.size(); ++k) {
+            if (k > 0) outs() << ", ";
+            const auto &op = inst->operands[k];
+            outs() << "\"" << op.text << "\":" << operandTypeToString(op.type);
+          }
+        }
+        outs() << "\n";
+      }
+      
+      // 如果有更多指令，顯示省略資訊
+      if (block.instructions.size() > displayCount) {
+        outs() << "    ... 還有 " << (block.instructions.size() - displayCount) << " 個指令\n";
       }
     }
     outs() << "\n";

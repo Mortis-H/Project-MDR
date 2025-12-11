@@ -28,6 +28,9 @@
 #include "llvm/MC/TargetRegistry.h"
 
 #include "llvm/TargetParser/Triple.h"
+#include "llvm/MC/MCInstPrinter.h"
+
+#include <map>
 
 using namespace llvm;
 
@@ -78,10 +81,75 @@ static InstructionInfo parseInstruction(StringRef line) {
   return info;
 }
 
+// 從 MCInst 提取 operands（使用 LLVM MC API）
+static std::vector<Operand> extractOperandsFromMCInst(
+    const MCInst &Inst,
+    const MCInstrInfo &MCII,
+    const MCRegisterInfo &MRI,
+    const MCSubtargetInfo &STI,
+    MCInstPrinter *InstPrinter) {
+  
+  std::vector<Operand> operands;
+  
+  if (!InstPrinter)
+    return operands;
+  
+  // 使用 MCInstPrinter 打印完整指令，然後解析
+  std::string InstStr;
+  raw_string_ostream OS(InstStr);
+  InstPrinter->printInst(&Inst, 0, "", STI, OS);
+  OS.flush();
+  
+  // DEBUG: 打印看看實際內容（僅針對 global_load_dwordx2）
+  // if (InstStr.find("global_load_dwordx2") != std::string::npos) {
+  //   errs() << "DEBUG: MCInstPrinter output: \"" << InstStr << "\"\n";
+  // }
+  
+  // 解析打印出來的指令字串
+  // MCInstPrinter 的格式: "\topcode operand1, operand2, ..."
+  // 注意開頭可能有 tab 或空格
+  StringRef InstRef = StringRef(InstStr).ltrim();
+  
+  // 跳過 opcode（找到第一個空格或 tab）
+  size_t firstSpace = InstRef.find_first_of(" \t");
+  if (firstSpace == StringRef::npos)
+    return operands;
+  
+  StringRef operandsPart = InstRef.substr(firstSpace).ltrim();
+  
+  // 如果沒有操作數，直接返回
+  if (operandsPart.empty())
+    return operands;
+  
+  // 使用逗號分割操作數
+  // 但是要注意，操作數內部可能包含空格（例如 "s[2:3] offset:16"）
+  // 所以只在逗號處分割
+  SmallVector<StringRef, 8> operandRefs;
+  operandsPart.split(operandRefs, ',', -1, false);
+  
+  for (auto opRef : operandRefs) {
+    StringRef opTrimmed = opRef.trim();
+    if (!opTrimmed.empty()) {
+      OperandType opType = detectOperandType(opTrimmed);
+      operands.push_back(Operand(opTrimmed.str(), opType));
+    }
+  }
+  
+  return operands;
+}
+
 // 解析指令（增強版，返回 ParsedInstruction）
-static ParsedInstruction parseInstructionEnhanced(StringRef line, 
-                                                    size_t lineNumber,
-                                                    StringRef originalLine) {
+// 如果有 MCInst 可用，使用它；否則回退到文本解析
+static ParsedInstruction parseInstructionEnhanced(
+    StringRef line, 
+    size_t lineNumber,
+    StringRef originalLine,
+    const MCInst *Inst = nullptr,
+    const MCInstrInfo *MCII = nullptr,
+    const MCRegisterInfo *MRI = nullptr,
+    const MCSubtargetInfo *STI = nullptr,
+    MCInstPrinter *InstPrinter = nullptr) {
+  
   ParsedInstruction inst;
   inst.lineNumber = lineNumber;
   inst.originalText = originalLine.str();
@@ -95,16 +163,23 @@ static ParsedInstruction parseInstructionEnhanced(StringRef line,
   }
   
   inst.opcode = trimmed.substr(0, firstSpace).str();
-  StringRef operandsPart = trimmed.substr(firstSpace).ltrim();
   
-  SmallVector<StringRef, 8> operandRefs;
-  operandsPart.split(operandRefs, ',', -1, false);
-  
-  for (auto opRef : operandRefs) {
-    StringRef opTrimmed = opRef.trim();
-    if (!opTrimmed.empty()) {
-      OperandType opType = detectOperandType(opTrimmed);
-      inst.operands.push_back(Operand(opTrimmed.str(), opType));
+  // 如果有 MCInst，使用它來提取 operands
+  if (Inst && MCII && MRI && STI && InstPrinter) {
+    inst.operands = extractOperandsFromMCInst(*Inst, *MCII, *MRI, *STI, InstPrinter);
+  } else {
+    // 回退到文本解析
+    StringRef operandsPart = trimmed.substr(firstSpace).ltrim();
+    
+    SmallVector<StringRef, 8> operandRefs;
+    operandsPart.split(operandRefs, ',', -1, false);
+    
+    for (auto opRef : operandRefs) {
+      StringRef opTrimmed = opRef.trim();
+      if (!opTrimmed.empty()) {
+        OperandType opType = detectOperandType(opTrimmed);
+        inst.operands.push_back(Operand(opTrimmed.str(), opType));
+      }
     }
   }
   
@@ -121,18 +196,24 @@ static bool isCommentLine(StringRef L) {
 }
 
 // ============================================================================
-// AnnotatingStreamer (從 main.cpp 複製)
+// AnnotatingStreamer (從 main.cpp 複製，增強版：捕獲 MCInst)
 // ============================================================================
 
 class AnnotatingStreamer : public MCStreamer {
   SourceMgr &SM;
   SmallVectorImpl<LineKind> &Kinds;
+  const MCInstrInfo &MCII;
+  const MCRegisterInfo &MRI;
+  std::map<unsigned, MCInst> &InstMap;  // 儲存每行的 MCInst
 
 public:
   AnnotatingStreamer(MCContext &Ctx,
                      SourceMgr &SM,
-                     SmallVectorImpl<LineKind> &Kinds)
-      : MCStreamer(Ctx), SM(SM), Kinds(Kinds) {}
+                     SmallVectorImpl<LineKind> &Kinds,
+                     const MCInstrInfo &MCII,
+                     const MCRegisterInfo &MRI,
+                     std::map<unsigned, MCInst> &InstMap)
+      : MCStreamer(Ctx), SM(SM), Kinds(Kinds), MCII(MCII), MRI(MRI), InstMap(InstMap) {}
 
   void emitLabel(MCSymbol *Symbol, SMLoc Loc) override {
     if (!Loc.isValid())
@@ -148,8 +229,11 @@ public:
     if (!Loc.isValid())
       return;
     unsigned LineNo = SM.FindLineNumber(Loc);
-    if (LineNo > 0 && LineNo <= Kinds.size())
+    if (LineNo > 0 && LineNo <= Kinds.size()) {
       Kinds[LineNo - 1] = LineKind::Instruction;
+      // 儲存 MCInst 供後續使用
+      InstMap[LineNo] = Inst;
+    }
   }
 
   bool emitSymbolAttribute(MCSymbol *Symbol,
@@ -317,8 +401,11 @@ AMDGCNAssembly parseAMDGCNAssembly(const std::string &filename,
     return AMDGCNAssembly();
   }
 
+  // 創建 map 來儲存每行的 MCInst
+  std::map<unsigned, MCInst> InstMap;
+  
   auto Streamer =
-      std::make_unique<AnnotatingStreamer>(Ctx, SrcMgr, Kinds);
+      std::make_unique<AnnotatingStreamer>(Ctx, SrcMgr, Kinds, *MCII, *MRI, InstMap);
 
   std::unique_ptr<MCAsmParser> Parser(
       createMCAsmParser(SrcMgr, Ctx, *Streamer, *MAI));
@@ -340,6 +427,10 @@ AMDGCNAssembly parseAMDGCNAssembly(const std::string &filename,
   if (Parser->Run(true)) {
     // 解析失敗，但繼續處理（可能只是部分失敗）
   }
+
+  // 創建 MCInstPrinter 用於打印 operands
+  std::unique_ptr<MCInstPrinter> InstPrinter(
+      TheTarget->createMCInstPrinter(Triple(TT), 0, *MAI, *MCII, *MRI));
 
   // 第二遍：分類行類型並解析指令
   ParsedProgram program;
@@ -363,8 +454,16 @@ AMDGCNAssembly parseAMDGCNAssembly(const std::string &filename,
     if (Kinds[I] == LineKind::Instruction) {
       InstructionInfos[I] = parseInstruction(Trimmed);
       
+      // 從 InstMap 中獲取 MCInst（如果有）
+      unsigned LineNo = I + 1;
+      const MCInst *Inst = nullptr;
+      auto it = InstMap.find(LineNo);
+      if (it != InstMap.end()) {
+        Inst = &it->second;
+      }
+      
       ParsedInstruction parsedInst = parseInstructionEnhanced(
-          Trimmed, I + 1, Line);
+          Trimmed, I + 1, Line, Inst, MCII.get(), MRI.get(), STI.get(), InstPrinter.get());
       program.allInstructions.push_back(parsedInst);
       continue;
     }
