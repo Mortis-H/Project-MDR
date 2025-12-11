@@ -133,18 +133,24 @@ Arguments (1 個):
 Label Block [0]: _Z23attend_bwd_combined_kerILi128EEv25attn_bwd_combined_globalsIXT_EE
   範圍: Line 8 - 5152 (5145 行)
   指令數: 1724
-  前 3 個指令:
-    Line 10: s_load_dwordx2
-    Line 11: s_load_dwordx4
-    Line 12: s_load_dword
+  前 5 個指令:
+    [0] Line 10: s_load_dwordx2 "s[50:51]":reg, "s[0:1]":reg, "0x0":imm
+    [1] Line 11: s_load_dwordx4 "s[20:23]":reg, "s[0:1]":reg, "0x10":imm
+    [2] Line 12: s_load_dword "s33":reg, "s[0:1]":reg, "0x20":imm
+    [3] Line 13: s_load_dwordx2 "s[6:7]":reg, "s[0:1]":reg, "0x30":imm
+    [4] Line 14: s_load_dwordx4 "s[28:31]":reg, "s[0:1]":reg, "0x40":imm
+    ... 還有 1719 個指令
 
 Label Block [1]: .LBB0_1
   範圍: Line 5153 - 13919 (8767 行)
   指令數: 3161
-  前 3 個指令:
-    Line 5154: s_add_i32
-    Line 5155: s_and_b32
-    Line 5156: s_and_b32
+  前 5 個指令:
+    [0] Line 5154: s_add_i32 "s1":reg, "s37":reg, "-1":imm
+    [1] Line 5155: s_and_b32 "s8":reg, "s1":reg, "0xffff":imm
+    [2] Line 5156: s_and_b32 "s36":reg, "s17":reg, "0x1fc0":imm
+    [3] Line 5157: s_add_i32 "s8":reg, "s8":reg, "0xffff":imm
+    [4] Line 5158: s_lshr_b32 "s39":reg, "s37":reg, "7":imm
+    ... 還有 3156 個指令
 
 Label Block [2]: .Lfunc_end0
   範圍: Line 13920 - 13970 (51 行)
