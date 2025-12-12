@@ -22,6 +22,8 @@ enum class LineKind {
   Comment,
   Metadata,
   KernelName,
+  AmdgcnTarget,
+  AmdhsaCodeObjectVersion,
 };
 
 /// 單行的完整資訊
@@ -39,6 +41,16 @@ struct LineInfo {
   // 如果是 kernel 名稱
   std::string kernelName;
   
+  // 如果是 amdgcn_target
+  std::string amdgcnTarget;
+  
+  // 如果是 amdhsa_code_object_version
+  std::string amdhsaCodeObjectVersion;
+  
+  // 如果是 directive，拆分為 name 和 content
+  std::string directiveName;
+  std::string directiveContent;
+  
   LineInfo() : lineNumber(0), kind(LineKind::Unknown) {}
   
   bool isInstruction() const { return kind == LineKind::Instruction; }
@@ -47,6 +59,8 @@ struct LineInfo {
   bool isComment() const { return kind == LineKind::Comment; }
   bool isMetadata() const { return kind == LineKind::Metadata; }
   bool isKernelName() const { return kind == LineKind::KernelName; }
+  bool isAmdgcnTarget() const { return kind == LineKind::AmdgcnTarget; }
+  bool isAmdhsaCodeObjectVersion() const { return kind == LineKind::AmdhsaCodeObjectVersion; }
 };
 
 // ============================================================================

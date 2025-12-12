@@ -497,6 +497,18 @@ AMDGCNAssembly parseAMDGCNAssembly(const std::string &filename,
     if (Trimmed.starts_with("---") || Trimmed.starts_with("..."))
       continue;
 
+    // .amdgcn_target directive
+    if (Trimmed.starts_with(".amdgcn_target")) {
+      Kinds[I] = LineKind::AmdgcnTarget;
+      continue;
+    }
+
+    // .amdhsa_code_object_version directive
+    if (Trimmed.starts_with(".amdhsa_code_object_version")) {
+      Kinds[I] = LineKind::AmdhsaCodeObjectVersion;
+      continue;
+    }
+
     // .globl directive (kernel name)
     if (Trimmed.starts_with(".globl") || Trimmed.starts_with(".global")) {
       Kinds[I] = LineKind::KernelName;
@@ -538,6 +550,74 @@ AMDGCNAssembly parseAMDGCNAssembly(const std::string &filename,
       }
       
       lineInfo.instruction = inst;
+    }
+    
+    // 如果是標籤，填充標籤名稱
+    if (lineInfo.kind == LineKind::Label) {
+      // 從 program.labels 中查找對應行號的標籤
+      const ParsedLabel *foundLabel = nullptr;
+      for (const auto &label : program.labels) {
+        if (label.lineNumber == I + 1) {
+          foundLabel = &label;
+          break;
+        }
+      }
+      
+      if (foundLabel) {
+        lineInfo.labelName = foundLabel->name;
+      } else {
+        // 備用方案：從文本中提取標籤名
+        StringRef trimmed = Lines[I].ltrim();
+        size_t colonPos = trimmed.find(':');
+        if (colonPos != StringRef::npos) {
+          lineInfo.labelName = trimmed.substr(0, colonPos).str();
+        }
+      }
+    }
+    
+    // 如果是 kernel 名稱，填充 kernel 名稱
+    if (lineInfo.kind == LineKind::KernelName) {
+      StringRef trimmed = Lines[I].ltrim();
+      // kernel 名稱行通常是 ".globl <name>" 或 "<name>:"
+      if (trimmed.starts_with(".globl")) {
+        StringRef kernelPart = trimmed.substr(6).ltrim();
+        lineInfo.kernelName = kernelPart.str();
+      }
+    }
+    
+    // 如果是 amdgcn_target，填充內容
+    if (lineInfo.kind == LineKind::AmdgcnTarget) {
+      StringRef trimmed = Lines[I].ltrim();
+      // .amdgcn_target "amdgcn-amd-amdhsa--gfx950"
+      if (trimmed.starts_with(".amdgcn_target")) {
+        StringRef content = trimmed.substr(14).ltrim();
+        lineInfo.amdgcnTarget = content.str();
+      }
+    }
+    
+    // 如果是 amdhsa_code_object_version，填充內容
+    if (lineInfo.kind == LineKind::AmdhsaCodeObjectVersion) {
+      StringRef trimmed = Lines[I].ltrim();
+      // .amdhsa_code_object_version 6
+      if (trimmed.starts_with(".amdhsa_code_object_version")) {
+        StringRef content = trimmed.substr(27).ltrim();
+        lineInfo.amdhsaCodeObjectVersion = content.str();
+      }
+    }
+    
+    // 如果是 directive，拆分為 name 和 content
+    if (lineInfo.kind == LineKind::Directive) {
+      StringRef trimmed = Lines[I].ltrim();
+      // 找第一個空白字符
+      size_t spacePos = trimmed.find_first_of(" \t");
+      if (spacePos != StringRef::npos) {
+        lineInfo.directiveName = trimmed.substr(0, spacePos).str();
+        lineInfo.directiveContent = trimmed.substr(spacePos).ltrim().str();
+      } else {
+        // 沒有空白，整個都是 directive name
+        lineInfo.directiveName = trimmed.str();
+        lineInfo.directiveContent = "";
+      }
     }
     
     assembly.addLine(lineInfo);

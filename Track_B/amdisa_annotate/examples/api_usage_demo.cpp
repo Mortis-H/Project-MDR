@@ -234,5 +234,129 @@ int main(int argc, char **argv) {
     outs() << "\n";
   }
 
+  // ========================================================================
+  // 步驟 6: 逐行遍歷並判斷行類型
+  // ========================================================================
+  outs() << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  outs() << "5. 逐行遍歷（Line-by-Line Iteration）\n";
+  outs() << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  outs() << "\n";
+
+  // 遍歷每一行
+  for (size_t lineNum = 1; lineNum <= assembly.getLineCount(); ++lineNum) {
+    const LineInfo *line = assembly.getLine(lineNum);
+    if (!line) continue;
+
+    // 打印行號
+    llvm::outs() << "Line " << lineNum << ": ";
+
+    // 根據行類型進行判斷和處理
+    if (line->isInstruction()) {
+      // 這是一個指令行
+      llvm::outs() << "[Instruction] " << line->instruction->opcode;
+      if (!line->instruction->operands.empty()) {
+        llvm::outs() << " ";
+        for (size_t k = 0; k < line->instruction->operands.size(); ++k) {
+          if (k > 0) outs() << ", ";
+          const auto &op = line->instruction->operands[k];
+          outs() << "\"" << op.text << "\":" << operandTypeToString(op.type);
+        }
+      }
+      outs() << "\n";
+      
+    } else if (line->isLabel()) {
+      // 這是一個標籤行
+      llvm::outs() << "[Label] " << line->labelName;
+      
+    } else if (line->isKernelName()) {
+      // 這是 Kernel 名稱行
+      llvm::outs() << "[KernelName] " << line->kernelName;
+      
+    } else if (line->isAmdgcnTarget()) {
+      // 這是 .amdgcn_target 行
+      llvm::outs() << "[AmdgcnTarget] " << line->amdgcnTarget;
+      
+    } else if (line->isAmdhsaCodeObjectVersion()) {
+      // 這是 .amdhsa_code_object_version 行
+      llvm::outs() << "[AmdhsaCodeObjectVersion] " << line->amdhsaCodeObjectVersion;
+      
+    } else if (line->isDirective()) {
+      // 這是指示（directive）行，如 .text, .section 等
+      llvm::outs() << "[Directive] " << line->directiveName;
+      if (!line->directiveContent.empty()) {
+        std::string content = line->directiveContent;
+        if (content.length() > 30) content = content.substr(0, 30) + "...";
+        llvm::outs() << " " << content;
+      }
+      
+    } else if (line->isComment()) {
+      // 這是註解行
+      llvm::outs() << "[Comment] " << line->text.substr(0, 40);
+      
+    } else if (line->isMetadata()) {
+      // 這是 Metadata 行（YAML 格式）
+      llvm::outs() << "[Metadata] " << line->text.substr(0, 40);
+      
+    } else {
+      // 未知類型
+      llvm::outs() << "[Unknown]";
+    }
+    
+    llvm::outs() << "\n";
+  }
+
+  // 也可以使用 switch 語句
+  llvm::outs() << "\n=== Alternative: Using switch statement ===\n\n";
+  
+  for (size_t lineNum = 1; lineNum <= std::min(size_t(20), assembly.getLineCount()); ++lineNum) {
+    const LineInfo *line = assembly.getLine(lineNum);
+    if (!line) continue;
+
+    llvm::outs() << "Line " << lineNum << ": ";
+
+    switch (line->kind) {
+      case LineKind::Instruction:
+        llvm::outs() << "[Instruction] " << line->instruction->opcode << "\n";
+        break;
+        
+      case LineKind::Label:
+        llvm::outs() << "[Label] " << line->labelName << "\n";
+        break;
+        
+      case LineKind::KernelName:
+        llvm::outs() << "[KernelName] " << line->kernelName << "\n";
+        break;
+        
+      case LineKind::AmdgcnTarget:
+        llvm::outs() << "[AmdgcnTarget] " << line->amdgcnTarget << "\n";
+        break;
+        
+      case LineKind::AmdhsaCodeObjectVersion:
+        llvm::outs() << "[AmdhsaCodeObjectVersion] " << line->amdhsaCodeObjectVersion << "\n";
+        break;
+        
+      case LineKind::Directive:
+        llvm::outs() << "[Directive] " << line->directiveName;
+        if (!line->directiveContent.empty()) {
+          llvm::outs() << " " << line->directiveContent;
+        }
+        llvm::outs() << "\n";
+        break;
+        
+      case LineKind::Comment:
+        llvm::outs() << "[Comment]\n";
+        break;
+        
+      case LineKind::Metadata:
+        llvm::outs() << "[Metadata]\n";
+        break;
+        
+      case LineKind::Unknown:
+      default:
+        llvm::outs() << "[Unknown]\n";
+        break;
+    }
+  }
+
   return 0;
 }
