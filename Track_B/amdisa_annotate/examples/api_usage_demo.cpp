@@ -247,11 +247,10 @@ int main(int argc, char **argv) {
     const LineInfo *line = assembly.getLine(lineNum);
     if (!line) continue;
 
-    // 打印行號
-    llvm::outs() << "Line " << lineNum << ": ";
 
     // 根據行類型進行判斷和處理
     if (line->isInstruction()) {
+      llvm::outs() << "Line " << lineNum << ": ";
       // 這是一個指令行
       llvm::outs() << "[Instruction] " << line->instruction->opcode;
       if (!line->instruction->operands.empty()) {
@@ -265,44 +264,48 @@ int main(int argc, char **argv) {
       outs() << "\n";
       
     } else if (line->isLabel()) {
+      llvm::outs() << "Line " << lineNum << ": ";
       // 這是一個標籤行
       llvm::outs() << "[Label] " << line->labelName;
+      llvm::outs() << "\n";
       
     } else if (line->isKernelName()) {
+      llvm::outs() << "Line " << lineNum << ": ";
       // 這是 Kernel 名稱行
       llvm::outs() << "[KernelName] " << line->kernelName;
+      llvm::outs() << "\n";
       
     } else if (line->isAmdgcnTarget()) {
+      llvm::outs() << "Line " << lineNum << ": ";
       // 這是 .amdgcn_target 行
       llvm::outs() << "[AmdgcnTarget] " << line->amdgcnTarget;
+      llvm::outs() << "\n";
       
     } else if (line->isAmdhsaCodeObjectVersion()) {
+      llvm::outs() << "Line " << lineNum << ": ";
       // 這是 .amdhsa_code_object_version 行
       llvm::outs() << "[AmdhsaCodeObjectVersion] " << line->amdhsaCodeObjectVersion;
+      llvm::outs() << "\n";
       
     } else if (line->isDirective()) {
+      llvm::outs() << "Line " << lineNum << ": ";
       // 這是指示（directive）行，如 .text, .section 等
-      llvm::outs() << "[Directive] " << line->directiveName;
-      if (!line->directiveContent.empty()) {
-        std::string content = line->directiveContent;
-        if (content.length() > 30) content = content.substr(0, 30) + "...";
-        llvm::outs() << " " << content;
-      }
-      
+      llvm::outs() << "[Directive] " << "Name:" <<line->directiveName << " Content:" << line->directiveContent;
+      llvm::outs() << "\n";
     } else if (line->isComment()) {
       // 這是註解行
-      llvm::outs() << "[Comment] " << line->text.substr(0, 40);
+      // llvm::outs() << "[Comment] " << line->text.substr(0, 40);
+  
       
     } else if (line->isMetadata()) {
       // 這是 Metadata 行（YAML 格式）
-      llvm::outs() << "[Metadata] " << line->text.substr(0, 40);
+      // llvm::outs() << "[Metadata] " << line->text.substr(0, 40);
       
     } else {
       // 未知類型
-      llvm::outs() << "[Unknown]";
+      // llvm::outs() << "[Unknown]";
     }
     
-    llvm::outs() << "\n";
   }
 
   // 也可以使用 switch 語句
