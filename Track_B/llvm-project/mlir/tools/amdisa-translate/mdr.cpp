@@ -30,6 +30,9 @@
 #include "mlir/Dialect/AMDISA/Passes.h"
 #include "mdr.h"
 
+mlir::amdisa::AMDISAAsmParser::AMDISAAsmParser(llvm::StringRef filename)
+    : filename_(filename) {}
+
 using namespace mlir;
 
 using namespace mlir::amdisa;
@@ -63,20 +66,14 @@ static cl::opt<enum Action> emitAction(
 // Parsing pipeline
 //===----------------------------------------------------------------------===//
 
-static OwningOpRef<ModuleOp>
-parseAsmToAMDISA(StringRef filename, MLIRContext &context) {
+static mlir::OwningOpRef<mlir::ModuleOp>
+parseAsmToAMDISA(llvm::StringRef filename,
+                 mlir::MLIRContext &context) {
 
-  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> fileOrErr =
-      llvm::MemoryBuffer::getFileOrSTDIN(filename);
-  if (std::error_code ec = fileOrErr.getError()) {
-    llvm::errs() << "Could not open input file: " << ec.message() << "\n";
-    return nullptr;
-  }
-
-  auto buffer = fileOrErr.get()->getBuffer();
-  AMDISAAsmParser parser(buffer);
+  AMDISAAsmParser parser(filename);
   return parser.parseModule(context);
 }
+
 
 static OwningOpRef<ModuleOp>
 parseMLIRFile(StringRef filename, MLIRContext &context) {

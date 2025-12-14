@@ -2,7 +2,18 @@
 
 set(LLVM_LINK_COMPONENTS
   Support
+  Option
+  Target
+  TargetParser
+  MC
+  MCParser
+
+  AMDGPUInfo
+  AMDGPUDesc
+  AMDGPUAsmParser
+  AMDGPUCodeGen
 )
+
 
 # Collect all registered dialect libs
 get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
@@ -16,7 +27,11 @@ get_property(translation_libs GLOBAL PROPERTY MLIR_TRANSLATION_LIBS)
 
 add_mlir_tool(amdisa-translate
   mdr.cpp
+  AMDGCNAssembly.cpp
+  AMDGPUMetadata.cpp
+  parse_utils.cpp
 )
+
 
 llvm_update_compile_flags(amdisa-translate)
 

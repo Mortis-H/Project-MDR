@@ -16,6 +16,63 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
 
+#include "llvm/Support/Casting.h"
+
+static llvm::StringRef stripOuterQuotes(llvm::StringRef s) {
+  s = s.trim();
+  if (s.size() >= 2 && s.front() == '"' && s.back() == '"')
+    return s.drop_front().drop_back();
+  return s;
+}
+
+static mlir::Type
+typeFromKernargDict(mlir::OpBuilder &b, mlir::DictionaryAttr d) {
+  // ---- 1. 抓 value_kind ----
+  auto vkAttr = d.getAs<mlir::StringAttr>("value_kind");
+  llvm::StringRef vk = vkAttr ? vkAttr.getValue() : "";
+
+
+  // ---- 2. Pointer 類 → !llvm.ptr ----
+  auto isPointerKind = [&](llvm::StringRef k) {
+    return k.contains("buffer") ||
+           k.contains("pointer") ||
+           k.contains("queue") ||
+           k.contains("kernarg") ||
+           k.contains("image") ||
+           k.contains("sampler");
+  };
+
+  if (!vk.empty() && isPointerKind(vk)) {
+    // address space 先不分，交給 LLVM 後端
+    return mlir::LLVM::LLVMPointerType::get(b.getContext());
+  }
+
+  // ---- 3. 非 pointer：看 size ----
+  int size = 0;
+  if (auto s = d.getAs<mlir::IntegerAttr>("size"))
+    size = s.getInt();
+
+  // GPU dialect 慣例：size-like 參數用 index
+  if (size == 4 || size == 8) {
+    return b.getIndexType();
+  }
+
+  // ---- 4. fallback：用整數 ----
+  switch (size) {
+  case 1:
+    return b.getI8Type();
+  case 2:
+    return b.getI16Type();
+  case 4:
+    return b.getI32Type();
+  case 8:
+    return b.getI64Type();
+  default:
+    return b.getIndexType();
+  }
+}
+
+
 using namespace mlir;
 using namespace mlir::amdisa;
 
@@ -75,31 +132,52 @@ public:
       return;
     }
 
-    //--------------------------------------------------------------------------
-    // (2) Determine kernel name
-    //--------------------------------------------------------------------------
-    std::string kernel = kernelName; // From Pass option
+    // --------------------------------------------------------------------------
+    // (2) Determine kernel name (prefer module attr, fallback to pass option)
+    // --------------------------------------------------------------------------
+    std::string kernel;
 
-    if (auto attr =
-            module->getAttrOfType<StringAttr>("amdisa.kernel_name")) {
-      kernel = attr.str();
+    // Prefer module attribute
+    if (auto a = module->getAttrOfType<StringAttr>("amdisa.kernel_name")) {
+      kernel = a.getValue().str(); // NOTE: getValue() not .str() on attr itself
     }
 
+    // Fallback to pass option
+    if (kernel.empty())
+      kernel = kernelName;
+
+    // Final default
     if (kernel.empty())
       kernel = "amdisa_kernel";
 
-    //--------------------------------------------------------------------------
-    // (3) Apply target triple + code object version if not already present
-    //--------------------------------------------------------------------------
-    if (!module->getAttr("llvm.target_triple"))
-      module->setAttr("llvm.target_triple",
-                      builder.getStringAttr(targetTriple));
+    // --------------------------------------------------------------------------
+    // (3) Apply / normalize target triple + code object version
+    //     Prefer existing module attrs, else use pass options.
+    //     Also strip outer quotes on llvm.target_triple to avoid \22.
+    // --------------------------------------------------------------------------
 
-    if (!module->getAttr("amdgpu.code_object_version"))
+    // llvm.target_triple
+    if (auto a = module->getAttrOfType<StringAttr>("llvm.target_triple")) {
+      llvm::StringRef v = stripOuterQuotes(a.getValue());
+      // If normalization changed it, rewrite attribute
+      if (v != a.getValue())
+        module->setAttr("llvm.target_triple", builder.getStringAttr(v));
+    } else if (!targetTriple.empty()) {
+      llvm::StringRef v = stripOuterQuotes(targetTriple);
+      module->setAttr("llvm.target_triple", builder.getStringAttr(v));
+    }
+
+    // amdgpu.code_object_version
+    if (!module->getAttr("amdgpu.code_object_version")) {
+      // Only set if pass option provides a meaningful value
+      // (codeObjectVersion is typically an int option; if you used std::string,
+      // parse it before calling getI32IntegerAttr).
       module->setAttr("amdgpu.code_object_version",
                       builder.getI32IntegerAttr(codeObjectVersion));
+    }
 
     Location loc = module.getLoc();
+
 
     //--------------------------------------------------------------------------
     // (4) Create gpu.module @amdisa_kernels
@@ -113,14 +191,33 @@ public:
     //--------------------------------------------------------------------------
     builder.setInsertionPointToStart(gpuModule.getBody());
 
-    auto funcType = builder.getFunctionType(/*inputs=*/TypeRange{},
+    // auto funcType = builder.getFunctionType(/*inputs=*/TypeRange{},
+    //                                         /*results=*/TypeRange{});
+
+    // auto gpuFunc = builder.create<gpu::GPUFuncOp>(
+    //     loc, kernel, funcType);
+
+    SmallVector<Type> inputTypes;
+
+    if (auto a = module->getAttrOfType<ArrayAttr>("amdisa.kernargs")) {
+      inputTypes.reserve(a.size());
+      for (mlir::Attribute elt : a) {
+        if (auto d = llvm::dyn_cast<mlir::DictionaryAttr>(elt)) {
+          inputTypes.push_back(typeFromKernargDict(builder, d));
+        }
+      }
+    }
+
+    auto funcType = builder.getFunctionType(/*inputs=*/inputTypes,
                                             /*results=*/TypeRange{});
 
-    auto gpuFunc = builder.create<gpu::GPUFuncOp>(
-        loc, kernel, funcType);
-
+    auto gpuFunc = builder.create<gpu::GPUFuncOp>(loc, kernel, funcType);
     gpuFunc->setAttr(gpu::GPUDialect::getKernelFuncAttrName(),
-                 builder.getUnitAttr());
+                    builder.getUnitAttr());
+
+
+    // gpuFunc->setAttr(gpu::GPUDialect::getKernelFuncAttrName(),
+    //              builder.getUnitAttr());
 
     Block *entry = &gpuFunc.getBody().front();
     builder.setInsertionPointToStart(entry);

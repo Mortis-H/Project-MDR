@@ -131,15 +131,17 @@ def extract_bitcode_bytes(mlir_text: str):
     return out
 
 
-def build_isa_and_hsaco(chip: str, workdir: pathlib.Path):
+def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.Path):
     for tool in ["mlir-opt", "llvm-mc", "ld.lld"]:
         ensure_tool(tool)
 
-    kernel_mlir = "GPUkernel.mlir"
-    kernel_binary_mlir = workdir / "GPUkernel_binary_isa.mlir"
-    kernel_isa_s = workdir / "GPUkernel_isa.s"
-    kernel_o = workdir / "GPUkernel.o"
-    kernel_hsaco = workdir / "GPUkernel.hsaco"
+    kernel_stem = kernel_mlir.stem
+
+    kernel_binary_mlir = workdir / f"{kernel_stem}_binary_isa.mlir"
+    kernel_isa_s         = workdir / f"{kernel_stem}.s"
+    kernel_o             = workdir / f"{kernel_stem}.o"
+    kernel_hsaco         = workdir / f"{kernel_stem}.hsaco"
+
 
     pipeline = (
         f"builtin.module("
@@ -244,12 +246,24 @@ def main():
         "--runner-utils-lib",
         help="path to libmlir_runner_utils.so (optional; will be auto-detected if possible)",
     )
+
+    ap.add_argument(
+        "kernel_mlir",
+        help="Input MLIR file containing gpu.func kernel"
+    )
+
     args = ap.parse_args()
 
     workdir = pathlib.Path(args.workdir)
     workdir.mkdir(parents=True, exist_ok=True)
 
-    build_isa_and_hsaco(args.chip, workdir)
+    kernel_mlir = pathlib.Path(args.kernel_mlir).resolve()
+
+    if not kernel_mlir.exists():
+        raise FileNotFoundError(kernel_mlir)
+
+    build_isa_and_hsaco(kernel_mlir, args.chip, workdir)
+
 
 
 if __name__ == "__main__":
