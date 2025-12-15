@@ -107,7 +107,8 @@ static int runDumpMLIR() {
     return 1;
   }
 
-  module->dump();
+  module->print(llvm::outs());
+  llvm::outs() << "\n";
   return 0;
 }
 
@@ -143,7 +144,8 @@ static int runDumpGPUInlineASM() {
     return 1;
   }
 
-  module->dump();
+  module->print(llvm::outs());
+  llvm::outs() << "\n";
   return 0;
 }
 

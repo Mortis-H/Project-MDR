@@ -106,11 +106,36 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
 
     switch (line->kind) {
 
-    case LineKind::Label: {
-      auto nameAttr = builder.getStringAttr(line->labelName);
-      builder.create<LabelOp>(loc, nameAttr);
-      break;
-    }
+      case LineKind::Label: {
+        std::string labelName = line->labelName;
+        
+        // 提取純粹的 label 名稱（移除註釋部分）
+        // 例如："vec_add: ; @vec_add" → "vec_add"
+        llvm::StringRef labelRef(labelName);
+        size_t colonPos = labelRef.find(':');
+        if (colonPos != llvm::StringRef::npos) {
+          labelRef = labelRef.substr(0, colonPos).trim();
+        }
+        std::string pureLabelName = labelRef.str();
+        
+        // 1. 跳過 .Lfunc_end 開頭的 label（函數結束標記，會由外層生成）
+        if (pureLabelName.rfind(".Lfunc_end", 0) == 0) {
+          break;
+        }
+        
+        // 2. 跳過與 kernel 同名的 label（函數入口，會由 gpu.func 生成）
+        llvm::StringRef kname;
+        if (auto a = module->getAttrOfType<mlir::StringAttr>("amdisa.kernel_name"))
+          kname = a.getValue();
+        if (!kname.empty() && pureLabelName == kname.str()) {
+          break;
+        }
+        
+        // 3. 保留其他所有 label（包括 .LBB0_X 基本塊 label）
+        auto nameAttr = builder.getStringAttr(labelName);
+        builder.create<LabelOp>(loc, nameAttr);
+        break;
+      }
 
     case LineKind::Instruction: {
       const ParsedInstruction &inst = *line->instruction;
@@ -184,7 +209,6 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
   if (assembly.hasMetadata()) {
     const AMDGPUMetadata &meta = assembly.getMetadata();
 
-    // 找到對應的 kernel（依你的資料，通常用 symbol 或 name 對到 amdisa.kernel_name）
     llvm::StringRef kname;
     if (auto a = module->getAttrOfType<mlir::StringAttr>("amdisa.kernel_name"))
       kname = a.getValue();
@@ -195,7 +219,21 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
       if (!kname.empty() && (k.symbol == kname.str() || k.name == kname.str())) {
         argDicts.reserve(k.args.size());
         for (const auto &arg : k.args) {
-          argDicts.push_back(propsToDictAttr(builder, arg));
+          // 跳過 hidden 參數（由 runtime 自動管理）
+          bool isHidden = false;
+          for (const auto &prop : arg.getAllProperties()) {
+            if (prop.first == "value_kind") {
+              llvm::StringRef valueKind(prop.second);
+              if (valueKind.starts_with("hidden")) {
+                isHidden = true;
+                break;
+              }
+            }
+          }
+          
+          if (!isHidden) {
+            argDicts.push_back(propsToDictAttr(builder, arg));
+          }
         }
 
         // module->setAttr("amdisa.sgpr_count", builder.getI32IntegerAttr(k.sgprCount));

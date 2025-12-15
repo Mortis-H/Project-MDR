@@ -213,8 +213,8 @@ def main():
     )
     ap.add_argument(
         "--workdir",
-        default="build_mdr",
-        help="directory to put intermediate files [default: build_mdr]",
+        default=None,
+        help="directory to put intermediate files [default: <kernel_mlir_stem>]",
     )
     ap.add_argument(
         "--emit-isa",
@@ -254,13 +254,18 @@ def main():
 
     args = ap.parse_args()
 
-    workdir = pathlib.Path(args.workdir)
-    workdir.mkdir(parents=True, exist_ok=True)
-
     kernel_mlir = pathlib.Path(args.kernel_mlir).resolve()
 
     if not kernel_mlir.exists():
         raise FileNotFoundError(kernel_mlir)
+
+    # 如果未指定 workdir，則使用 kernel_mlir 的檔名
+    if args.workdir is None:
+        workdir = pathlib.Path(kernel_mlir.stem)
+    else:
+        workdir = pathlib.Path(args.workdir)
+    
+    workdir.mkdir(parents=True, exist_ok=True)
 
     build_isa_and_hsaco(kernel_mlir, args.chip, workdir)
 

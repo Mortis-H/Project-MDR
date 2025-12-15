@@ -27,54 +27,56 @@ static llvm::StringRef stripOuterQuotes(llvm::StringRef s) {
 
 static mlir::Type
 typeFromKernargDict(mlir::OpBuilder &b, mlir::DictionaryAttr d) {
-  // ---- 1. 抓 value_kind ----
-  auto vkAttr = d.getAs<mlir::StringAttr>("value_kind");
-  llvm::StringRef vk = vkAttr ? vkAttr.getValue() : "";
-
-
-  // ---- 2. Pointer 類 → !llvm.ptr ----
-  auto isPointerKind = [&](llvm::StringRef k) {
-    return k.contains("buffer") ||
-           k.contains("pointer") ||
-           k.contains("queue") ||
-           k.contains("kernarg") ||
-           k.contains("image") ||
-           k.contains("sampler");
-  };
-
-  if (!vk.empty() && isPointerKind(vk)) {
-    // address space 先不分，交給 LLVM 後端
-    return mlir::LLVM::LLVMPointerType::get(b.getContext());
-  }
-
-  // ---- 3. 非 pointer：看 size ----
   int size = 0;
   if (auto s = d.getAs<mlir::IntegerAttr>("size"))
     size = s.getInt();
+  
+  // 獲取 value_kind 用於驗證（可選）
+  auto vkAttr = d.getAs<mlir::StringAttr>("value_kind");
+  llvm::StringRef vk = vkAttr ? vkAttr.getValue() : "";
 
-  // GPU dialect 慣例：size-like 參數用 index
-  if (size == 4 || size == 8) {
-    return b.getIndexType();
-  }
-
-  // ---- 4. fallback：用整數 ----
   switch (size) {
-  case 1:
-    return b.getI8Type();
+  case 8: {
+    // 在 debug 模式下驗證 value_kind
+    #ifndef NDEBUG
+    if (!vk.empty() && !vk.contains("buffer") && !vk.contains("pointer")) {
+      llvm::errs() << "Warning: size=8 but value_kind=" << vk 
+                   << " (expected pointer type)\n";
+    }
+    #endif
+    return mlir::LLVM::LLVMPointerType::get(b.getContext());
+  }
+    
+  case 4:
+    return b.getIndexType();
+    
   case 2:
     return b.getI16Type();
-  case 4:
-    return b.getI32Type();
-  case 8:
-    return b.getI64Type();
+    
+  case 1:
+    return b.getI8Type();
+    
   default:
-    return b.getIndexType();
+    if (size > 8 && size <= 4096) {
+      // 大型結構體參數（如 attn_bwd_combined_globals）
+      // 使用字節數組類型：!llvm.array<N x i8>
+      llvm::errs() << "Info: large kernel argument (size=" << size 
+                   << " bytes), using !llvm.array<" << size << " x i8>\n";
+      mlir::Type i8Type = b.getI8Type();
+      return mlir::LLVM::LLVMArrayType::get(i8Type, size);
+      
+    } else if (size > 4096) {
+      llvm::errs() << "Error: kernel argument too large (size=" << size 
+                   << " bytes), max 4096 expected. Using index as fallback.\n";
+      return b.getIndexType();
+      
+    } else {
+      llvm::errs() << "Error: invalid kernel argument size=" << size 
+                   << ". Using index as fallback.\n";
+      return b.getIndexType();
+    }
   }
 }
-
-
-using namespace mlir;
-using namespace mlir::amdisa;
 
 namespace mlir {
 namespace amdisa {
