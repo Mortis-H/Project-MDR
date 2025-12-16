@@ -26,7 +26,8 @@ get_property(translation_libs GLOBAL PROPERTY MLIR_TRANSLATION_LIBS)
 # --------------------------------------------------------------------------
 
 add_mlir_tool(amdisa-translate
-  mdr.cpp
+  amdisa-translate.cpp
+  AMDISAAsmParser.cpp
   AMDGCNAssembly.cpp
   AMDGPUMetadata.cpp
   parse_utils.cpp

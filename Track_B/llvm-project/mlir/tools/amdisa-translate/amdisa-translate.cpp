@@ -1,4 +1,4 @@
-//===- AMDISAParser.cpp - AMD ISA Parser & Dumper ------------------------===//
+//===- amdisa-translate.cpp - AMD ISA Translation Tool --------------------===//
 //
 // This tool implements:
 //     .s  -> AMDISA Dialect  ->  (MLIR or GPU inline asm)
@@ -11,10 +11,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/Parser/Parser.h"
+#include "AMDISAAsmParser.h"
+
 #include "mlir/IR/AsmState.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/MLIRContext.h"
+#include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 
 #include "llvm/Support/CommandLine.h"
@@ -24,17 +26,11 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "mlir/Dialect/AMDISA/IR/AMDISAOps.h"
+#include "mlir/Dialect/AMDISA/Passes.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 
-#include "mlir/Dialect/AMDISA/Passes.h"
-#include "mdr.h"
-
-mlir::amdisa::AMDISAAsmParser::AMDISAAsmParser(llvm::StringRef filename)
-    : filename_(filename) {}
-
 using namespace mlir;
-
 using namespace mlir::amdisa;
 namespace cl = llvm::cl;
 
@@ -54,27 +50,26 @@ static cl::opt<enum InputType> inputType(
         clEnumValN(Asm,  "s",    "Load input as AMD .s assembly"),
         clEnumValN(MLIR, "mlir", "Load input as MLIR file")));
 
-enum Action { None, DumpMLIR, DumpASM, DumpGPUInlineASM };
+enum Action { None, DumpMLIR, DumpGPUInlineASM };
 static cl::opt<enum Action> emitAction(
     "emit", cl::desc("Output type"),
     cl::values(
-        clEnumValN(DumpMLIR,        "mlir",         "Dump the MLIR module"),
-        clEnumValN(DumpASM,         "s",            "Dump reconstructed .s"),
-        clEnumValN(DumpGPUInlineASM,"gpuinlineasm", "Lower to gpu.func + llvm.inline_asm")));
+        clEnumValN(DumpMLIR,        "mlir", "Dump the MLIR module in AMDISA dialect"),
+        clEnumValN(DumpGPUInlineASM,"gpu",  "Lower to gpu.func + llvm.inline_asm and dump the result")));
 
 //===----------------------------------------------------------------------===//
-// Parsing pipeline
+// Parsing pipeline helpers
 //===----------------------------------------------------------------------===//
 
+/// Parse AMD assembly (.s file) to AMDISA dialect
 static mlir::OwningOpRef<mlir::ModuleOp>
 parseAsmToAMDISA(llvm::StringRef filename,
                  mlir::MLIRContext &context) {
-
   AMDISAAsmParser parser(filename);
   return parser.parseModule(context);
 }
 
-
+/// Parse existing MLIR file
 static OwningOpRef<ModuleOp>
 parseMLIRFile(StringRef filename, MLIRContext &context) {
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> fileOrErr =
@@ -136,7 +131,7 @@ static int runDumpGPUInlineASM() {
 
   PassManager pm(&context);
 
-  // Add your lowering pass
+  // Add the AMDISA to GPU inline asm lowering pass
   pm.addPass(createLowerAMDISAToGPUInlineAsmPass());
 
   if (failed(pm.run(*module))) {
@@ -156,14 +151,15 @@ static int runDumpGPUInlineASM() {
 int main(int argc, char **argv) {
   mlir::registerAsmPrinterCLOptions();
   mlir::registerMLIRContextCLOptions();
-  cl::ParseCommandLineOptions(argc, argv, "AMDISA Parser\n");
+  cl::ParseCommandLineOptions(argc, argv, "AMDISA Translation Tool\n");
 
   switch (emitAction) {
-    case DumpMLIR:        return runDumpMLIR();
-    case DumpGPUInlineASM:return runDumpGPUInlineASM();
-    case DumpASM:         return 0;
+    case DumpMLIR:
+      return runDumpMLIR();
+    case DumpGPUInlineASM:
+      return runDumpGPUInlineASM();
     default:
-      llvm::errs() << "No action specified. Use -emit=mlir, -emit=s, or -emit=gpuinlineasm\n";
+      llvm::errs() << "No action specified. Use -emit=mlir or -emit=gpu\n";
       return 2;
   }
 }

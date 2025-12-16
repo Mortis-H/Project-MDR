@@ -131,7 +131,59 @@ def extract_bitcode_bytes(mlir_text: str):
     return out
 
 
+def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path):
+    """
+    使用 amdisa-translate 將 .s 文件轉換為 .amdisamlir 和 .gpumlir
+    
+    Args:
+        asm_file: 輸入的 .s assembly 文件
+        workdir: 工作目錄
+    
+    Returns:
+        (amdisamlir_path, gpumlir_path): 生成的文件路徑
+    """
+    ensure_tool("amdisa-translate")
+    
+    asm_stem = asm_file.stem
+    amdisamlir_file = workdir / f"{asm_stem}.amdisamlir"
+    gpumlir_file = workdir / f"{asm_stem}.gpumlir"
+    
+    # Step 1: .s -> .amdisamlir
+    print(f"\n=== Step 1: Translating {asm_file.name} to AMDISA MLIR ===")
+    amdisa_cmd = [
+        "amdisa-translate",
+        "-x", "s",
+        "-emit=mlir",
+        str(asm_file),
+    ]
+    result = subprocess.run(amdisa_cmd, capture_output=True, text=True, check=True)
+    amdisamlir_file.write_text(result.stdout)
+    print(f"Generated AMDISA MLIR: {amdisamlir_file}")
+    
+    # Step 2: .amdisamlir -> .gpumlir
+    print(f"\n=== Step 2: Lowering AMDISA MLIR to GPU MLIR ===")
+    gpu_cmd = [
+        "amdisa-translate",
+        "-x", "mlir",
+        "-emit=gpu",
+        str(amdisamlir_file),
+    ]
+    result = subprocess.run(gpu_cmd, capture_output=True, text=True, check=True)
+    gpumlir_file.write_text(result.stdout)
+    print(f"Generated GPU MLIR: {gpumlir_file}")
+    
+    return amdisamlir_file, gpumlir_file
+
+
 def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.Path):
+    """
+    從 GPU MLIR 繼續執行原本的 pipeline，生成 ISA 和 HSACO
+    
+    Args:
+        kernel_mlir: GPU MLIR 文件 (帶有 gpu.func)
+        chip: 目標晶片型號
+        workdir: 工作目錄
+    """
     for tool in ["mlir-opt", "llvm-mc", "ld.lld"]:
         ensure_tool(tool)
 
@@ -142,7 +194,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     kernel_o             = workdir / f"{kernel_stem}.o"
     kernel_hsaco         = workdir / f"{kernel_stem}.hsaco"
 
-
+    print(f"\n=== Step 3: Running MLIR optimization pipeline ===")
     pipeline = (
         f"builtin.module("
         f"gpu-kernel-outlining,"
@@ -175,6 +227,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     kernel_isa_s.write_text(isa)
     print(f"Wrote ISA assembly to {kernel_isa_s}")
 
+    print(f"\n=== Step 4: Assembling ISA to object file ===")
     llvm_mc_cmd = [
         "llvm-mc",
         "-triple", "amdgcn-amd-amdhsa",
@@ -186,6 +239,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     ]
     run_cmd(llvm_mc_cmd)
 
+    print(f"\n=== Step 5: Linking to HSACO ===")
     ld_cmd = [
         "ld.lld",
         "-shared",
@@ -195,7 +249,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     ]
     run_cmd(ld_cmd)
 
-    print(f"Generated HSACO: {kernel_hsaco}")
+    print(f"\n✓ Successfully generated HSACO: {kernel_hsaco}")
 
 
 # ------------------------------------------------------------
@@ -204,7 +258,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
 def main():
 
     ap = argparse.ArgumentParser(
-        description="Generate a simple AMDGPU MLIR kernel and build HSACO / LLVM IR / run host code (device-only pipeline)."
+        description="AMD ISA to MLIR pipeline: Translate .s assembly to MLIR, then build HSACO / LLVM IR."
     )
     ap.add_argument(
         "--chip",
@@ -248,26 +302,44 @@ def main():
     )
 
     ap.add_argument(
-        "kernel_mlir",
-        help="Input MLIR file containing gpu.func kernel"
+        "input_file",
+        help="Input file: either .s (AMD ISA assembly) or .mlir (GPU MLIR with gpu.func kernel)"
     )
 
     args = ap.parse_args()
 
-    kernel_mlir = pathlib.Path(args.kernel_mlir).resolve()
+    input_file = pathlib.Path(args.input_file).resolve()
 
-    if not kernel_mlir.exists():
-        raise FileNotFoundError(kernel_mlir)
+    if not input_file.exists():
+        raise FileNotFoundError(input_file)
 
-    # 如果未指定 workdir，則使用 kernel_mlir 的檔名
+    # 如果未指定 workdir，則使用 input_file 的檔名
     if args.workdir is None:
-        workdir = pathlib.Path(kernel_mlir.stem)
+        workdir = pathlib.Path(input_file.stem)
     else:
         workdir = pathlib.Path(args.workdir)
     
     workdir.mkdir(parents=True, exist_ok=True)
 
-    build_isa_and_hsaco(kernel_mlir, args.chip, workdir)
+    # 根據文件副檔名決定處理流程
+    suffix = input_file.suffix.lower()
+    
+    if suffix == ".s":
+        # 完整流程：.s -> .amdisamlir -> .gpumlir -> ISA/HSACO
+        print(f"=== Processing AMD ISA Assembly: {input_file.name} ===")
+        amdisamlir_file, gpumlir_file = translate_asm_to_gpu(input_file, workdir)
+        
+        if args.emit_isa:
+            build_isa_and_hsaco(gpumlir_file, args.chip, workdir)
+    
+    elif suffix in [".mlir", ".gpumlir"]:
+        # 從 GPU MLIR 開始（原本的流程）
+        print(f"=== Processing GPU MLIR: {input_file.name} ===")
+        if args.emit_isa:
+            build_isa_and_hsaco(input_file, args.chip, workdir)
+    
+    else:
+        raise ValueError(f"Unsupported file type: {suffix}. Expected .s or .mlir")
 
 
 

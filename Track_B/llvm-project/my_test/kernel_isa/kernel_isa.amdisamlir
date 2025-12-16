@@ -775,3 +775,4 @@ module attributes {amdgpu.code_object_version = 6 : i32, amdisa.kernargs = [{add
   amdisa.inst {mnemonic = "s_or_b64", operands = ["exec", "exec", "s[6:7]"], raw_text = "\09s_or_b64 exec, exec, s[6:7]"}
   amdisa.inst {mnemonic = "s_endpgm", operands = [], raw_text = "\09s_endpgm"}
 }
+
