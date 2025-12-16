@@ -98,6 +98,11 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
 
   AMDGCNAssembly assembly = parseAMDGCNAssembly(filename_.str());
 
+  // Track whether we're inside the kernel function
+  // Start when we see the kernel label, end when we see a .section directive
+  bool insideKernelFunction = false;
+  std::string kernelLabelName;
+  
   for (size_t lineNum = 1; lineNum <= assembly.getLineCount(); ++lineNum) {
     const LineInfo *line = assembly.getLine(lineNum);
     if (!line) continue;
@@ -118,26 +123,38 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
         }
         std::string pureLabelName = labelRef.str();
         
-        // 1. 跳過 .Lfunc_end 開頭的 label（函數結束標記，會由外層生成）
-        if (pureLabelName.rfind(".Lfunc_end", 0) == 0) {
-          break;
-        }
-        
-        // 2. 跳過與 kernel 同名的 label（函數入口，會由 gpu.func 生成）
+        // Get kernel name (might have been set earlier)
         llvm::StringRef kname;
         if (auto a = module->getAttrOfType<mlir::StringAttr>("amdisa.kernel_name"))
           kname = a.getValue();
+        
+        // Check if this is the kernel label (start of kernel function)
         if (!kname.empty() && pureLabelName == kname.str()) {
+          insideKernelFunction = true;
+          kernelLabelName = pureLabelName;
+          break;  // Skip kernel label itself (will be created by gpu.func)
+        }
+        
+        // 1. 跳過 .Lfunc_end 開頭的 label（函數結束標記，會由外層生成）
+        if (pureLabelName.rfind(".Lfunc_end", 0) == 0) {
+          insideKernelFunction = false;  // End of kernel function
           break;
         }
         
-        // 3. 保留其他所有 label（包括 .LBB0_X 基本塊 label）
-        auto nameAttr = builder.getStringAttr(labelName);
-        builder.create<LabelOp>(loc, nameAttr);
+        // 2. Only create LabelOp if inside kernel function
+        if (insideKernelFunction) {
+          auto nameAttr = builder.getStringAttr(labelName);
+          builder.create<LabelOp>(loc, nameAttr);
+        }
         break;
       }
 
     case LineKind::Instruction: {
+      // Only create InstOp if inside kernel function
+      if (!insideKernelFunction) {
+        break;
+      }
+      
       const ParsedInstruction &inst = *line->instruction;
 
       auto mnemonicAttr = builder.getStringAttr(inst.opcode);
@@ -206,8 +223,168 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
     }
   }
 
+  // Ultimate simple approach: save complete original file content
+  // and mark which lines are instructions
+  std::map<std::string, std::string> amdhdaDirectives;
+  llvm::SmallVector<std::string> allLines;
+  llvm::SmallVector<bool> isInstructionLine;
+  llvm::SmallVector<bool> isLabelLine;
+  llvm::SmallVector<bool> isAmdhsaKernelSection;
+  llvm::SmallVector<bool> isMetadataSection;
+  bool inAmdhdaKernel = false;
+  bool inMetadata = false;
+  
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> fileOrErr = 
+      llvm::MemoryBuffer::getFileOrSTDIN(filename_);
+  if (fileOrErr && fileOrErr.get()) {
+    llvm::StringRef fileContent = fileOrErr.get()->getBuffer();
+    llvm::SmallVector<llvm::StringRef, 0> lines;
+    fileContent.split(lines, '\n');
+    
+    // Analyze each line and classify it
+    // Key insight: .amdhsa_kernel and .amdgpu_metadata are closed blocks
+    for (llvm::StringRef lineRef : lines) {
+      llvm::StringRef trimmed = lineRef.trim();
+      std::string lineStr = lineRef.str();
+      
+      // Track .amdhsa_kernel closed block
+      if (trimmed.starts_with(".amdhsa_kernel")) {
+        inAmdhdaKernel = true;
+        // Mark this line as start of kernel block
+        allLines.push_back(lineStr);
+        isInstructionLine.push_back(false);
+        isLabelLine.push_back(false);
+        isAmdhsaKernelSection.push_back(true);
+        isMetadataSection.push_back(false);
+        continue;
+      } else if (trimmed.starts_with(".end_amdhsa_kernel")) {
+        // Mark this line as end of kernel block
+        allLines.push_back(lineStr);
+        isInstructionLine.push_back(false);
+        isLabelLine.push_back(false);
+        isAmdhsaKernelSection.push_back(true);
+        isMetadataSection.push_back(false);
+        inAmdhdaKernel = false;
+        continue;
+      } else if (inAmdhdaKernel) {
+        // Inside .amdhsa_kernel block: extract directives and mark as [K]
+        if (trimmed.starts_with(".amdhsa_")) {
+          auto splitPair = trimmed.split(' ');
+          if (splitPair.second.empty()) {
+            splitPair = trimmed.split('\t');
+          }
+          if (!splitPair.second.empty()) {
+            std::string directiveName = splitPair.first.str();
+            std::string value = splitPair.second.trim().str();
+            if (!value.empty()) {
+              amdhdaDirectives[directiveName] = value;
+            }
+          }
+        }
+        allLines.push_back(lineStr);
+        isInstructionLine.push_back(false);
+        isLabelLine.push_back(false);
+        isAmdhsaKernelSection.push_back(true);
+        isMetadataSection.push_back(false);
+        continue;
+      }
+      
+      // Track .amdgpu_metadata closed block
+      if (trimmed.starts_with(".amdgpu_metadata")) {
+        inMetadata = true;
+        allLines.push_back(lineStr);
+        isInstructionLine.push_back(false);
+        isLabelLine.push_back(false);
+        isAmdhsaKernelSection.push_back(false);
+        isMetadataSection.push_back(true);
+        continue;
+      } else if (trimmed.starts_with(".end_amdgpu_metadata")) {
+        allLines.push_back(lineStr);
+        isInstructionLine.push_back(false);
+        isLabelLine.push_back(false);
+        isAmdhsaKernelSection.push_back(false);
+        isMetadataSection.push_back(true);
+        inMetadata = false;
+        continue;
+      } else if (inMetadata) {
+        // Inside .amdgpu_metadata block: mark as [M]
+        allLines.push_back(lineStr);
+        isInstructionLine.push_back(false);
+        isLabelLine.push_back(false);
+        isAmdhsaKernelSection.push_back(false);
+        isMetadataSection.push_back(true);
+        continue;
+      }
+      
+      // Normal line classification (outside closed blocks)
+      bool isInst = false;
+      bool isLbl = false;
+      
+      if (!trimmed.empty()) {
+        // Comments (starting with ';') are never labels or instructions
+        if (trimmed.starts_with(";")) {
+          // Keep as [O] (Other)
+        }
+        // Check if it's a label (ends with ':' or contains ':' followed by whitespace/comment)
+        // This includes local labels like .Lfunc_end0: and .LBB0_2:
+        else if (trimmed.ends_with(":") || trimmed.contains(": ") || trimmed.contains(":\t")) {
+          isLbl = true;
+        }
+        // Check if it's an instruction (not starting with '.' and contains instruction patterns)
+        else if (!trimmed.starts_with(".")) {
+          if (trimmed.contains("s_") || trimmed.contains("v_") || 
+              trimmed.contains("global_") || trimmed.contains("buffer_") ||
+              trimmed.contains("_e32") || trimmed.contains("_e64")) {
+            isInst = true;
+          }
+        }
+      }
+      
+      // Save line with classification
+      allLines.push_back(lineStr);
+      isInstructionLine.push_back(isInst);
+      isLabelLine.push_back(isLbl);
+      isAmdhsaKernelSection.push_back(false);
+      isMetadataSection.push_back(false);
+    }
+    
+    // Save the complete original content as a JSON-like structure
+    std::string structuredContent;
+    for (size_t i = 0; i < allLines.size(); i++) {
+      // Format: [type]line_content
+      // type: I=instruction, L=label, K=amdhsa_kernel, M=metadata, O=other
+      char type = 'O';
+      if (isInstructionLine[i]) type = 'I';
+      else if (isLabelLine[i]) type = 'L';
+      else if (isAmdhsaKernelSection[i]) type = 'K';
+      else if (isMetadataSection[i]) type = 'M';
+      
+      structuredContent += std::string("[") + type + "]" + allLines[i] + "\n";
+    }
+    
+    module->setAttr("amdisa.full_original", builder.getStringAttr(structuredContent));
+  }
+  
+  // Save .amdhsa_kernel directives as a single attribute
+  if (!amdhdaDirectives.empty()) {
+    llvm::SmallVector<mlir::Attribute> directiveAttrs;
+    for (const auto &[key, value] : amdhdaDirectives) {
+      llvm::SmallVector<mlir::NamedAttribute> props;
+      props.push_back(builder.getNamedAttr("name", builder.getStringAttr(key)));
+      props.push_back(builder.getNamedAttr("value", builder.getStringAttr(value)));
+      directiveAttrs.push_back(builder.getDictionaryAttr(props));
+    }
+    module->setAttr("amdisa.amdhsa_directives", builder.getArrayAttr(directiveAttrs));
+  }
+
   if (assembly.hasMetadata()) {
     const AMDGPUMetadata &meta = assembly.getMetadata();
+    
+    // 保存原始 metadata YAML 以便重建完整的 .s
+    if (!meta.rawYAML.empty()) {
+      module->setAttr("amdisa.raw_metadata", 
+                      builder.getStringAttr(meta.rawYAML));
+    }
 
     llvm::StringRef kname;
     if (auto a = module->getAttrOfType<mlir::StringAttr>("amdisa.kernel_name"))

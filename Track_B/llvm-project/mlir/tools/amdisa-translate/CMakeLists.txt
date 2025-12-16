@@ -30,6 +30,7 @@ add_mlir_tool(amdisa-translate
   AMDGCNAssembly.cpp
   AMDGPUMetadata.cpp
   parse_utils.cpp
+  AMDISAToAssembly.cpp
 )
 
 

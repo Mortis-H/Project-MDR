@@ -29,6 +29,7 @@
 
 #include "mlir/Dialect/AMDISA/Passes.h"
 #include "mdr.h"
+#include "AMDISAToAssembly.h"
 
 mlir::amdisa::AMDISAAsmParser::AMDISAAsmParser(llvm::StringRef filename)
     : filename_(filename) {}
@@ -150,6 +151,48 @@ static int runDumpGPUInlineASM() {
 }
 
 //===----------------------------------------------------------------------===//
+// Action: Reconstruct full .s assembly from GPU MLIR
+//===----------------------------------------------------------------------===//
+
+static int runDumpASM() {
+  MLIRContext context;
+
+  // Load required dialects
+  context.getOrLoadDialect<AMDISADialect>();
+  context.getOrLoadDialect<gpu::GPUDialect>();
+  context.getOrLoadDialect<LLVM::LLVMDialect>();
+
+  OwningOpRef<ModuleOp> module;
+
+  if (inputType == Asm) {
+    // If input is .s, we need to parse it, lower it to GPU, then reconstruct
+    module = parseAsmToAMDISA(inputFilename, context);
+    if (!module) {
+      llvm::errs() << "Failed to parse input .s file.\n";
+      return 1;
+    }
+
+    // Lower to GPU inline asm
+    PassManager pm(&context);
+    pm.addPass(createLowerAMDISAToGPUInlineAsmPass());
+    if (failed(pm.run(*module))) {
+      llvm::errs() << "Lowering to GPU inline asm failed.\n";
+      return 1;
+    }
+  } else {
+    // Input is already MLIR (expected to be GPU MLIR)
+    module = parseMLIRFile(inputFilename, context);
+    if (!module) {
+      llvm::errs() << "Failed to load MLIR file.\n";
+      return 1;
+    }
+  }
+
+  // Reconstruct full .s assembly
+  return mlir::amdisa::reconstructAssemblyFromGPU(*module, llvm::outs());
+}
+
+//===----------------------------------------------------------------------===//
 // Main
 //===----------------------------------------------------------------------===//
 
@@ -161,7 +204,7 @@ int main(int argc, char **argv) {
   switch (emitAction) {
     case DumpMLIR:        return runDumpMLIR();
     case DumpGPUInlineASM:return runDumpGPUInlineASM();
-    case DumpASM:         return 0;
+    case DumpASM:         return runDumpASM();
     default:
       llvm::errs() << "No action specified. Use -emit=mlir, -emit=s, or -emit=gpuinlineasm\n";
       return 2;
