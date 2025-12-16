@@ -49,19 +49,95 @@ def generate_mlir_module() -> str:
               llvm.inline_asm has_side_effects asm_dialect = att "        global_load_dword v7, v[2:3], off", "" : () -> ()
               llvm.inline_asm has_side_effects asm_dialect = att "        v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]", "" : () -> ()
               llvm.inline_asm has_side_effects asm_dialect = att "        s_waitcnt vmcnt(0)", "" : () -> ()
+
+              // ===========================
+
+              //////////////////////////////
+              // Register clobbing after studying user logic
+              //////////////////////////////
+              %reserved = llvm.inline_asm has_side_effects asm_dialect = att "", "={v[0:31]}": () -> vector<32xi32>
+
+              //////////////////////////////
+              // Value binding to read the register in the user logic
+              //////////////////////////////
+
+              // Bind A
+              %val_A = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v6", "=v": () -> f32
+
+              // Bind B
+              %val_B = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v7", "=v": () -> f32
+
+              //////////////////////////////
+              // DSL section
+              //////////////////////////////
+
+              // Demonstrate:
+              // - indexing with GPU dialect
+              // - very simple control flow using CF dialect
+              // - printf() with formatted strings
+
+              %tid = gpu.thread_id x
+              %flag = arith.constant 3 : index
+              %is_positive = arith.cmpi eq, %tid, %flag : index
+              gpu.printf "TID = %d, FLAG = %d, condition = eq, is_positive = %d\n", %tid, %flag, %is_positive : index, index, i1
+
+              cf.cond_br %is_positive, ^bbPOSITIVE_AB, ^bbMERGE_AB
+              ^bbPOSITIVE_AB:
+                  gpu.printf "A[%d] printed inside kernel = %4.3f\n", %tid, %val_A : index, f32
+                  gpu.printf "B[%d] printed inside kernel = %4.3f\n", %tid, %val_B : index, f32
+                  cf.br ^bbMERGE_AB
+
+              ^bbMERGE_AB:
+
+              // ===========================
+
+              // Original kernel logic continue
               llvm.inline_asm has_side_effects asm_dialect = att "        v_add_f32_e32 v2, v6, v7", "" : () -> ()
               llvm.inline_asm has_side_effects asm_dialect = att "        global_store_dword v[0:1], v2, off", "" : () -> ()
               llvm.inline_asm has_side_effects asm_dialect = att ".LBB0_2:", "" : () -> ()
 
+              // ===========================
+
+              //////////////////////////////
               // Value binding to read the register in the user logic
-              %val_user = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v2", "=v,~{v[0:31]}": () -> f32
+              //////////////////////////////
 
-              // Register clobbing after studying user logic
-              %reserved = llvm.inline_asm has_side_effects asm_dialect = att "", "={v[0:31]}": () -> vector<32xi32>
+              // Bind C
+              %val_C = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v2", "=v": () -> f32
 
+              //////////////////////////////
               // DSL section
-              // Only support printf() for now
-              gpu.printf "C printed inside kernel = %4.3f\n", %val_user : f32
+              //////////////////////////////
+
+              // Demonstrate utility values used by DSL should be better be created from scratch
+              %tid_2 = gpu.thread_id x
+              %flag_2 = arith.constant 2 : index
+              %is_positive_2 = arith.cmpi eq, %tid_2, %flag_2 : index
+              gpu.printf "TID = %d, FLAG = %d, condition = eq, is_positive = %d\n", %tid_2, %flag_2, %is_positive_2 : index, index, i1
+
+              cf.cond_br %is_positive_2, ^bbPOSITIVE_C, ^bbMERGE_C
+              ^bbPOSITIVE_C:
+                  gpu.printf "C[%d] printed inside kernel = %4.3f\n", %tid_2, %val_C : index, f32
+                  cf.br ^bbMERGE_C
+
+              ^bbMERGE_C:
+
+              //////////////////////////////
+              // DSL section
+              //////////////////////////////
+
+              // Demonstrate different comparison condition
+              %tid_3 = gpu.thread_id x
+              %flag_3 = arith.constant 4 : index
+              %is_positive_3 = arith.cmpi slt, %tid_3, %flag_3 : index
+              gpu.printf "TID = %d, FLAG = %d, condition = slt, is_positive = %d\n", %tid_3, %flag_3, %is_positive_3 : index, index, i1
+
+              cf.cond_br %is_positive_3, ^bbPOSITIVE_D, ^bbMERGE_D
+              ^bbPOSITIVE_D:
+                  gpu.printf "C[%d] printed inside kernel = %4.3f\n", %tid_3, %val_C : index, f32
+                  cf.br ^bbMERGE_D
+
+              ^bbMERGE_D:
 
               // Register clobbing end
               llvm.inline_asm has_side_effects asm_dialect = att "", "{v[0:31]}" %reserved : (vector<32xi32>)-> ()
@@ -218,7 +294,7 @@ def build_isa_and_hsaco(chip: str, workdir: pathlib.Path):
         f"builtin.module("
         f"gpu-kernel-outlining,"
         f"rocdl-attach-target{{chip={chip}}},"
-        f"gpu.module(convert-gpu-to-rocdl{{index-bitwidth=32 runtime=HIP}}),"
+        f"gpu.module(convert-scf-to-cf,convert-gpu-to-rocdl{{index-bitwidth=32 runtime=HIP}}),"
         f"gpu-to-llvm,"
         f"gpu-module-to-binary{{format=isa}}"
         f")"

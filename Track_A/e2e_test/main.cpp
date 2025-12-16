@@ -17,14 +17,14 @@
     } while (0)
 
 int main() {
-    const int N = 1;
+    const int N = 4;
     const size_t bytes = N * sizeof(float);
 
     // 準備 host 資料
     std::vector<float> hA(N), hB(N), hC(N);
     for (int i = 0; i < N; ++i) {
-        hA[i] = static_cast<float>(i) + 100;
-        hB[i] = static_cast<float>(2 * i) + 100;
+        hA[i] = static_cast<float>(i) + 50;
+        hB[i] = static_cast<float>(2 * i) + 150;
     }
 
     // 初始化 HIP、選裝置（可省略 hipInit，呼叫任何 HIP API 時會自動 init）
@@ -88,7 +88,9 @@ int main() {
     }
 
     std::cout << "Result: " << (ok ? "OK" : "FAILED") << std::endl;
-    std::cout << "C printed at host = " << std::fixed << std::setprecision(3) << hC[0] << std::endl;
+    for (int i = 0; i < N; ++i) {
+        std::cout << "C printed at host = " << std::fixed << std::setprecision(3) << hC[i] << std::endl;
+    }
 
     // 清理
     HIP_CHECK(hipFree(dA));
