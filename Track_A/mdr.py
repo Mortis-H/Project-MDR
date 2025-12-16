@@ -127,14 +127,15 @@ def generate_mlir_module() -> str:
               //////////////////////////////
 
               // Demonstrate different comparison condition
-              %tid_3 = gpu.thread_id x
               %flag_3 = arith.constant 4 : index
-              %is_positive_3 = arith.cmpi slt, %tid_3, %flag_3 : index
-              gpu.printf "TID = %d, FLAG = %d, condition = slt, is_positive = %d\n", %tid_3, %flag_3, %is_positive_3 : index, index, i1
+              %is_positive_3 = arith.cmpi slt, %tid_2, %flag_3 : index
+              gpu.printf "TID = %d, FLAG = %d, condition = slt, is_positive = %d\n", %tid_2, %flag_3, %is_positive_3 : index, index, i1
 
               cf.cond_br %is_positive_3, ^bbPOSITIVE_3, ^bbMERGE_3
               ^bbPOSITIVE_3:
-                  gpu.printf "C[%d] printed inside kernel = %4.3f\n", %tid_3, %val_C : index, f32
+                  gpu.printf "A[%d] printed inside kernel = %4.3f\n", %tid_2, %val_A : index, f32
+                  gpu.printf "B[%d] printed inside kernel = %4.3f\n", %tid_2, %val_B : index, f32
+                  gpu.printf "C[%d] printed inside kernel = %4.3f\n", %tid_2, %val_C : index, f32
                   cf.br ^bbMERGE_3
 
               ^bbMERGE_3:
@@ -149,7 +150,7 @@ def generate_mlir_module() -> str:
               %c4 = arith.constant 4.0 : f32
               %val_4AC = arith.mulf %c4, %val_AC : f32
               %val_B2_4AC = arith.subf %val_B2, %val_4AC : f32
-              gpu.printf "B^2-4AC = %4.3f\n", %val_B2_4AC : f32
+              gpu.printf "B[%d]^2-4A[%d]C[%d] = %4.3f\n", %tid_2, %tid_2, %tid_2, %val_B2_4AC : index, index, index, f32
 
               // Register clobbing end
               llvm.inline_asm has_side_effects asm_dialect = att "", "{v[0:31]}" %reserved : (vector<32xi32>)-> ()
