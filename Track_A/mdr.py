@@ -81,13 +81,13 @@ def generate_mlir_module() -> str:
               %is_positive = arith.cmpi eq, %tid, %flag : index
               gpu.printf "TID = %d, FLAG = %d, condition = eq, is_positive = %d\n", %tid, %flag, %is_positive : index, index, i1
 
-              cf.cond_br %is_positive, ^bbPOSITIVE_AB, ^bbMERGE_AB
-              ^bbPOSITIVE_AB:
+              cf.cond_br %is_positive, ^bbPOSITIVE_1, ^bbMERGE_1
+              ^bbPOSITIVE_1:
                   gpu.printf "A[%d] printed inside kernel = %4.3f\n", %tid, %val_A : index, f32
                   gpu.printf "B[%d] printed inside kernel = %4.3f\n", %tid, %val_B : index, f32
-                  cf.br ^bbMERGE_AB
+                  cf.br ^bbMERGE_1
 
-              ^bbMERGE_AB:
+              ^bbMERGE_1:
 
               // ===========================
 
@@ -115,12 +115,12 @@ def generate_mlir_module() -> str:
               %is_positive_2 = arith.cmpi eq, %tid_2, %flag_2 : index
               gpu.printf "TID = %d, FLAG = %d, condition = eq, is_positive = %d\n", %tid_2, %flag_2, %is_positive_2 : index, index, i1
 
-              cf.cond_br %is_positive_2, ^bbPOSITIVE_C, ^bbMERGE_C
-              ^bbPOSITIVE_C:
+              cf.cond_br %is_positive_2, ^bbPOSITIVE_2, ^bbMERGE_2
+              ^bbPOSITIVE_2:
                   gpu.printf "C[%d] printed inside kernel = %4.3f\n", %tid_2, %val_C : index, f32
-                  cf.br ^bbMERGE_C
+                  cf.br ^bbMERGE_2
 
-              ^bbMERGE_C:
+              ^bbMERGE_2:
 
               //////////////////////////////
               // DSL section
@@ -132,12 +132,24 @@ def generate_mlir_module() -> str:
               %is_positive_3 = arith.cmpi slt, %tid_3, %flag_3 : index
               gpu.printf "TID = %d, FLAG = %d, condition = slt, is_positive = %d\n", %tid_3, %flag_3, %is_positive_3 : index, index, i1
 
-              cf.cond_br %is_positive_3, ^bbPOSITIVE_D, ^bbMERGE_D
-              ^bbPOSITIVE_D:
+              cf.cond_br %is_positive_3, ^bbPOSITIVE_3, ^bbMERGE_3
+              ^bbPOSITIVE_3:
                   gpu.printf "C[%d] printed inside kernel = %4.3f\n", %tid_3, %val_C : index, f32
-                  cf.br ^bbMERGE_D
+                  cf.br ^bbMERGE_3
 
-              ^bbMERGE_D:
+              ^bbMERGE_3:
+
+              //////////////////////////////
+              // DSL section
+              //////////////////////////////
+
+              // Demonstrate simple math operations
+              %val_B2 = arith.mulf %val_B, %val_B : f32
+              %val_AC = arith.mulf %val_A, %val_C : f32
+              %c4 = arith.constant 4.0 : f32
+              %val_4AC = arith.mulf %c4, %val_AC : f32
+              %val_B2_4AC = arith.subf %val_B2, %val_4AC : f32
+              gpu.printf "B^2-4AC = %4.3f\n", %val_B2_4AC : f32
 
               // Register clobbing end
               llvm.inline_asm has_side_effects asm_dialect = att "", "{v[0:31]}" %reserved : (vector<32xi32>)-> ()
