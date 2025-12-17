@@ -1,0 +1,391 @@
+#!/usr/bin/env python3
+"""
+端到端測試腳本：驗證 pipeline 轉換的正確性
+
+流程：
+1. 編譯原始 kernel → 提取 .s 文件
+2. 執行 host 程式 → 記錄輸出 (結果 A)
+3. 用 pipeline.py 處理 .s → 生成新的 .hsaco
+4. 替換 .hsaco 後再執行 → 記錄輸出 (結果 B)
+5. 比較 A == B，驗證 pipeline 正確性
+"""
+
+import argparse
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+import difflib
+from typing import Tuple
+
+
+def run_cmd(cmd, cwd=None, capture=False):
+    """執行命令"""
+    print(f"[$] {' '.join(str(c) for c in cmd)}")
+    if capture:
+        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True)
+        return result.stdout, result.stderr
+    else:
+        subprocess.run(cmd, cwd=cwd, check=True)
+        return None, None
+
+
+def ensure_tool(name: str):
+    """確認工具存在"""
+    if shutil.which(name) is None:
+        raise RuntimeError(f"Required tool '{name}' not found in PATH")
+
+
+def extract_isa_from_hipcc_temps(workdir: pathlib.Path, arch: str) -> pathlib.Path:
+    """
+    從 hipcc --save-temps 產生的臨時文件中提取 ISA assembly
+    
+    hipcc 會生成類似這樣的文件：
+    - vec_add_kernel-gfx950.s (已組裝的 ISA)
+    
+    Returns:
+        提取出來的 .s 文件路徑
+    """
+    # 尋找 hipcc 生成的 .s 文件
+    isa_files = list(workdir.glob(f"*-{arch}.s"))
+    
+    if not isa_files:
+        raise RuntimeError(f"No ISA assembly file (*-{arch}.s) found in {workdir}")
+    
+    if len(isa_files) > 1:
+        print(f"[!] Found multiple ISA files: {isa_files}, using the first one")
+    
+    return isa_files[0]
+
+
+def step1_compile_original(kernel_src: pathlib.Path,
+                           host_src: pathlib.Path,
+                           arch: str,
+                           workdir: pathlib.Path) -> Tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
+    """
+    Step 1: 編譯原始 kernel 和 host 程式
+    
+    使用 hipcc 編譯 kernel，直接使用其生成的原始文件名，不做額外複製。
+    
+    Returns:
+        (hsaco_path, isa_path, executable_path)
+    """
+    ensure_tool("hipcc")
+    
+    print("\n" + "="*60)
+    print("Step 1: 編譯原始 kernel")
+    print("="*60)
+    
+    # 編譯 kernel 到 code object (並保存臨時文件)
+    # hipcc 會自動生成完整的文件名（包含架構信息）
+    print("\n[1.1] 編譯 kernel 到 code object...")
+    kernel_base_name = kernel_src.stem
+    compile_kernel_cmd = [
+        "hipcc",
+        "--genco",
+        f"--offload-arch={arch}",
+        "--save-temps",
+        str(kernel_src),
+        "-o", str(workdir / f"{kernel_base_name}.out")
+    ]
+    run_cmd(compile_kernel_cmd, cwd=workdir)
+    
+    # 查找實際生成的 code object 文件（hipcc 會生成 *-{arch}.out）
+    print("\n[1.2] 定位生成的 code object...")
+    code_objects = list(workdir.glob(f"*-{arch}.out"))
+    if not code_objects:
+        raise RuntimeError(f"找不到生成的 code object (*-{arch}.out) in {workdir}")
+    hsaco_original = code_objects[0]
+    print(f"使用 code object: {hsaco_original}")
+    
+    # 從生成的 code object 名稱中提取完整的基礎名稱（包含架構信息）
+    # 例如: vec_add_kernel-hip-amdgcn-amd-amdhsa-gfx950.out -> vec_add_kernel-hip-amdgcn-amd-amdhsa-gfx950
+    kernel_full_name = hsaco_original.stem
+    print(f"完整 kernel 名稱: {kernel_full_name}")
+    
+    # 提取 ISA (hipcc 已經生成，直接使用)
+    print("\n[1.3] 定位 ISA assembly...")
+    isa_original = extract_isa_from_hipcc_temps(workdir, arch)
+    print(f"使用 ISA 文件: {isa_original}")
+    
+    # 編譯 host 程式（使用完整的 kernel 名稱）
+    print("\n[1.4] 編譯 host 程式...")
+    executable = workdir / kernel_full_name
+    compile_host_cmd = [
+        "hipcc",
+        str(host_src),
+        "-o", str(executable)
+    ]
+    run_cmd(compile_host_cmd, cwd=workdir)
+    
+    print(f"\n✓ 原始編譯完成:")
+    print(f"  - HSACO: {hsaco_original}")
+    print(f"  - ISA:   {isa_original}")
+    print(f"  - 執行檔: {executable}")
+    
+    return hsaco_original, isa_original, executable
+
+
+def step2_run_original(executable: pathlib.Path,
+                      hsaco_original: pathlib.Path,
+                      workdir: pathlib.Path,
+                      hsaco_name: str) -> str:
+    """
+    Step 2: 執行原始版本並記錄輸出
+    
+    Args:
+        hsaco_name: Host 程式期望載入的 HSACO 文件名
+    
+    Returns:
+        程式輸出
+    """
+    print("\n" + "="*60)
+    print("Step 2: 執行原始版本")
+    print("="*60)
+    
+    # 創建符號連結，指向原始 HSACO（使用相對路徑，便於目錄移動）
+    hsaco_link = workdir / hsaco_name
+    if hsaco_link.exists() or hsaco_link.is_symlink():
+        hsaco_link.unlink()
+    # 計算相對路徑
+    relative_path = hsaco_original.relative_to(workdir)
+    hsaco_link.symlink_to(relative_path)
+    print(f"創建符號連結: {hsaco_name} -> {relative_path}")
+    
+    print(f"\n執行: {executable}")
+    stdout, stderr = run_cmd([str(executable)], cwd=workdir, capture=True)
+    
+    output = stdout + stderr
+    print("\n--- 原始版本輸出 ---")
+    print(output)
+    print("--- 輸出結束 ---")
+    
+    return output
+
+
+def step3_rebuild_with_pipeline(isa_file: pathlib.Path,
+                                pipeline_script: pathlib.Path,
+                                arch: str,
+                                workdir: pathlib.Path) -> pathlib.Path:
+    """
+    Step 3: 用 pipeline.py 重建 kernel
+    
+    Returns:
+        新生成的 .hsaco 路徑
+    """
+    print("\n" + "="*60)
+    print("Step 3: 用 pipeline 重建 kernel")
+    print("="*60)
+    
+    ensure_tool("python3")
+    
+    pipeline_workdir = workdir / "pipeline_output"
+    pipeline_workdir.mkdir(exist_ok=True)
+    
+    print(f"\n執行 pipeline: {pipeline_script}")
+    pipeline_cmd = [
+        "python3",
+        str(pipeline_script),
+        str(isa_file),
+        f"--chip={arch}",
+        f"--workdir={pipeline_workdir}",
+        "--emit-isa"
+    ]
+    run_cmd(pipeline_cmd, cwd=workdir)
+    
+    # Pipeline 會自動為 .s 文件添加 _rebuilt 後綴
+    # 所以 kernel_original.s -> kernel_original_rebuilt.hsaco
+    hsaco_rebuilt = pipeline_workdir / f"{isa_file.stem}_rebuilt.hsaco"
+    
+    if not hsaco_rebuilt.exists():
+        raise RuntimeError(f"Pipeline 未生成預期的 HSACO: {hsaco_rebuilt}")
+    
+    print(f"\n✓ Pipeline 重建完成: {hsaco_rebuilt}")
+    return hsaco_rebuilt
+
+
+def step4_run_rebuilt(executable: pathlib.Path,
+                     hsaco_rebuilt: pathlib.Path,
+                     workdir: pathlib.Path,
+                     hsaco_name: str) -> str:
+    """
+    Step 4: 用重建的 HSACO 執行並記錄輸出
+    
+    Args:
+        hsaco_name: Host 程式期望載入的 HSACO 文件名
+    
+    Returns:
+        程式輸出
+    """
+    print("\n" + "="*60)
+    print("Step 4: 執行重建版本")
+    print("="*60)
+    
+    # 更新符號連結，指向重建的 HSACO（使用相對路徑，便於目錄移動）
+    hsaco_link = workdir / hsaco_name
+    if hsaco_link.exists() or hsaco_link.is_symlink():
+        hsaco_link.unlink()
+    # 計算相對路徑（rebuilt 在子目錄 pipeline_output/ 下）
+    relative_path = hsaco_rebuilt.relative_to(workdir)
+    hsaco_link.symlink_to(relative_path)
+    print(f"更新符號連結: {hsaco_name} -> {relative_path}")
+    
+    print(f"\n執行: {executable}")
+    stdout, stderr = run_cmd([str(executable)], cwd=workdir, capture=True)
+    
+    output = stdout + stderr
+    print("\n--- 重建版本輸出 ---")
+    print(output)
+    print("--- 輸出結束 ---")
+    
+    return output
+
+
+def step5_compare_outputs(output_original: str, output_rebuilt: str) -> bool:
+    """
+    Step 5: 比較兩次執行的輸出
+    
+    Returns:
+        True 如果輸出相同
+    """
+    print("\n" + "="*60)
+    print("Step 5: 比較輸出")
+    print("="*60)
+    
+    if output_original == output_rebuilt:
+        print("\n✓ 測試通過！兩次執行的輸出完全相同。")
+        return True
+    else:
+        print("\n✗ 測試失敗！輸出不同。\n")
+        print("差異如下:")
+        print("-" * 60)
+        
+        diff = difflib.unified_diff(
+            output_original.splitlines(keepends=True),
+            output_rebuilt.splitlines(keepends=True),
+            fromfile="原始版本",
+            tofile="重建版本",
+            lineterm=""
+        )
+        print("".join(diff))
+        
+        return False
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="E2E 測試：驗證 pipeline 轉換的正確性"
+    )
+    ap.add_argument(
+        "--kernel",
+        type=pathlib.Path,
+        default=pathlib.Path("../../../Track_A/e2e_test/vec_add_kernel.hip"),
+        help="Kernel 源碼文件 [default: ../../../Track_A/e2e_test/vec_add_kernel.hip]"
+    )
+    ap.add_argument(
+        "--host",
+        type=pathlib.Path,
+        default=pathlib.Path("../../../Track_A/e2e_test/main.cpp"),
+        help="Host 程式源碼 [default: ../../../Track_A/e2e_test/main.cpp]"
+    )
+    ap.add_argument(
+        "--pipeline",
+        type=pathlib.Path,
+        default=pathlib.Path("pipeline.py"),
+        help="Pipeline 腳本路徑 [default: pipeline.py]"
+    )
+    ap.add_argument(
+        "--arch",
+        default="gfx950",
+        help="GPU 架構 [default: gfx950]"
+    )
+    ap.add_argument(
+        "--workdir",
+        type=pathlib.Path,
+        default=pathlib.Path("output"),
+        help="工作目錄 [default: output]"
+    )
+    ap.add_argument(
+        "--hsaco-name",
+        default=None,
+        help="Host 程式期望載入的 HSACO 文件名 [default: 從 kernel 文件名自動提取]"
+    )
+    
+    args = ap.parse_args()
+    
+    # 解析路徑
+    kernel_src = args.kernel.resolve()
+    host_src = args.host.resolve()
+    pipeline_script = args.pipeline.resolve()
+    workdir = args.workdir.resolve()
+    
+    # 如果沒有指定 hsaco-name，從 kernel 文件名自動提取
+    if args.hsaco_name is None:
+        args.hsaco_name = f"{kernel_src.stem}.hsaco"
+        print(f"[INFO] 自動設定 HSACO 名稱: {args.hsaco_name}")
+    
+    # 檢查文件存在
+    if not kernel_src.exists():
+        raise FileNotFoundError(f"Kernel 源碼不存在: {kernel_src}")
+    if not host_src.exists():
+        raise FileNotFoundError(f"Host 源碼不存在: {host_src}")
+    if not pipeline_script.exists():
+        raise FileNotFoundError(f"Pipeline 腳本不存在: {pipeline_script}")
+    
+    # 創建工作目錄
+    workdir.mkdir(parents=True, exist_ok=True)
+    
+    print("="*60)
+    print("E2E 測試開始")
+    print("="*60)
+    print(f"Kernel:     {kernel_src}")
+    print(f"Host:       {host_src}")
+    print(f"Pipeline:   {pipeline_script}")
+    print(f"架構:       {args.arch}")
+    print(f"工作目錄:   {workdir}")
+    print(f"HSACO 名稱: {args.hsaco_name}")
+    
+    try:
+        # Step 1: 編譯原始版本
+        hsaco_original, isa_original, executable = step1_compile_original(
+            kernel_src, host_src, args.arch, workdir
+        )
+        
+        # Step 2: 執行原始版本
+        output_original = step2_run_original(
+            executable, hsaco_original, workdir, args.hsaco_name
+        )
+        
+        # Step 3: 用 pipeline 重建
+        hsaco_rebuilt = step3_rebuild_with_pipeline(
+            isa_original, pipeline_script, args.arch, workdir
+        )
+        
+        # Step 4: 執行重建版本
+        output_rebuilt = step4_run_rebuilt(
+            executable, hsaco_rebuilt, workdir, args.hsaco_name
+        )
+        
+        # Step 5: 比較結果
+        success = step5_compare_outputs(output_original, output_rebuilt)
+        
+        print("\n" + "="*60)
+        if success:
+            print("測試結果: ✓ 通過")
+            print("="*60)
+            return 0
+        else:
+            print("測試結果: ✗ 失敗")
+            print("="*60)
+            return 1
+            
+    except Exception as e:
+        print(f"\n✗ 測試過程中發生錯誤: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

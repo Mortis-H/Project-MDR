@@ -154,20 +154,21 @@ def auto_detect_mlir_libs() -> tuple[pathlib.Path, pathlib.Path] | tuple[None, N
     return None, None
 
 
-def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path):
+def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_prefix: str = None):
     """
     使用 amdisa-translate 將 .s 文件轉換為 .amdisamlir 和 .gpumlir
     
     Args:
         asm_file: 輸入的 .s assembly 文件
         workdir: 工作目錄
+        output_prefix: 輸出文件前綴（如果為 None，使用輸入文件名）
     
     Returns:
         (amdisamlir_path, gpumlir_path): 生成的文件路徑
     """
     ensure_tool("amdisa-translate")
     
-    asm_stem = asm_file.stem
+    asm_stem = output_prefix if output_prefix else asm_file.stem
     amdisamlir_file = workdir / f"{asm_stem}.amdisamlir"
     gpumlir_file = workdir / f"{asm_stem}.gpumlir"
     
@@ -198,7 +199,7 @@ def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path):
     return amdisamlir_file, gpumlir_file
 
 
-def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.Path):
+def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.Path, output_prefix: str = None):
     """
     從 GPU MLIR 繼續執行原本的 pipeline，生成 ISA 和 HSACO
     
@@ -206,11 +207,12 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
         kernel_mlir: GPU MLIR 文件 (帶有 gpu.func)
         chip: 目標晶片型號
         workdir: 工作目錄
+        output_prefix: 輸出文件前綴（如果為 None，使用輸入文件名）
     """
     for tool in ["mlir-opt", "llvm-mc", "ld.lld"]:
         ensure_tool(tool)
 
-    kernel_stem = kernel_mlir.stem
+    kernel_stem = output_prefix if output_prefix else kernel_mlir.stem
 
     kernel_binary_mlir = workdir / f"{kernel_stem}_binary_isa.mlir"
     kernel_isa_s         = workdir / f"{kernel_stem}.s"
@@ -279,7 +281,8 @@ def build_and_run_host(kernel_mlir: pathlib.Path,
                        chip: str,
                        workdir: pathlib.Path,
                        rocm_runtime_lib: str | None,
-                       runner_utils_lib: str | None):
+                       runner_utils_lib: str | None,
+                       output_prefix: str = None):
     """
     降階 host + device 並使用 mlir-runner 執行。
     
@@ -297,6 +300,9 @@ def build_and_run_host(kernel_mlir: pathlib.Path,
       3) mlir-runner --shared-libs=... \
                      --shared-libs=... \
                      --entry-point-result=void
+    
+    Args:
+        output_prefix: 輸出文件前綴（如果為 None，使用輸入文件名）
     """
     for tool in ["mlir-opt", "mlir-runner"]:
         ensure_tool(tool)
@@ -327,7 +333,7 @@ def build_and_run_host(kernel_mlir: pathlib.Path,
     print(f"使用 ROCm runtime lib: {rocm_runtime_lib_path}")
     print(f"使用 runner utils lib: {runner_utils_lib_path}")
     
-    kernel_stem = kernel_mlir.stem
+    kernel_stem = output_prefix if output_prefix else kernel_mlir.stem
     host_step1_mlir = workdir / f"{kernel_stem}_host_step1.mlir"
     host_final_mlir = workdir / f"{kernel_stem}_host_final.mlir"
     
@@ -424,6 +430,11 @@ def main():
         "--runner-utils-lib",
         help="path to libmlir_runner_utils.so (optional; will be auto-detected if possible)",
     )
+    ap.add_argument(
+        "--output-prefix",
+        default=None,
+        help="output file prefix [default: <input_stem>_rebuilt for .s, <input_stem> for .mlir]",
+    )
 
     ap.add_argument(
         "input_file",
@@ -460,17 +471,30 @@ def main():
     # 根據文件副檔名決定處理流程
     suffix = input_file.suffix.lower()
     
+    # 決定輸出文件前綴
+    if args.output_prefix is None:
+        if suffix == ".s":
+            # 對於 .s 文件，自動添加 _rebuilt 後綴以區分原始和重建版本
+            output_prefix = f"{input_file.stem}_rebuilt"
+        else:
+            # 對於 .mlir 文件，使用原始文件名
+            output_prefix = input_file.stem
+    else:
+        output_prefix = args.output_prefix
+    
+    print(f"[INFO] 輸出文件前綴: {output_prefix}")
+    
     # 用於記錄最終生成的 GPU MLIR 文件（用於後續的 run-host）
     final_gpu_mlir = None
     
     if suffix == ".s":
         # 完整流程：.s -> .amdisamlir -> .gpumlir -> ISA/HSACO
         print(f"=== Processing AMD ISA Assembly: {input_file.name} ===")
-        amdisamlir_file, gpumlir_file = translate_asm_to_gpu(input_file, workdir)
+        amdisamlir_file, gpumlir_file = translate_asm_to_gpu(input_file, workdir, output_prefix)
         final_gpu_mlir = gpumlir_file
         
         if args.emit_isa:
-            build_isa_and_hsaco(gpumlir_file, args.chip, workdir)
+            build_isa_and_hsaco(gpumlir_file, args.chip, workdir, output_prefix)
     
     elif suffix in [".mlir", ".gpumlir"]:
         # 從 GPU MLIR 開始（原本的流程）
@@ -478,7 +502,7 @@ def main():
         final_gpu_mlir = input_file
         
         if args.emit_isa:
-            build_isa_and_hsaco(input_file, args.chip, workdir)
+            build_isa_and_hsaco(input_file, args.chip, workdir, output_prefix)
     
     else:
         raise ValueError(f"Unsupported file type: {suffix}. Expected .s or .mlir")
@@ -497,6 +521,7 @@ def main():
             workdir=workdir,
             rocm_runtime_lib=args.rocm_runtime_lib,
             runner_utils_lib=args.runner_utils_lib,
+            output_prefix=output_prefix,
         )
 
 
