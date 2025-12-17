@@ -1,0 +1,9 @@
+========================================
+HSACO Runner
+========================================
+HSACO:  /home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_06_shared_memory/executable.hsaco
+Kernel: _Z12sharedMemoryPKfS0_Pfi
+Size:   1024
+========================================
+✓ Module loaded successfully
+Failed to get function '_Z12sharedMemoryPKfS0_Pfi': named symbol not found

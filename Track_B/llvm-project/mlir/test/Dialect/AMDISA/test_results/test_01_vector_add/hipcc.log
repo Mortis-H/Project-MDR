@@ -1,0 +1,57 @@
+clang++: warning: argument unused during compilation: '--hip-link' [-Wunused-command-line-argument]
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:48:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   48 |     hipMalloc(&d_a, bytes);
+      |     ^~~~~~~~~ ~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:49:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   49 |     hipMalloc(&d_b, bytes);
+      |     ^~~~~~~~~ ~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:50:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   50 |     hipMalloc(&d_c, bytes);
+      |     ^~~~~~~~~ ~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:53:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   53 |     hipMemcpy(d_a, h_a, bytes, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:54:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   54 |     hipMemcpy(d_b, h_b, bytes, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:63:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   63 |     hipMemcpy(h_c, d_c, bytes, hipMemcpyDeviceToHost);
+      |     ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:72:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   72 |     hipFree(d_a);
+      |     ^~~~~~~ ~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:73:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   73 |     hipFree(d_b);
+      |     ^~~~~~~ ~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:74:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   74 |     hipFree(d_c);
+      |     ^~~~~~~ ~~~
+9 warnings generated when compiling for gfx950.
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:48:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   48 |     hipMalloc(&d_a, bytes);
+      |     ^~~~~~~~~ ~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:49:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   49 |     hipMalloc(&d_b, bytes);
+      |     ^~~~~~~~~ ~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:50:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   50 |     hipMalloc(&d_c, bytes);
+      |     ^~~~~~~~~ ~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:53:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   53 |     hipMemcpy(d_a, h_a, bytes, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:54:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   54 |     hipMemcpy(d_b, h_b, bytes, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:63:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   63 |     hipMemcpy(h_c, d_c, bytes, hipMemcpyDeviceToHost);
+      |     ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:72:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   72 |     hipFree(d_a);
+      |     ^~~~~~~ ~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:73:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   73 |     hipFree(d_b);
+      |     ^~~~~~~ ~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_01_vector_add.hip:74:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   74 |     hipFree(d_c);
+      |     ^~~~~~~ ~~~
+9 warnings generated when compiling for host.

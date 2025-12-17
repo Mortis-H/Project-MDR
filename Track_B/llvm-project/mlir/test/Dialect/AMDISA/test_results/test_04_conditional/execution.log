@@ -1,0 +1,9 @@
+========================================
+HSACO Runner
+========================================
+HSACO:  /home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_04_conditional/executable.hsaco
+Kernel: _Z11conditionalPKfS0_Pfi
+Size:   1024
+========================================
+✓ Module loaded successfully
+Failed to get function '_Z11conditionalPKfS0_Pfi': named symbol not found

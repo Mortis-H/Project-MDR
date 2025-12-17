@@ -1,0 +1,51 @@
+[0;34m========================================[0m
+[0;34m從組裝檔案到 GPU 執行驗證[0m
+[0;34m========================================[0m
+
+[0;34m配置資訊：[0m
+  輸入檔案: /home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_02_scalar_ops/stage3_rebuilt.s
+  Kernel 名稱: _Z9scalarOpsPii
+  Kernel 類型: int_scalar
+  測試大小: 1024
+  GPU 架構: gfx950
+
+[1;33m[1/3] 組裝 .s → .o[0m
+  命令: llvm-mc -triple amdgcn-amd-amdhsa -mcpu=gfx950 -filetype=obj
+  [0;32m✓[0m 組裝成功: /home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_02_scalar_ops/stage3_rebuilt_test.o (4656 bytes)
+
+[1;33m[2/3] 連結 .o → .hsaco[0m
+  命令: ld.lld -shared
+  [0;32m✓[0m 連結成功: /home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_02_scalar_ops/stage3_rebuilt_test.hsaco (5936 bytes)
+
+[1;33m[3/3] GPU 執行驗證[0m
+  命令: universal_hsaco_runner /home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_02_scalar_ops/stage3_rebuilt_test.hsaco _Z9scalarOpsPii int_scalar 1024
+
+[0;32m✓ GPU 執行成功並通過驗證[0m
+
+[0;34m執行結果：[0m
+========================================
+Universal HSACO Runner
+========================================
+HSACO:  /home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_02_scalar_ops/stage3_rebuilt_test.hsaco
+Kernel: _Z9scalarOpsPii
+Type:   int_scalar
+Size:   1024
+========================================
+✓ Module loaded successfully
+✓ Function found: _Z9scalarOpsPii
+========================================
+✓ Kernel launched (grid=4, block=256)
+✓ Kernel execution completed
+✅ PASS: Kernel executed successfully
+Sample results (output):
+  [0] = 2
+  [1] = 14
+  [2] = 24
+  [3] = 44
+  [4] = 55
+========================================
+
+[0;32m========================================[0m
+[0;32m✅ 測試通過！[0m
+[0;32m從 .s 檔案到 GPU 執行完全正確[0m
+[0;32m========================================[0m
