@@ -1,0 +1,28 @@
+[0;34m========================================[0m
+[0;34mAMDISA Dialect - 全面測試[0m
+[0;34m========================================[0m
+
+[0;32m✓ hsaco_runner 已存在[0m
+
+[0;32m找到 6 個 kernel 文件[0m
+
+[0;34m========================================[0m
+[0;34m測試 1: test_01_vector_add[0m
+[0;34m========================================[0m
+[1;33m[1/13][0m 編譯 HIP 到 Assembly...
+  [0;32m✓[0m 成功生成 bundled.s (629 行)
+[1;33m[2/13][0m 提取 device assembly...
+已提取 device assembly: /home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_01_vector_add/original.s (223 行)
+  [0;32m✓[0m 成功提取 original.s (223 行)
+[1;33m[3/13][0m 解析 Assembly 到 AMDISA MLIR...
+  [0;32m✓[0m 成功生成 amdisa.mlir (27 行)
+[1;33m[4/13][0m 降級到 GPU Inline ASM...
+  [0;32m✓[0m 成功生成 gpu.mlir (9 行)
+[1;33m[5/13][0m 重建 Assembly...
+  [0;32m✓[0m 成功生成 rebuilt.s (196 行)
+[1;33m[6/13][0m 組譯 Original Assembly...
+  [0;32m✓[0m original.o (6328 bytes)
+[1;33m[7/13][0m 連結 Original Object...
+  [0;32m✓[0m original.out (1752 bytes)
+[1;33m[8/13][0m 封裝 Original HSACO...
+stat: cannot statx '/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_01_vector_add/original.hsaco': No such file or directory

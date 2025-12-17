@@ -1,0 +1,19 @@
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_06_shared_memory.hip:45:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   45 |     hipMalloc(&d_input, bytes);
+      |     ^~~~~~~~~ ~~~~~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_06_shared_memory.hip:46:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   46 |     hipMalloc(&d_output, 4 * sizeof(int));
+      |     ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_06_shared_memory.hip:48:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   48 |     hipMemcpy(d_input, h_input, bytes, hipMemcpyHostToDevice);
+      |     ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_06_shared_memory.hip:53:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   53 |     hipMemcpy(h_output, d_output, 4 * sizeof(int), hipMemcpyDeviceToHost);
+      |     ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_06_shared_memory.hip:66:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   66 |     hipFree(d_input);
+      |     ^~~~~~~ ~~~~~~~
+/home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/hip_kernels/test_06_shared_memory.hip:67:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   67 |     hipFree(d_output);
+      |     ^~~~~~~ ~~~~~~~~
+6 warnings generated when compiling for gfx950.

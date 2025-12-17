@@ -1,0 +1,9 @@
+========================================
+HSACO Runner
+========================================
+HSACO:  /home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_05_loop/executable.hsaco
+Kernel: _Z9loopTestPKfS0_Pfi
+Size:   1024
+========================================
+✓ Module loaded successfully
+Failed to get function '_Z9loopTestPKfS0_Pfi': named symbol not found

@@ -78,33 +78,6 @@ _Z10loopKernelPii:                      ; @_Z10loopKernelPii
 	.set _Z10loopKernelPii.has_recursion, 0
 	.set _Z10loopKernelPii.has_indirect_call, 0
 	.section	.AMDGPU.csdata,"",@progbits
-; Kernel info:
-; codeLenInByte = 88
-; TotalNumSgprs: 11
-; NumVgprs: 3
-; NumAgprs: 0
-; TotalNumVgprs: 3
-; ScratchSize: 0
-; MemoryBound: 0
-; FloatMode: 240
-; IeeeMode: 1
-; LDSByteSize: 0 bytes/workgroup (compile time only)
-; SGPRBlocks: 1
-; VGPRBlocks: 0
-; NumSGPRsForWavesPerEU: 11
-; NumVGPRsForWavesPerEU: 3
-; AccumOffset: 4
-; Occupancy: 8
-; WaveLimiterHint : 0
-; COMPUTE_PGM_RSRC2:SCRATCH_EN: 0
-; COMPUTE_PGM_RSRC2:USER_SGPR: 2
-; COMPUTE_PGM_RSRC2:TRAP_HANDLER: 0
-; COMPUTE_PGM_RSRC2:TGID_X_EN: 1
-; COMPUTE_PGM_RSRC2:TGID_Y_EN: 0
-; COMPUTE_PGM_RSRC2:TGID_Z_EN: 0
-; COMPUTE_PGM_RSRC2:TIDIG_COMP_CNT: 0
-; COMPUTE_PGM_RSRC3_GFX90A:ACCUM_OFFSET: 0
-; COMPUTE_PGM_RSRC3_GFX90A:TG_SPLIT: 0
 	.text
 	.p2alignl 6, 3212836864
 	.fill 256, 4, 3212836864
