@@ -1,5 +1,27 @@
 # Track B AMDISA Dialect
 
+## amdisa-translate 工具使用指南
+
+### 常用命令
+
+```bash
+# 1. .s → AMDISA dialect
+amdisa-translate -x s input.s -emit=mlir > output_amdisa.mlir
+
+# 2. .s → GPU dialect (一步到位)
+amdisa-translate -x s input.s -emit=gpu > output_gpu.mlir
+
+# 3. GPU dialect → 重建的 .s
+mlir-opt output_gpu.mlir \
+    --pass-pipeline='builtin.module(gpu.module(convert-gpu-to-rocdl{index-bitwidth=32 runtime=HIP}))' \
+    --rocdl-attach-target='chip=gfx950' \
+    --gpu-to-llvm \
+    --reconcile-unrealized-casts \
+    --gpu-module-to-binary='format=isa' \
+    -o output_binary.mlir
+
+---
+
 ## Universal HSACO Runner
 
 ### 工具說明
