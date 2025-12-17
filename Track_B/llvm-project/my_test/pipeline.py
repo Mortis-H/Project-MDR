@@ -131,6 +131,29 @@ def extract_bitcode_bytes(mlir_text: str):
     return out
 
 
+def auto_detect_mlir_libs() -> tuple[pathlib.Path, pathlib.Path] | tuple[None, None]:
+    """
+    嘗試自動偵測 libmlir_rocm_runtime.so 和 libmlir_runner_utils.so
+    基於 PATH 中 mlir-runner (或 mlir-opt) 的位置。
+    
+    假設標準的 LLVM 構建布局：build/bin, build/lib。
+    """
+    runner_path = shutil.which("mlir-runner") or shutil.which("mlir-opt")
+    if not runner_path:
+        return None, None
+
+    bin_dir = pathlib.Path(runner_path).parent
+    lib_dir = bin_dir.parent / "lib"
+
+    rocm_rt = lib_dir / "libmlir_rocm_runtime.so"
+    runner_utils = lib_dir / "libmlir_runner_utils.so"
+
+    if rocm_rt.exists() and runner_utils.exists():
+        return rocm_rt, runner_utils
+
+    return None, None
+
+
 def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path):
     """
     使用 amdisa-translate 將 .s 文件轉換為 .amdisamlir 和 .gpumlir
@@ -252,6 +275,107 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     print(f"\n✓ Successfully generated HSACO: {kernel_hsaco}")
 
 
+def build_and_run_host(kernel_mlir: pathlib.Path,
+                       chip: str,
+                       workdir: pathlib.Path,
+                       rocm_runtime_lib: str | None,
+                       runner_utils_lib: str | None):
+    """
+    降階 host + device 並使用 mlir-runner 執行。
+    
+    Pipeline（分為兩個 mlir-opt 調用，然後是 mlir-runner）：
+    
+      1) mlir-opt -pass-pipeline="
+           builtin.module(
+             gpu.module(strip-debuginfo,
+                        convert-gpu-to-rocdl{index-bitwidth=32 runtime=HIP}),
+             rocdl-attach-target{chip=<chip>}
+           )"
+      
+      2) mlir-opt -gpu-to-llvm -reconcile-unrealized-casts -gpu-module-to-binary
+      
+      3) mlir-runner --shared-libs=... \
+                     --shared-libs=... \
+                     --entry-point-result=void
+    """
+    for tool in ["mlir-opt", "mlir-runner"]:
+        ensure_tool(tool)
+    
+    # 嘗試自動偵測庫（如果沒有提供）
+    auto_rocm_rt, auto_runner_utils = auto_detect_mlir_libs()
+    
+    rocm_runtime_lib_path = pathlib.Path(
+        rocm_runtime_lib if rocm_runtime_lib is not None else (
+            str(auto_rocm_rt) if auto_rocm_rt is not None else ""
+        )
+    )
+    runner_utils_lib_path = pathlib.Path(
+        runner_utils_lib if runner_utils_lib is not None else (
+            str(auto_runner_utils) if auto_runner_utils is not None else ""
+        )
+    )
+    
+    if not rocm_runtime_lib_path.is_file() or not runner_utils_lib_path.is_file():
+        raise RuntimeError(
+            "無法找到 libmlir_rocm_runtime.so 或 libmlir_runner_utils.so。\n"
+            "請透過以下方式明確傳遞它們：\n"
+            "  --rocm-runtime-lib /path/to/libmlir_rocm_runtime.so\n"
+            "  --runner-utils-lib /path/to/libmlir_runner_utils.so\n"
+            "或確保使用標準 LLVM 構建布局，以便可以自動偵測。"
+        )
+    
+    print(f"使用 ROCm runtime lib: {rocm_runtime_lib_path}")
+    print(f"使用 runner utils lib: {runner_utils_lib_path}")
+    
+    kernel_stem = kernel_mlir.stem
+    host_step1_mlir = workdir / f"{kernel_stem}_host_step1.mlir"
+    host_final_mlir = workdir / f"{kernel_stem}_host_final.mlir"
+    
+    # Step 1: gpu.module(strip-debuginfo, convert-gpu-to-rocdl{...}), rocdl-attach-target
+    print(f"\n=== Step: Lowering GPU module to ROCDL ===")
+    pipeline1 = (
+        f"builtin.module("
+        f"gpu.module(strip-debuginfo,convert-gpu-to-rocdl{{index-bitwidth=32 runtime=HIP}}),"
+        f"rocdl-attach-target{{chip={chip}}}"
+        f")"
+    )
+    
+    mlir_opt_cmd1 = [
+        "mlir-opt",
+        str(kernel_mlir),
+        f"--pass-pipeline={pipeline1}",
+        "-o",
+        str(host_step1_mlir),
+    ]
+    run_cmd(mlir_opt_cmd1)
+    
+    # Step 2: -gpu-to-llvm -reconcile-unrealized-casts -gpu-module-to-binary
+    print(f"\n=== Step: Converting to LLVM and creating binary ===")
+    mlir_opt_cmd2 = [
+        "mlir-opt",
+        str(host_step1_mlir),
+        "-gpu-to-llvm",
+        "-reconcile-unrealized-casts",
+        "-gpu-module-to-binary",
+        "-o",
+        str(host_final_mlir),
+    ]
+    run_cmd(mlir_opt_cmd2)
+    
+    # Step 3: mlir-runner
+    print(f"\n=== Step: Running kernel via mlir-runner ===")
+    mlir_runner_cmd = [
+        "mlir-runner",
+        str(host_final_mlir),
+        f"--shared-libs={rocm_runtime_lib_path}",
+        f"--shared-libs={runner_utils_lib_path}",
+        "--entry-point-result=void",
+    ]
+    run_cmd(mlir_runner_cmd)
+    
+    print(f"\n✓ Kernel execution completed")
+
+
 # ------------------------------------------------------------
 # Main Logic
 # ------------------------------------------------------------
@@ -273,7 +397,7 @@ def main():
     ap.add_argument(
         "--emit-isa",
         action="store_true",
-        default=True,
+        default=None,
         help="run device-only pipeline with gpu-module-to-binary{format=isa} and build HSACO",
     )
     ap.add_argument(
@@ -320,14 +444,30 @@ def main():
         workdir = pathlib.Path(args.workdir)
     
     workdir.mkdir(parents=True, exist_ok=True)
+    
+    # 智能決定是否需要 emit_isa
+    # 如果用戶沒有明確指定 --emit-isa 或 --no-emit-isa
+    if args.emit_isa is None:
+        if args.run_host:
+            # 使用 --run-host 時，預設不生成 HSACO（避免重複編譯）
+            args.emit_isa = False
+            print("[INFO] --run-host 已啟用，自動停用 HSACO 生成以避免重複編譯")
+            print("[INFO] 如需同時生成 HSACO，請明確使用 --emit-isa --run-host")
+        else:
+            # 不執行時，預設生成 HSACO
+            args.emit_isa = True
 
     # 根據文件副檔名決定處理流程
     suffix = input_file.suffix.lower()
+    
+    # 用於記錄最終生成的 GPU MLIR 文件（用於後續的 run-host）
+    final_gpu_mlir = None
     
     if suffix == ".s":
         # 完整流程：.s -> .amdisamlir -> .gpumlir -> ISA/HSACO
         print(f"=== Processing AMD ISA Assembly: {input_file.name} ===")
         amdisamlir_file, gpumlir_file = translate_asm_to_gpu(input_file, workdir)
+        final_gpu_mlir = gpumlir_file
         
         if args.emit_isa:
             build_isa_and_hsaco(gpumlir_file, args.chip, workdir)
@@ -335,11 +475,29 @@ def main():
     elif suffix in [".mlir", ".gpumlir"]:
         # 從 GPU MLIR 開始（原本的流程）
         print(f"=== Processing GPU MLIR: {input_file.name} ===")
+        final_gpu_mlir = input_file
+        
         if args.emit_isa:
             build_isa_and_hsaco(input_file, args.chip, workdir)
     
     else:
         raise ValueError(f"Unsupported file type: {suffix}. Expected .s or .mlir")
+    
+    # 如果指定了 --run-host，則執行 kernel
+    if args.run_host:
+        if final_gpu_mlir is None:
+            raise RuntimeError("No GPU MLIR file available for host execution")
+        
+        print(f"\n{'='*60}")
+        print(f"=== Running host + device execution ===")
+        print(f"{'='*60}")
+        build_and_run_host(
+            kernel_mlir=final_gpu_mlir,
+            chip=args.chip,
+            workdir=workdir,
+            rocm_runtime_lib=args.rocm_runtime_lib,
+            runner_utils_lib=args.runner_utils_lib,
+        )
 
 
 

@@ -108,27 +108,17 @@ public:
     OpBuilder builder(ctx);
 
     //--------------------------------------------------------------------------
-    // (1) Collect all raw assembly from amdisa.label + amdisa.inst
+    // (1) Collect all AMDISA operations (preserving order)
     //--------------------------------------------------------------------------
-    std::string asmText;
-
+    SmallVector<Operation *, 32> amdisaOps;
+    
     module.walk([&](Operation *op) {
-      if (auto label = dyn_cast<amdisa::LabelOp>(op)) {
-        // label.getName() = StringRef → OK
-        asmText += label.getName().str();
-        asmText += ":\n";
-
-      } else if (auto inst = dyn_cast<amdisa::InstOp>(op)) {
-        if (auto raw = inst.getRawText()) {
-          // raw = optional<StringRef> → use *raw
-          asmText += *raw;
-          asmText += "\n";
-        }
+      if (isa<amdisa::LabelOp>(op) || isa<amdisa::InstOp>(op)) {
+        amdisaOps.push_back(op);
       }
     });
 
-
-    if (asmText.empty()) {
+    if (amdisaOps.empty()) {
       module.emitError() << "No AMDISA ops found for lowering\n";
       signalPassFailure();
       return;
@@ -225,32 +215,47 @@ public:
     builder.setInsertionPointToStart(entry);
 
     //--------------------------------------------------------------------------
-    // (6) Insert llvm.inline_asm containing the full AMD ISA
+    // (6) Insert separate llvm.inline_asm for each AMDISA instruction
     //--------------------------------------------------------------------------
-    StringRef asmStrRef(asmText);
     StringRef constraintsRef = "";
-
     LLVM::AsmDialectAttr dialectAttr;      // default-constructed = null attr
     ArrayAttr operandAttrs;                // default-constructed = null attr
-
     TypeRange resultTypes;
     ValueRange operands;
-
     auto tailKind = mlir::LLVM::tailcallkind::TailCallKind::None;
 
-    auto inlineAsm = LLVM::InlineAsmOp::create(
-        builder,
-        loc,
-        /*resultTypes=*/resultTypes,
-        /*operands=*/operands,
-        /*asm_string=*/asmStrRef,
-        /*constraints=*/constraintsRef,
-        /*has_side_effects=*/true,
-        /*is_align_stack=*/false,
-        /*tail_call_kind=*/tailKind,
-        /*asm_dialect=*/dialectAttr,
-        /*operand_attrs=*/operandAttrs);
-
+    for (Operation *op : amdisaOps) {
+      std::string asmStr;
+      
+      if (auto label = dyn_cast<amdisa::LabelOp>(op)) {
+        // 將 label 作為獨立的 inline asm（label:）
+        asmStr = label.getName().str() + ":";
+        
+      } else if (auto inst = dyn_cast<amdisa::InstOp>(op)) {
+        // 每個指令作為獨立的 inline asm
+        if (auto raw = inst.getRawText()) {
+          asmStr = raw->str();
+        } else {
+          continue;  // 跳過沒有 raw text 的指令
+        }
+      }
+      
+      if (!asmStr.empty()) {
+        StringRef asmStrRef(asmStr);
+        LLVM::InlineAsmOp::create(
+            builder,
+            loc,
+            /*resultTypes=*/resultTypes,
+            /*operands=*/operands,
+            /*asm_string=*/asmStrRef,
+            /*constraints=*/constraintsRef,
+            /*has_side_effects=*/true,
+            /*is_align_stack=*/false,
+            /*tail_call_kind=*/tailKind,
+            /*asm_dialect=*/dialectAttr,
+            /*operand_attrs=*/operandAttrs);
+      }
+    }
 
     // Add terminator
     builder.create<gpu::ReturnOp>(loc);
