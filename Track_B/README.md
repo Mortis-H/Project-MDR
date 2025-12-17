@@ -19,8 +19,8 @@ mlir-opt output_gpu.mlir \
     --reconcile-unrealized-casts \
     --gpu-module-to-binary='format=isa' \
     -o output_binary.mlir
+```
 
----
 
 ## Universal HSACO Runner
 
