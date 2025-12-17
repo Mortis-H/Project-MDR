@@ -36,23 +36,6 @@ GPU dialect (.mlir)
 GPU 執行驗證 ✅ 已通過
 ```
 
-### 關鍵差異
-
-**舊流程** (不正確 - 使用 hipcc 直接編譯)：
-```
-HIP 源碼 → hipcc → .hsaco → GPU 執行
-```
-- ❌ 無法驗證從 `.s` 組裝檔案轉換後的正確性
-- ❌ 只驗證了原始編譯流程
-
-**新流程** (正確 - 從 `.s` 檔案開始)：
-```
-重建 .s → llvm-mc → .o → ld.lld → .hsaco → GPU 執行驗證
-```
-- ✅ 驗證從組裝檔案到可執行檔的完整流程
-- ✅ 驗證重建的 `.s` 檔案可以在 GPU 上正確執行
-- ✅ 使用正確的工具鏈 (llvm-mc + ld.lld)
-
 ## 測試腳本
 
 ### 1. `test_asm_to_hsaco.sh` - 單一 .s 檔案測試 ✅ 可用
@@ -269,7 +252,4 @@ make clean && make
 ./run_all_tests.sh
 ```
 
-## 授權
-
-本測試套件為 LLVM Project 的一部分。
 
