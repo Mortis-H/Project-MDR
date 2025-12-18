@@ -31,26 +31,28 @@ typeFromKernargDict(mlir::OpBuilder &b, mlir::DictionaryAttr d) {
   if (auto s = d.getAs<mlir::IntegerAttr>("size"))
     size = s.getInt();
   
-  // 獲取 value_kind 用於驗證（可選）
+  // 獲取 value_kind 用於判斷類型（包括 hidden 參數）
   auto vkAttr = d.getAs<mlir::StringAttr>("value_kind");
   llvm::StringRef vk = vkAttr ? vkAttr.getValue() : "";
 
   switch (size) {
   case 8: {
-    // 在 debug 模式下驗證 value_kind
+    // 8-byte 參數：指標或 hidden_global_offset_*
     #ifndef NDEBUG
-    if (!vk.empty() && !vk.contains("buffer") && !vk.contains("pointer")) {
+    if (!vk.empty() && !vk.contains("buffer") && !vk.contains("pointer") && !vk.contains("hidden_global_offset")) {
       llvm::errs() << "Warning: size=8 but value_kind=" << vk 
-                   << " (expected pointer type)\n";
+                   << " (expected pointer or hidden_global_offset type)\n";
     }
     #endif
     return mlir::LLVM::LLVMPointerType::get(b.getContext());
   }
     
   case 4:
+    // 4-byte 參數：index、by_value 或大部分 hidden 參數
     return b.getIndexType();
     
   case 2:
+    // 2-byte 參數：hidden_group_size_*, hidden_remainder_*, hidden_grid_dims
     return b.getI16Type();
     
   case 1:
@@ -207,9 +209,19 @@ public:
     gpuFunc->setAttr(gpu::GPUDialect::getKernelFuncAttrName(),
                     builder.getUnitAttr());
 
-
-    // gpuFunc->setAttr(gpu::GPUDialect::getKernelFuncAttrName(),
-    //              builder.getUnitAttr());
+    // Transfer register counts from module to gpu.func attributes
+    if (auto sgprCount = module->getAttrOfType<IntegerAttr>("amdisa.sgpr_count")) {
+      gpuFunc->setAttr("amdisa.sgpr_count", sgprCount);
+    }
+    if (auto vgprCount = module->getAttrOfType<IntegerAttr>("amdisa.vgpr_count")) {
+      gpuFunc->setAttr("amdisa.vgpr_count", vgprCount);
+    }
+    if (auto agprCount = module->getAttrOfType<IntegerAttr>("amdisa.agpr_count")) {
+      gpuFunc->setAttr("amdisa.agpr_count", agprCount);
+    }
+    if (auto kernargSize = module->getAttrOfType<IntegerAttr>("amdisa.kernarg_segment_size")) {
+      gpuFunc->setAttr("amdisa.kernarg_segment_size", kernargSize);
+    }
 
     Block *entry = &gpuFunc.getBody().front();
     builder.setInsertionPointToStart(entry);

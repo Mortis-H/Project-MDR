@@ -207,27 +207,19 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
       if (!kname.empty() && (k.symbol == kname.str() || k.name == kname.str())) {
         argDicts.reserve(k.args.size());
         for (const auto &arg : k.args) {
-          // Skip hidden parameters (automatically managed by runtime)
-          bool isHidden = false;
-          for (const auto &prop : arg.getAllProperties()) {
-            if (prop.first == "value_kind") {
-              llvm::StringRef valueKind(prop.second);
-              if (valueKind.starts_with("hidden")) {
-                isHidden = true;
-                break;
-              }
-            }
-          }
-          
-          if (!isHidden) {
-            argDicts.push_back(propsToDictAttr(builder, arg));
-          }
+          // Include ALL parameters (including hidden ones)
+          // Hidden parameters are required for correct kernarg_segment_size
+          argDicts.push_back(propsToDictAttr(builder, arg));
         }
 
-        // Optional: Store register counts (currently commented out)
-        // module->setAttr("amdisa.sgpr_count", builder.getI32IntegerAttr(k.sgprCount));
-        // module->setAttr("amdisa.vgpr_count", builder.getI32IntegerAttr(k.vgprCount));
-        // module->setAttr("amdisa.agpr_count", builder.getI32IntegerAttr(k.agprCount));
+        // Store register counts as module attributes
+        module->setAttr("amdisa.sgpr_count", builder.getI32IntegerAttr(k.sgprCount));
+        module->setAttr("amdisa.vgpr_count", builder.getI32IntegerAttr(k.vgprCount));
+        module->setAttr("amdisa.agpr_count", builder.getI32IntegerAttr(k.agprCount));
+        
+        // Store kernarg_segment_size for validation
+        module->setAttr("amdisa.kernarg_segment_size", builder.getI32IntegerAttr(k.kernargSegmentSize));
+        
         break;
       }
     }

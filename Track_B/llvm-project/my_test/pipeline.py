@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import yaml
 
 
 # ------------------------------------------------------------
@@ -173,7 +174,7 @@ def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_p
     gpumlir_file = workdir / f"{asm_stem}.gpumlir"
     
     # Step 1: .s -> .amdisamlir
-    print(f"\n=== Step 1: Translating {asm_file.name} to AMDISA MLIR ===")
+    print(f"\n=== Stage 1: Translating {asm_file.name} to AMDISA MLIR ===")
     amdisa_cmd = [
         "amdisa-translate",
         "-x", "s",
@@ -185,7 +186,7 @@ def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_p
     print(f"Generated AMDISA MLIR: {amdisamlir_file}")
     
     # Step 2: .amdisamlir -> .gpumlir
-    print(f"\n=== Step 2: Lowering AMDISA MLIR to GPU MLIR ===")
+    print(f"\n=== Stage 2: Lowering AMDISA MLIR to GPU MLIR ===")
     gpu_cmd = [
         "amdisa-translate",
         "-x", "mlir",
@@ -199,9 +200,156 @@ def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_p
     return amdisamlir_file, gpumlir_file
 
 
+def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
+    """
+    修復 ISA metadata：從 GPU MLIR attributes 提取正確的 metadata
+    
+    MLIR pipeline (convert-gpu-to-rocdl, gpu-module-to-binary) 會丟失自定義的
+    amdisa.* attributes，導致生成的 ISA metadata 不正確。
+    此函數從原始 GPU MLIR 提取這些信息並修復 ISA。
+    """
+    
+    # 讀取 GPU MLIR 獲取 attributes
+    gpumlir_text = gpumlir_file.read_text()
+    
+    # 提取 module attributes
+    attrs = {}
+    
+    # 提取 vgpr_count, sgpr_count, agpr_count, kernarg_segment_size
+    for attr_name in ['vgpr_count', 'sgpr_count', 'agpr_count', 'kernarg_segment_size']:
+        pattern = rf'amdisa\.{attr_name}\s*=\s*(\d+)'
+        match = re.search(pattern, gpumlir_text)
+        if match:
+            attrs[attr_name] = int(match.group(1))
+    
+    # 提取 kernargs array
+    kernargs_pattern = r'amdisa\.kernargs\s*=\s*\[(.*?)\](?=,\s+amdisa\.|,\s+llvm\.|}\s+{)'
+    match = re.search(kernargs_pattern, gpumlir_text, re.DOTALL)
+    
+    args_list = []
+    if match:
+        kernargs_str = match.group(1)
+        # 簡單解析：找到所有 {..} 字典
+        dict_pattern = r'\{([^{}]*?)\}'
+        for dict_match in re.finditer(dict_pattern, kernargs_str):
+            arg_dict = {}
+            dict_content = dict_match.group(1)
+            
+            # 解析每個屬性
+            for prop_match in re.finditer(r'(\w+)\s*=\s*"([^"]+)"', dict_content):
+                arg_dict[prop_match.group(1)] = prop_match.group(2)
+            for prop_match in re.finditer(r'(\w+)\s*=\s*(\d+)', dict_content):
+                arg_dict[prop_match.group(1)] = int(prop_match.group(2))
+            
+            if arg_dict:
+                args_list.append(arg_dict)
+    
+    if not args_list and not attrs:
+        print("[Warning] No amdisa attributes found in GPU MLIR, ISA metadata may be incorrect")
+        return isa_text
+    
+    # 找到 ISA 中的 .amdgpu_metadata 部分
+    metadata_start = isa_text.find('.amdgpu_metadata')
+    metadata_end = isa_text.find('.end_amdgpu_metadata')
+    
+    if metadata_start == -1 or metadata_end == -1:
+        print("[Warning] No .amdgpu_metadata section found in ISA")
+        return isa_text
+    
+    # 提取 YAML metadata
+    yaml_start = isa_text.find('---', metadata_start)
+    yaml_end = isa_text.find('...', yaml_start)
+    
+    if yaml_start == -1 or yaml_end == -1:
+        print("[Warning] Invalid YAML in .amdgpu_metadata")
+        return isa_text
+    
+    yaml_text = isa_text[yaml_start+3:yaml_end].strip()
+    
+    try:
+        metadata = yaml.safe_load(yaml_text)
+    except Exception as e:
+        print(f"[Warning] Failed to parse ISA metadata YAML: {e}")
+        return isa_text
+    
+    # 修復 metadata
+    if 'amdhsa.kernels' in metadata and len(metadata['amdhsa.kernels']) > 0:
+        kernel = metadata['amdhsa.kernels'][0]
+        
+        # 修復 GPR counts
+        if 'vgpr_count' in attrs:
+            kernel['.vgpr_count'] = attrs['vgpr_count']
+        if 'sgpr_count' in attrs:
+            kernel['.sgpr_count'] = attrs['sgpr_count']
+        if 'agpr_count' in attrs:
+            kernel['.agpr_count'] = attrs['agpr_count']
+        
+        # 修復 kernarg_segment_size
+        if 'kernarg_segment_size' in attrs:
+            kernel['.kernarg_segment_size'] = attrs['kernarg_segment_size']
+        
+        # 修復 args
+        if args_list:
+            kernel['.args'] = []
+            for arg in args_list:
+                yaml_arg = {}
+                if 'address_space' in arg:
+                    yaml_arg['.address_space'] = arg['address_space']
+                if 'offset' in arg:
+                    yaml_arg['.offset'] = arg['offset']
+                if 'size' in arg:
+                    yaml_arg['.size'] = arg['size']
+                if 'value_kind' in arg:
+                    yaml_arg['.value_kind'] = arg['value_kind']
+                kernel['.args'].append(yaml_arg)
+    
+    # 重新生成 YAML
+    fixed_yaml = yaml.dump(metadata, default_flow_style=False, sort_keys=False)
+    
+    # 替換 ISA 中的 metadata
+    before_metadata = isa_text[:yaml_start]
+    after_metadata = isa_text[yaml_end:]
+    
+    fixed_isa = before_metadata + "---\n" + fixed_yaml + "...\n" + after_metadata
+    
+    # 同時修復 .amdhsa_* 指令（這些指令會被 assembler 使用）
+    if 'kernarg_segment_size' in attrs:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_kernarg_size)\s+\d+',
+            rf'\1 {attrs["kernarg_segment_size"]}',
+            fixed_isa
+        )
+    
+    if 'vgpr_count' in attrs and attrs['vgpr_count'] > 0:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_next_free_vgpr)\s+\d+',
+            rf'\1 {attrs["vgpr_count"]}',
+            fixed_isa
+        )
+    
+    if 'sgpr_count' in attrs and attrs['sgpr_count'] > 0:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_next_free_sgpr)\s+\d+',
+            rf'\1 {attrs["sgpr_count"]}',
+            fixed_isa
+        )
+    
+    print(f"[Info] Fixed ISA metadata:")
+    if 'vgpr_count' in attrs:
+        print(f"  - vgpr_count: {attrs['vgpr_count']}")
+    if 'sgpr_count' in attrs:
+        print(f"  - sgpr_count: {attrs['sgpr_count']}")
+    if 'kernarg_segment_size' in attrs:
+        print(f"  - kernarg_segment_size: {attrs['kernarg_segment_size']}")
+    if args_list:
+        print(f"  - args count: {len(args_list)}")
+    
+    return fixed_isa
+
+
 def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.Path, output_prefix: str = None):
     """
-    從 GPU MLIR 繼續執行原本的 pipeline，生成 ISA 和 HSACO
+    從 GPU MLIR 繼續執行 pipeline，生成 ISA 和 HSACO
     
     Args:
         kernel_mlir: GPU MLIR 文件 (帶有 gpu.func)
@@ -219,7 +367,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     kernel_o             = workdir / f"{kernel_stem}.o"
     kernel_hsaco         = workdir / f"{kernel_stem}.hsaco"
 
-    print(f"\n=== Step 3: Running MLIR optimization pipeline ===")
+    print(f"\n=== Stage 3: Running MLIR optimization pipeline ===")
     pipeline = (
         f"builtin.module("
         f"gpu-kernel-outlining,"
@@ -249,10 +397,14 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
         print(f"[!] Found {len(isa_list)} gpu.binary entries (ISA), using the first one.")
 
     isa = isa_list[0]
+    
+    # Fix ISA metadata: extract from GPU MLIR attributes
+    isa = fix_isa_metadata(isa, kernel_mlir)
+    
     kernel_isa_s.write_text(isa)
     print(f"Wrote ISA assembly to {kernel_isa_s}")
 
-    print(f"\n=== Step 4: Assembling ISA to object file ===")
+    print(f"\n=== Stage 4: Assembling ISA to object file ===")
     llvm_mc_cmd = [
         "llvm-mc",
         "-triple", "amdgcn-amd-amdhsa",
@@ -264,7 +416,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     ]
     run_cmd(llvm_mc_cmd)
 
-    print(f"\n=== Step 5: Linking to HSACO ===")
+    print(f"\n=== Stage 5: Linking to HSACO ===")
     ld_cmd = [
         "ld.lld",
         "-shared",
@@ -277,110 +429,69 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     print(f"\n✓ Successfully generated HSACO: {kernel_hsaco}")
 
 
-def build_and_run_host(kernel_mlir: pathlib.Path,
-                       chip: str,
-                       workdir: pathlib.Path,
-                       rocm_runtime_lib: str | None,
-                       runner_utils_lib: str | None,
-                       output_prefix: str = None):
+def build_llvm_ir_via_binary(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.Path, output_prefix: str = None):
     """
-    降階 host + device 並使用 mlir-runner 執行。
+    從 GPU MLIR 生成 LLVM IR（用於調試和分析）
     
-    Pipeline（分為兩個 mlir-opt 調用，然後是 mlir-runner）：
-    
-      1) mlir-opt -pass-pipeline="
-           builtin.module(
-             gpu.module(strip-debuginfo,
-                        convert-gpu-to-rocdl{index-bitwidth=32 runtime=HIP}),
-             rocdl-attach-target{chip=<chip>}
-           )"
-      
-      2) mlir-opt -gpu-to-llvm -reconcile-unrealized-casts -gpu-module-to-binary
-      
-      3) mlir-runner --shared-libs=... \
-                     --shared-libs=... \
-                     --entry-point-result=void
+    使用 format=llvm 而不是 format=isa，生成 LLVM bitcode 並轉換為人類可讀的 .ll 文件
     
     Args:
+        kernel_mlir: GPU MLIR 文件 (帶有 gpu.func)
+        chip: 目標晶片型號
+        workdir: 工作目錄
         output_prefix: 輸出文件前綴（如果為 None，使用輸入文件名）
     """
-    for tool in ["mlir-opt", "mlir-runner"]:
+    for tool in ["mlir-opt", "llvm-dis"]:
         ensure_tool(tool)
     
-    # 嘗試自動偵測庫（如果沒有提供）
-    auto_rocm_rt, auto_runner_utils = auto_detect_mlir_libs()
-    
-    rocm_runtime_lib_path = pathlib.Path(
-        rocm_runtime_lib if rocm_runtime_lib is not None else (
-            str(auto_rocm_rt) if auto_rocm_rt is not None else ""
-        )
-    )
-    runner_utils_lib_path = pathlib.Path(
-        runner_utils_lib if runner_utils_lib is not None else (
-            str(auto_runner_utils) if auto_runner_utils is not None else ""
-        )
-    )
-    
-    if not rocm_runtime_lib_path.is_file() or not runner_utils_lib_path.is_file():
-        raise RuntimeError(
-            "無法找到 libmlir_rocm_runtime.so 或 libmlir_runner_utils.so。\n"
-            "請透過以下方式明確傳遞它們：\n"
-            "  --rocm-runtime-lib /path/to/libmlir_rocm_runtime.so\n"
-            "  --runner-utils-lib /path/to/libmlir_runner_utils.so\n"
-            "或確保使用標準 LLVM 構建布局，以便可以自動偵測。"
-        )
-    
-    print(f"使用 ROCm runtime lib: {rocm_runtime_lib_path}")
-    print(f"使用 runner utils lib: {runner_utils_lib_path}")
-    
     kernel_stem = output_prefix if output_prefix else kernel_mlir.stem
-    host_step1_mlir = workdir / f"{kernel_stem}_host_step1.mlir"
-    host_final_mlir = workdir / f"{kernel_stem}_host_final.mlir"
     
-    # Step 1: gpu.module(strip-debuginfo, convert-gpu-to-rocdl{...}), rocdl-attach-target
-    print(f"\n=== Step: Lowering GPU module to ROCDL ===")
-    pipeline1 = (
+    kernel_binary_mlir = workdir / f"{kernel_stem}_binary_llvm.mlir"
+    kernel_llvm_bc = workdir / f"{kernel_stem}_llvm.bc"
+    kernel_llvm_ll = workdir / f"{kernel_stem}_llvm.ll"
+    
+    print(f"\n=== Generating LLVM IR (for debugging) ===")
+    pipeline = (
         f"builtin.module("
-        f"gpu.module(strip-debuginfo,convert-gpu-to-rocdl{{index-bitwidth=32 runtime=HIP}}),"
-        f"rocdl-attach-target{{chip={chip}}}"
+        f"gpu-kernel-outlining,"
+        f"rocdl-attach-target{{chip={chip}}},"
+        f"gpu.module(convert-gpu-to-rocdl{{index-bitwidth=32 runtime=HIP}}),"
+        f"gpu-to-llvm,"
+        f"gpu-module-to-binary{{format=llvm}}"
         f")"
     )
     
-    mlir_opt_cmd1 = [
+    mlir_opt_cmd = [
         "mlir-opt",
         str(kernel_mlir),
-        f"--pass-pipeline={pipeline1}",
+        f"--pass-pipeline={pipeline}",
         "-o",
-        str(host_step1_mlir),
+        str(kernel_binary_mlir),
     ]
-    run_cmd(mlir_opt_cmd1)
+    run_cmd(mlir_opt_cmd)
     
-    # Step 2: -gpu-to-llvm -reconcile-unrealized-casts -gpu-module-to-binary
-    print(f"\n=== Step: Converting to LLVM and creating binary ===")
-    mlir_opt_cmd2 = [
-        "mlir-opt",
-        str(host_step1_mlir),
-        "-gpu-to-llvm",
-        "-reconcile-unrealized-casts",
-        "-gpu-module-to-binary",
+    binary_text = kernel_binary_mlir.read_text()
+    bc_list = extract_bitcode_bytes(binary_text)
+    
+    if not bc_list:
+        raise RuntimeError("No offload/offloading bitcode attribute found in MLIR output")
+    
+    if len(bc_list) > 1:
+        print(f"[!] Found {len(bc_list)} offload entries (bitcode), using the first one.")
+    
+    bitcode = bc_list[0]
+    kernel_llvm_bc.write_bytes(bitcode)
+    print(f"Wrote LLVM bitcode to {kernel_llvm_bc}")
+    
+    llvm_dis_cmd = [
+        "llvm-dis",
+        str(kernel_llvm_bc),
         "-o",
-        str(host_final_mlir),
+        str(kernel_llvm_ll),
     ]
-    run_cmd(mlir_opt_cmd2)
+    run_cmd(llvm_dis_cmd)
     
-    # Step 3: mlir-runner
-    print(f"\n=== Step: Running kernel via mlir-runner ===")
-    mlir_runner_cmd = [
-        "mlir-runner",
-        str(host_final_mlir),
-        f"--shared-libs={rocm_runtime_lib_path}",
-        f"--shared-libs={runner_utils_lib_path}",
-        "--entry-point-result=void",
-    ]
-    run_cmd(mlir_runner_cmd)
-    
-    print(f"\n✓ Kernel execution completed")
-
+    print(f"✓ Wrote human-readable LLVM IR to {kernel_llvm_ll}")
 
 # ------------------------------------------------------------
 # Main Logic
@@ -397,14 +508,14 @@ def main():
     )
     ap.add_argument(
         "--workdir",
-        default=None,
-        help="directory to put intermediate files [default: <kernel_mlir_stem>]",
+        default="pipeline_output",
+        help="directory to put intermediate files [default: \"pipeline_output\"]",
     )
     ap.add_argument(
         "--emit-isa",
         action="store_true",
-        default=None,
-        help="run device-only pipeline with gpu-module-to-binary{format=isa} and build HSACO",
+        default=True,
+        help="run device-only pipeline with gpu-module-to-binary{format=isa} and build HSACO (default: enabled)",
     )
     ap.add_argument(
         "--no-emit-isa",
@@ -418,24 +529,10 @@ def main():
         help="also run device-only pipeline with gpu-module-to-binary{format=llvm} and dump LLVM IR (via llvm-dis)",
     )
     ap.add_argument(
-        "--run-host",
-        action="store_true",
-        help="lower host+device and run @main via mlir-runner",
-    )
-    ap.add_argument(
-        "--rocm-runtime-lib",
-        help="path to libmlir_rocm_runtime.so (optional; will be auto-detected if possible)",
-    )
-    ap.add_argument(
-        "--runner-utils-lib",
-        help="path to libmlir_runner_utils.so (optional; will be auto-detected if possible)",
-    )
-    ap.add_argument(
         "--output-prefix",
         default=None,
         help="output file prefix [default: <input_stem>_rebuilt for .s, <input_stem> for .mlir]",
     )
-
     ap.add_argument(
         "input_file",
         help="Input file: either .s (AMD ISA assembly) or .mlir (GPU MLIR with gpu.func kernel)"
@@ -455,20 +552,7 @@ def main():
         workdir = pathlib.Path(args.workdir)
     
     workdir.mkdir(parents=True, exist_ok=True)
-    
-    # 智能決定是否需要 emit_isa
-    # 如果用戶沒有明確指定 --emit-isa 或 --no-emit-isa
-    if args.emit_isa is None:
-        if args.run_host:
-            # 使用 --run-host 時，預設不生成 HSACO（避免重複編譯）
-            args.emit_isa = False
-            print("[INFO] --run-host 已啟用，自動停用 HSACO 生成以避免重複編譯")
-            print("[INFO] 如需同時生成 HSACO，請明確使用 --emit-isa --run-host")
-        else:
-            # 不執行時，預設生成 HSACO
-            args.emit_isa = True
 
-    # 根據文件副檔名決定處理流程
     suffix = input_file.suffix.lower()
     
     # 決定輸出文件前綴
@@ -495,6 +579,9 @@ def main():
         
         if args.emit_isa:
             build_isa_and_hsaco(gpumlir_file, args.chip, workdir, output_prefix)
+        
+        if args.emit_llvm_ir:
+            build_llvm_ir_via_binary(gpumlir_file, args.chip, workdir, output_prefix)
     
     elif suffix in [".mlir", ".gpumlir"]:
         # 從 GPU MLIR 開始（原本的流程）
@@ -503,28 +590,12 @@ def main():
         
         if args.emit_isa:
             build_isa_and_hsaco(input_file, args.chip, workdir, output_prefix)
+        
+        if args.emit_llvm_ir:
+            build_llvm_ir_via_binary(input_file, args.chip, workdir, output_prefix)
     
     else:
         raise ValueError(f"Unsupported file type: {suffix}. Expected .s or .mlir")
-    
-    # 如果指定了 --run-host，則執行 kernel
-    if args.run_host:
-        if final_gpu_mlir is None:
-            raise RuntimeError("No GPU MLIR file available for host execution")
-        
-        print(f"\n{'='*60}")
-        print(f"=== Running host + device execution ===")
-        print(f"{'='*60}")
-        build_and_run_host(
-            kernel_mlir=final_gpu_mlir,
-            chip=args.chip,
-            workdir=workdir,
-            rocm_runtime_lib=args.rocm_runtime_lib,
-            runner_utils_lib=args.runner_utils_lib,
-            output_prefix=output_prefix,
-        )
-
-
 
 if __name__ == "__main__":
     main()
