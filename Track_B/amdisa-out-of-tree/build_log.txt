@@ -1,0 +1,130 @@
+==========================================
+Building AMDISA Out-of-Tree Project
+==========================================
+Project Dir: /home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree
+Build Dir: /home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/build
+MLIR Dir: /home/morhuang/llvm-project/build/lib/cmake/mlir
+LLVM Dir: /home/morhuang/llvm-project/build/lib/cmake/llvm
+==========================================
+
+Configuring...
+-- The CXX compiler identification is GNU 13.3.0
+-- The C compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Found ZLIB: /usr/lib/x86_64-linux-gnu/libz.so (found version "1.3")  
+-- Found zstd: /usr/lib/x86_64-linux-gnu/libzstd.so  
+-- Found LibXml2: /usr/lib/x86_64-linux-gnu/libxml2.so (found version "2.9.14") 
+-- Using MLIRConfig.cmake in: /home/morhuang/llvm-project/build/lib/cmake/mlir
+-- Using LLVMConfig.cmake in: /home/morhuang/llvm-project/build/lib/cmake/llvm
+-- Linker detection: GNU ld
+-- Performing Test LLVM_USES_LIBSTDCXX
+-- Performing Test LLVM_USES_LIBSTDCXX - Success
+-- Performing Test LLVM_DEFAULT_TO_GLIBCXX_USE_CXX11_ABI
+-- Performing Test LLVM_DEFAULT_TO_GLIBCXX_USE_CXX11_ABI - Success
+-- Performing Test C_SUPPORTS_FPIC
+-- Performing Test C_SUPPORTS_FPIC - Success
+-- Performing Test CXX_SUPPORTS_FPIC
+-- Performing Test CXX_SUPPORTS_FPIC - Success
+-- Building with -fPIC
+-- Performing Test C_SUPPORTS_FNO_SEMANTIC_INTERPOSITION
+-- Performing Test C_SUPPORTS_FNO_SEMANTIC_INTERPOSITION - Success
+-- Performing Test CXX_SUPPORTS_FNO_SEMANTIC_INTERPOSITION
+-- Performing Test CXX_SUPPORTS_FNO_SEMANTIC_INTERPOSITION - Success
+-- Performing Test SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG
+-- Performing Test SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG - Success
+-- Performing Test CXX_SUPPORTS_SUGGEST_OVERRIDE_FLAG
+-- Performing Test CXX_SUPPORTS_SUGGEST_OVERRIDE_FLAG - Success
+-- Performing Test CXX_WSUGGEST_OVERRIDE_ALLOWS_ONLY_FINAL
+-- Performing Test CXX_WSUGGEST_OVERRIDE_ALLOWS_ONLY_FINAL - Success
+-- Performing Test C_WCOMMENT_ALLOWS_LINE_WRAP
+-- Performing Test C_WCOMMENT_ALLOWS_LINE_WRAP - Failed
+-- Performing Test C_SUPPORTS_CTAD_MAYBE_UNSPPORTED_FLAG
+-- Performing Test C_SUPPORTS_CTAD_MAYBE_UNSPPORTED_FLAG - Failed
+-- Performing Test CXX_SUPPORTS_CTAD_MAYBE_UNSPPORTED_FLAG
+-- Performing Test CXX_SUPPORTS_CTAD_MAYBE_UNSPPORTED_FLAG - Success
+-- Performing Test LINKER_SUPPORTS_COLOR_DIAGNOSTICS
+-- Performing Test LINKER_SUPPORTS_COLOR_DIAGNOSTICS - Failed
+-- Looking for os_signpost_interval_begin
+-- Looking for os_signpost_interval_begin - not found
+-- Looking for flock
+-- Looking for flock - found
+-- Performing Test LLVM_LINKER_SUPPORTS_B_SYMBOLIC_FUNCTIONS
+-- Performing Test LLVM_LINKER_SUPPORTS_B_SYMBOLIC_FUNCTIONS - Success
+-- Configuring done (0.9s)
+-- Generating done (0.0s)
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    LLVM_EXTERNAL_LIT
+
+
+-- Build files have been written to: /home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/build
+
+Building...
+[1/17] Building Passes.h.inc...
+[2/17] Building AMDISAOpsTypes.h.inc...
+[3/17] Building AMDISAOps.h.inc...
+[4/17] Building AMDISAOpsTypes.cpp.inc...
+[5/17] Building AMDISAOpsDialect.cpp.inc...
+[6/17] Building AMDISAOpsDialect.h.inc...
+[7/17] Building AMDISAOps.cpp.inc...
+[8/17] Building CXX object lib/AMDISA/Transforms/CMakeFiles/obj.MLIRAMDISATransforms.dir/LowerToGPUInlineAsm.cpp.o
+FAILED: lib/AMDISA/Transforms/CMakeFiles/obj.MLIRAMDISATransforms.dir/LowerToGPUInlineAsm.cpp.o 
+/usr/bin/c++ -DGTEST_HAS_RTTI=0 -D_DEBUG -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_USE_CXX11_ABI=1 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -I/home/morhuang/llvm-project/llvm/include -I/home/morhuang/llvm-project/build/include -I/home/morhuang/llvm-project/mlir/include -I/home/morhuang/llvm-project/build/tools/mlir/include -I/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/include -I/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/build/include -fPIC -fno-semantic-interposition -fvisibility-inlines-hidden -Werror=date-time -Wall -Wextra -Wno-unused-parameter -Wwrite-strings -Wcast-qual -Wno-missing-field-initializers -Wimplicit-fallthrough -Wno-nonnull -Wno-class-memaccess -Wno-dangling-reference -Wno-redundant-move -Wno-pessimizing-move -Wno-array-bounds -Wno-stringop-overread -Wno-noexcept-type -Wdelete-non-virtual-dtor -Wsuggest-override -Wno-comment -Wno-misleading-indentation -Wctad-maybe-unsupported -fdiagnostics-color -ffunction-sections -fdata-sections -O3 -DNDEBUG -std=gnu++17   -D_DEBUG -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_USE_CXX11_ABI=1 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS  -fno-exceptions -funwind-tables -fno-rtti -UNDEBUG -MD -MT lib/AMDISA/Transforms/CMakeFiles/obj.MLIRAMDISATransforms.dir/LowerToGPUInlineAsm.cpp.o -MF lib/AMDISA/Transforms/CMakeFiles/obj.MLIRAMDISATransforms.dir/LowerToGPUInlineAsm.cpp.o.d -o lib/AMDISA/Transforms/CMakeFiles/obj.MLIRAMDISATransforms.dir/LowerToGPUInlineAsm.cpp.o -c /home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/lib/AMDISA/Transforms/LowerToGPUInlineAsm.cpp
+In file included from /home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/lib/AMDISA/Transforms/LowerToGPUInlineAsm.cpp:8:
+/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/include/AMDISA/Passes.h:21:10: fatal error: AMDISA/Passes.h.inc: No such file or directory
+   21 | #include "AMDISA/Passes.h.inc"
+      |          ^~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+[9/17] Building CXX object tools/amdisa-translate/CMakeFiles/amdisa-translate.dir/amdisa-translate.cpp.o
+FAILED: tools/amdisa-translate/CMakeFiles/amdisa-translate.dir/amdisa-translate.cpp.o 
+/usr/bin/c++ -DGTEST_HAS_RTTI=0 -DLLVM_BUILD_STATIC -D_DEBUG -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_USE_CXX11_ABI=1 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -I/home/morhuang/llvm-project/llvm/include -I/home/morhuang/llvm-project/build/include -I/home/morhuang/llvm-project/mlir/include -I/home/morhuang/llvm-project/build/tools/mlir/include -I/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/include -I/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/build/include -fPIC -fno-semantic-interposition -fvisibility-inlines-hidden -Werror=date-time -Wall -Wextra -Wno-unused-parameter -Wwrite-strings -Wcast-qual -Wno-missing-field-initializers -Wimplicit-fallthrough -Wno-nonnull -Wno-class-memaccess -Wno-dangling-reference -Wno-redundant-move -Wno-pessimizing-move -Wno-array-bounds -Wno-stringop-overread -Wno-noexcept-type -Wdelete-non-virtual-dtor -Wsuggest-override -Wno-comment -Wno-misleading-indentation -Wctad-maybe-unsupported -fdiagnostics-color -ffunction-sections -fdata-sections -O3 -DNDEBUG -std=gnu++17   -D_DEBUG -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_USE_CXX11_ABI=1 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS  -fno-exceptions -funwind-tables -fno-rtti -fno-exceptions -funwind-tables -fno-rtti -UNDEBUG -MD -MT tools/amdisa-translate/CMakeFiles/amdisa-translate.dir/amdisa-translate.cpp.o -MF tools/amdisa-translate/CMakeFiles/amdisa-translate.dir/amdisa-translate.cpp.o.d -o tools/amdisa-translate/CMakeFiles/amdisa-translate.dir/amdisa-translate.cpp.o -c /home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/tools/amdisa-translate/amdisa-translate.cpp
+In file included from /home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/tools/amdisa-translate/amdisa-translate.cpp:29:
+/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/include/AMDISA/Passes.h:21:10: fatal error: AMDISA/Passes.h.inc: No such file or directory
+   21 | #include "AMDISA/Passes.h.inc"
+      |          ^~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+[10/17] Building CXX object tools/amdisa-translate/CMakeFiles/amdisa-translate.dir/AMDGPUMetadata.cpp.o
+[11/17] Building CXX object tools/amdisa-translate/CMakeFiles/amdisa-translate.dir/AMDGCNAssembly.cpp.o
+[12/17] Building CXX object tools/amdisa-translate/CMakeFiles/amdisa-translate.dir/AMDISAAsmParser.cpp.o
+/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/tools/amdisa-translate/AMDISAAsmParser.cpp: In member function ‘mlir::OwningOpRef<mlir::ModuleOp> mlir::amdisa::AMDISAAsmParser::parseModule(mlir::MLIRContext&)’:
+/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/tools/amdisa-translate/AMDISAAsmParser.cpp:122:32: warning: ‘OpTy mlir::OpBuilder::create(mlir::Location, Args&& ...) [with OpTy = mlir::amdisa::LabelOp; Args = {mlir::StringAttr&}]’ is deprecated: Use OpTy::create instead [-Wdeprecated-declarations]
+  122 |         builder.create<LabelOp>(loc, nameAttr);
+      |         ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~
+In file included from /home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/tools/amdisa-translate/AMDISAAsmParser.cpp:19:
+/home/morhuang/llvm-project/mlir/include/mlir/IR/Builders.h:506:8: note: declared here
+  506 |   OpTy create(Location location, Args &&...args) {
+      |        ^~~~~~
+/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/tools/amdisa-translate/AMDISAAsmParser.cpp:141:29: warning: ‘OpTy mlir::OpBuilder::create(mlir::Location, Args&& ...) [with OpTy = mlir::amdisa::InstOp; Args = {mlir::StringAttr&, mlir::ArrayAttr&, mlir::StringAttr&}]’ is deprecated: Use OpTy::create instead [-Wdeprecated-declarations]
+  141 |       builder.create<InstOp>(loc, mnemonicAttr, opsAttr, rawAttr);
+      |       ~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/morhuang/llvm-project/mlir/include/mlir/IR/Builders.h:506:8: note: declared here
+  506 |   OpTy create(Location location, Args &&...args) {
+      |        ^~~~~~
+[13/17] Building CXX object lib/AMDISA/IR/CMakeFiles/obj.MLIRAMDISA.dir/AMDISAOps.cpp.o
+[14/17] Building CXX object tools/amdisa-translate/CMakeFiles/amdisa-translate.dir/parse_utils.cpp.o
+/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/tools/amdisa-translate/parse_utils.cpp: In function ‘AMDGCNAssembly parseAMDGCNAssembly(const std::string&, const std::string&, const std::string&)’:
+/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/tools/amdisa-translate/parse_utils.cpp:269:57: warning: ‘static const llvm::Target* llvm::TargetRegistry::lookupTarget(llvm::StringRef, std::string&)’ is deprecated: Use overload accepting Triple instead [-Wdeprecated-declarations]
+  269 |   const Target *TheTarget = TargetRegistry::lookupTarget(TT, Error);
+      |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~
+In file included from /home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/tools/amdisa-translate/parse_utils.cpp:28:
+/home/morhuang/llvm-project/llvm/include/llvm/MC/TargetRegistry.h:742:24: note: declared here
+  742 |   static const Target *lookupTarget(StringRef TripleStr, std::string &Error) {
+      |                        ^~~~~~~~~~~~
+/home/morhuang/Project-MDR/Track_B/amdisa-out-of-tree/tools/amdisa-translate/parse_utils.cpp:368:33: warning: ‘llvm::MCRegisterInfo* llvm::Target::createMCRegInfo(llvm::StringRef) const’ is deprecated: Use overload accepting Triple instead [-Wdeprecated-declarations]
+  368 |       TheTarget->createMCRegInfo(TT));
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+/home/morhuang/llvm-project/llvm/include/llvm/MC/TargetRegistry.h:446:19: note: declared here
+  446 |   MCRegisterInfo *createMCRegInfo(StringRef TT) const {
+      |                   ^~~~~~~~~~~~~~~
+ninja: build stopped: subcommand failed.
+ERROR: Build failed!
