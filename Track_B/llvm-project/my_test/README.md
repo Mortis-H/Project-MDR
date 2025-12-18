@@ -13,6 +13,12 @@ A complete toolchain for translating AMD GPU ISA assembly to MLIR and back, with
 
 ## Part A: Using pipeline.py to translate ISA assembly
 
+**Prerequisites:** Navigate to the test directory first.
+
+```bash
+cd Project-MDR/Track_B/llvm-project/my_test
+```
+
 ### 1. Translate ISA to MLIR and rebuild HSACO (default behavior).
 
 ```bash
@@ -143,6 +149,12 @@ Input: kernel.gpumlir
 ## Part B: End-to-end correctness testing
 
 `test_pipeline_correctness.py` validates that the rebuilt kernel produces identical output.
+
+**Prerequisites:** Navigate to the test directory first.
+
+```bash
+cd Project-MDR/Track_B/llvm-project/my_test
+```
 
 ### 1. Run basic correctness test (standard compilation).
 
