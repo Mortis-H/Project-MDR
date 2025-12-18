@@ -172,14 +172,17 @@ cd Project-MDR/Track_B/llvm-project/my_test
 ### 2. Run with MDR-optimized ISA (assemble mode).
 
 ```bash
-# Use pre-optimized ISA from MDR (skips hipcc compilation)
+# Use pre-optimized ISA from MDR (skips kernel compilation, assembles ISA directly)
 ./test_pipeline_correctness.py --use-mdr-isa mdr_debugging.s
 ```
 
-**MDR Assemble mode:**
-- Uses `clang -cc1as` to assemble ISA
-- Uses `ld.lld` to link code object
-- Uses `clang-offload-bundler` to create fat binary
+**MDR Assemble mode workflow:**
+- Skips kernel compilation (no `.hip` → ISA generation)
+- Uses pre-optimized ISA directly (from MDR or other tools)
+- Assembles ISA with `clang -cc1as` → object file
+- Links with `ld.lld` → code object
+- Bundles with `clang-offload-bundler` → fat binary
+- Compiles host program with `hipcc` (still required)
 - Mirrors Track_A/e2e_test/Makefile's `assemble` target
 
 ### 3. Test with custom kernel and host.
