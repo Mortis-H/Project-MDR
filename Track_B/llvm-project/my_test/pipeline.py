@@ -173,6 +173,14 @@ def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_p
     amdisamlir_file = workdir / f"{asm_stem}.amdisamlir"
     gpumlir_file = workdir / f"{asm_stem}.gpumlir"
     
+    # 首先從原始 ISA 文件提取 group_segment_fixed_size（因為 amdisa-import 會丟失這個值）
+    asm_text = asm_file.read_text()
+    group_segment_size = None
+    match = re.search(r'\.amdhsa_group_segment_fixed_size\s+(\d+)', asm_text)
+    if match:
+        group_segment_size = int(match.group(1))
+        print(f"[Info] Extracted group_segment_fixed_size from original ISA: {group_segment_size}")
+    
     # Step 1: .s -> .amdisamlir
     print(f"\n=== Stage 1: Translating {asm_file.name} to AMDISA MLIR ===")
     amdisa_cmd = [
@@ -194,7 +202,24 @@ def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_p
         str(amdisamlir_file),
     ]
     result = subprocess.run(gpu_cmd, capture_output=True, text=True, check=True)
-    gpumlir_file.write_text(result.stdout)
+    gpumlir_text = result.stdout
+    
+    # 手動注入 group_segment_fixed_size 到 GPU MLIR 的 module attributes
+    if group_segment_size is not None:
+        # 在 module attributes 中添加 amdisa.group_segment_fixed_size
+        # 找到 module attributes {... 的位置
+        module_attr_pattern = r'(module attributes \{[^}]*)'
+        match = re.search(module_attr_pattern, gpumlir_text)
+        if match:
+            attrs_str = match.group(1)
+            # 在最後添加 group_segment_fixed_size attribute（在 } 之前）
+            new_attrs_str = attrs_str + f', amdisa.group_segment_fixed_size = {group_segment_size} : i32'
+            gpumlir_text = gpumlir_text.replace(attrs_str, new_attrs_str)
+            print(f"[Info] Injected amdisa.group_segment_fixed_size = {group_segment_size} into GPU MLIR")
+        else:
+            print("[Warning] Could not find module attributes in GPU MLIR to inject group_segment_fixed_size")
+    
+    gpumlir_file.write_text(gpumlir_text)
     print(f"Generated GPU MLIR: {gpumlir_file}")
     
     return amdisamlir_file, gpumlir_file
@@ -215,8 +240,8 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
     # 提取 module attributes
     attrs = {}
     
-    # 提取 vgpr_count, sgpr_count, agpr_count, kernarg_segment_size
-    for attr_name in ['vgpr_count', 'sgpr_count', 'agpr_count', 'kernarg_segment_size']:
+    # 提取 vgpr_count, sgpr_count, agpr_count, kernarg_segment_size, group_segment_fixed_size
+    for attr_name in ['vgpr_count', 'sgpr_count', 'agpr_count', 'kernarg_segment_size', 'group_segment_fixed_size']:
         pattern = rf'amdisa\.{attr_name}\s*=\s*(\d+)'
         match = re.search(pattern, gpumlir_text)
         if match:
@@ -288,6 +313,10 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
         if 'kernarg_segment_size' in attrs:
             kernel['.kernarg_segment_size'] = attrs['kernarg_segment_size']
         
+        # 修復 group_segment_fixed_size (LDS / shared memory 大小)
+        if 'group_segment_fixed_size' in attrs:
+            kernel['.group_segment_fixed_size'] = attrs['group_segment_fixed_size']
+        
         # 修復 args
         if args_list:
             kernel['.args'] = []
@@ -320,6 +349,13 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
             fixed_isa
         )
     
+    if 'group_segment_fixed_size' in attrs:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_group_segment_fixed_size)\s+\d+',
+            rf'\1 {attrs["group_segment_fixed_size"]}',
+            fixed_isa
+        )
+    
     if 'vgpr_count' in attrs and attrs['vgpr_count'] > 0:
         fixed_isa = re.sub(
             r'(\.amdhsa_next_free_vgpr)\s+\d+',
@@ -341,6 +377,8 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
         print(f"  - sgpr_count: {attrs['sgpr_count']}")
     if 'kernarg_segment_size' in attrs:
         print(f"  - kernarg_segment_size: {attrs['kernarg_segment_size']}")
+    if 'group_segment_fixed_size' in attrs:
+        print(f"  - group_segment_fixed_size: {attrs['group_segment_fixed_size']} (LDS/Shared Memory)")
     if args_list:
         print(f"  - args count: {len(args_list)}")
     

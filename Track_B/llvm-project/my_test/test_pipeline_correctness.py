@@ -2,11 +2,20 @@
 """
 端到端測試腳本：驗證 pipeline 轉換的正確性
 
-流程：
+支援兩種測試模式：
+
+模式 1 (原本模式):
 1. 編譯原始 kernel → 提取 .s 文件
 2. 執行 host 程式 → 記錄輸出 (結果 A)
 3. 用 pipeline.py 處理 .s → 生成新的 .hsaco
 4. 替換 .hsaco 後再執行 → 記錄輸出 (結果 B)
+5. 比較 A == B，驗證 pipeline 正確性
+
+模式 2 (Universal Runner 模式):
+1. 編譯原始 kernel → 提取 .s 和 .hsaco
+2. 用 universal_hsaco_runner 執行原始 .hsaco → 記錄輸出 (結果 A)
+3. 用 pipeline.py 處理 .s → 生成新的 .hsaco
+4. 用 universal_hsaco_runner 執行重建 .hsaco → 記錄輸出 (結果 B)
 5. 比較 A == B，驗證 pipeline 正確性
 """
 
@@ -159,20 +168,24 @@ def step1_compile_original(kernel_src: pathlib.Path,
     isa_original = extract_isa_from_hipcc_temps(workdir, arch)
     print(f"使用 ISA 文件: {isa_original}")
     
-    # 編譯 host 程式（使用完整的 kernel 名稱）
-    print("\n[1.4] 編譯 host 程式...")
-    executable = workdir / kernel_full_name
-    compile_host_cmd = [
-        "hipcc",
-        str(host_src),
-        "-o", str(executable)
-    ]
-    run_cmd(compile_host_cmd, cwd=workdir)
+    # 編譯 host 程式（如果提供了 host_src）
+    executable = None
+    if host_src is not None:
+        print("\n[1.4] 編譯 host 程式（使用完整的 kernel 名稱）...")
+        executable = workdir / kernel_full_name
+        compile_host_cmd = [
+            "hipcc",
+            str(host_src),
+            "-o", str(executable)
+        ]
+        run_cmd(compile_host_cmd, cwd=workdir)
+        print(f"  - 執行檔: {executable}")
     
     print(f"\n✓ 原始編譯完成:")
     print(f"  - HSACO: {hsaco_original}")
     print(f"  - ISA:   {isa_original}")
-    print(f"  - 執行檔: {executable}")
+    if executable:
+        print(f"  - 執行檔: {executable}")
     
     return hsaco_original, isa_original, executable
 
@@ -277,20 +290,24 @@ def step1_assemble_mdr(kernel_src: pathlib.Path,
     ]
     run_cmd(bundle_cmd, cwd=workdir)
     
-    # 編譯 host 程式
-    print(f"\n[1.5] 編譯 host 程式...")
-    executable = workdir / kernel_base_name
-    compile_host_cmd = [
-        "hipcc",
-        str(host_src),
-        "-o", str(executable)
-    ]
-    run_cmd(compile_host_cmd, cwd=workdir)
+    # 編譯 host 程式（如果提供了 host_src）
+    executable = None
+    if host_src is not None:
+        print(f"\n[1.5] 編譯 host 程式...")
+        executable = workdir / kernel_base_name
+        compile_host_cmd = [
+            "hipcc",
+            str(host_src),
+            "-o", str(executable)
+        ]
+        run_cmd(compile_host_cmd, cwd=workdir)
+        print(f"  - 執行檔: {executable}")
     
     print(f"\n✓ MDR Assemble 完成:")
     print(f"  - HSACO: {hsaco_path}")
     print(f"  - ISA:   {kernel_s}")
-    print(f"  - 執行檔: {executable}")
+    if executable:
+        print(f"  - 執行檔: {executable}")
     
     return hsaco_path, kernel_s, executable
 
@@ -484,7 +501,7 @@ def step4_run_rebuilt(executable: pathlib.Path,
 
 def step5_compare_outputs(output_original: str, output_rebuilt: str) -> bool:
     """
-    Step 5: 比較兩次執行的輸出
+    Step 5: 比較兩次執行的輸出（忽略 HSACO 路徑差異）
     
     Returns:
         True 如果輸出相同
@@ -493,17 +510,39 @@ def step5_compare_outputs(output_original: str, output_rebuilt: str) -> bool:
     print("Step 5: 比較輸出")
     print("="*60)
     
+    # 過濾輸出：移除包含 HSACO 路徑的行
+    def filter_output(output):
+        """過濾掉路徑相關的行，只保留實際計算結果"""
+        lines = output.splitlines()
+        filtered = []
+        for line in lines:
+            # 跳過包含 HSACO 路徑的行
+            if "HSACO:" in line and ("/" in line or "\\" in line):
+                continue
+            filtered.append(line)
+        return '\n'.join(filtered)
+    
+    # 先比較原始輸出（完全相同最好）
     if output_original == output_rebuilt:
         print("\n✓ 測試通過！兩次執行的輸出完全相同。")
         return True
+    
+    # 如果不完全相同，過濾後再比較（忽略路徑差異）
+    filtered_original = filter_output(output_original)
+    filtered_rebuilt = filter_output(output_rebuilt)
+    
+    if filtered_original == filtered_rebuilt:
+        print("\n✓ 測試通過！計算結果相同（已忽略 HSACO 路徑差異）。")
+        print("\n註：HSACO 路徑不同是正常的（原始 vs 重建），不影響測試結果。")
+        return True
     else:
-        print("\n✗ 測試失敗！輸出不同。\n")
-        print("差異如下:")
+        print("\n✗ 測試失敗！計算結果不同。\n")
+        print("差異如下（已過濾路徑）:")
         print("-" * 60)
         
         diff = difflib.unified_diff(
-            output_original.splitlines(keepends=True),
-            output_rebuilt.splitlines(keepends=True),
+            filtered_original.splitlines(keepends=True),
+            filtered_rebuilt.splitlines(keepends=True),
             fromfile="原始版本",
             tofile="重建版本",
             lineterm=""
@@ -513,21 +552,79 @@ def step5_compare_outputs(output_original: str, output_rebuilt: str) -> bool:
         return False
 
 
+# ============================================================================
+# Universal Runner 模式函數
+# ============================================================================
+
+def step2_run_with_universal_runner(hsaco_path: pathlib.Path,
+                                    runner_path: pathlib.Path,
+                                    kernel_name: str,
+                                    kernel_type: str,
+                                    test_size: int,
+                                    workdir: pathlib.Path,
+                                    label: str = "原始") -> Tuple[str, str]:
+    """
+    使用 universal_hsaco_runner 執行 HSACO 並記錄輸出
+    
+    Args:
+        hsaco_path: HSACO 檔案路徑
+        runner_path: universal_hsaco_runner 可執行檔路徑
+        kernel_name: Kernel 函數名稱 (mangled name)
+        kernel_type: Kernel 類型 (float_add, int_scalar, etc.)
+        test_size: 測試資料大小
+        workdir: 工作目錄
+        label: 標籤（用於顯示，如 "原始" 或 "重建"）
+    
+    Returns:
+        (程式輸出, HSACO hash)
+    """
+    print("\n" + "="*60)
+    print(f"執行{label}版本 (Universal Runner)")
+    print("="*60)
+    
+    # 計算 HSACO 的 hash
+    hsaco_hash = calculate_file_hash(hsaco_path)
+    print(f"\n[驗證] {label} HSACO 檔案資訊:")
+    print(f"  路徑: {hsaco_path}")
+    print(f"  大小: {hsaco_path.stat().st_size} bytes")
+    print(f"  SHA256: {hsaco_hash}")
+    
+    # 使用 universal_hsaco_runner 執行
+    print(f"\n執行 universal_hsaco_runner:")
+    print(f"  HSACO:  {hsaco_path}")
+    print(f"  Kernel: {kernel_name}")
+    print(f"  Type:   {kernel_type}")
+    print(f"  Size:   {test_size}")
+    
+    runner_cmd = [
+        str(runner_path),
+        str(hsaco_path),
+        kernel_name,
+        kernel_type,
+        str(test_size)
+    ]
+    
+    stdout, stderr = run_cmd(runner_cmd, cwd=workdir, capture=True)
+    
+    output = stdout + stderr
+    print(f"\n--- {label}版本輸出 ---")
+    print(output)
+    print("--- 輸出結束 ---")
+    
+    return output, hsaco_hash
+
+
 def main():
     ap = argparse.ArgumentParser(
-        description="E2E 測試：驗證 pipeline 轉換的正確性"
+        description="E2E 測試：驗證 pipeline 轉換的正確性（支援兩種模式）"
     )
+    
+    # 通用參數
     ap.add_argument(
         "--kernel",
         type=pathlib.Path,
         default=pathlib.Path("../../../Track_A/e2e_test/vec_add_kernel.hip"),
         help="Kernel 源碼文件 [default: ../../../Track_A/e2e_test/vec_add_kernel.hip]"
-    )
-    ap.add_argument(
-        "--host",
-        type=pathlib.Path,
-        default=pathlib.Path("../../../Track_A/e2e_test/main.cpp"),
-        help="Host 程式源碼 [default: ../../../Track_A/e2e_test/main.cpp]"
     )
     ap.add_argument(
         "--pipeline",
@@ -547,99 +644,228 @@ def main():
         help="工作目錄 [default: output]"
     )
     ap.add_argument(
-        "--hsaco-name",
-        default=None,
-        help="Host 程式期望載入的 HSACO 文件名 [default: 從 kernel 文件名自動提取]"
-    )
-    ap.add_argument(
         "--use-mdr-isa",
         type=pathlib.Path,
         default=None,
         help="使用 MDR 優化後的 ISA 組合語言文件進行 assemble [若不指定則使用一般 hipcc 編譯]"
     )
     
+    # 模式選擇
+    ap.add_argument(
+        "--use-universal-runner",
+        action="store_true",
+        help="使用 universal_hsaco_runner 模式（不需要 host source）"
+    )
+    
+    # 原本模式的參數（當不使用 universal runner 時需要）
+    ap.add_argument(
+        "--host",
+        type=pathlib.Path,
+        default=pathlib.Path("../../../Track_A/e2e_test/main.cpp"),
+        help="Host 程式源碼 [default: ../../../Track_A/e2e_test/main.cpp] (僅原本模式需要)"
+    )
+    ap.add_argument(
+        "--hsaco-name",
+        default=None,
+        help="Host 程式期望載入的 HSACO 文件名 [default: 從 kernel 文件名自動提取] (僅原本模式需要)"
+    )
+    
+    # Universal Runner 模式的參數（當使用 universal runner 時需要）
+    ap.add_argument(
+        "--runner",
+        type=pathlib.Path,
+        default=pathlib.Path("../mlir/test/Dialect/AMDISA/universal_hsaco_runner"),
+        help="universal_hsaco_runner 可執行檔路徑 [default: ../mlir/test/Dialect/AMDISA/universal_hsaco_runner]"
+    )
+    ap.add_argument(
+        "--kernel-name",
+        default=None,
+        help="Kernel 函數名稱 (mangled name), 例如: _Z9vectorAddPKfS0_Pfi (Universal Runner 模式需要)"
+    )
+    ap.add_argument(
+        "--kernel-type",
+        choices=["float_add", "int_scalar", "int_mem", "int_cond", "int_loop", "int_shared"],
+        default=None,
+        help="Kernel 類型 (Universal Runner 模式需要)"
+    )
+    ap.add_argument(
+        "--test-size",
+        type=int,
+        default=1024,
+        help="測試資料大小 [default: 1024] (Universal Runner 模式需要)"
+    )
+    
     args = ap.parse_args()
     
     # 解析路徑
     kernel_src = args.kernel.resolve()
-    host_src = args.host.resolve()
     pipeline_script = args.pipeline.resolve()
     workdir = args.workdir.resolve()
     
-    # 如果沒有指定 hsaco-name，從 kernel 文件名自動提取
-    if args.hsaco_name is None:
-        args.hsaco_name = f"{kernel_src.stem}.hsaco"
-        print(f"[INFO] 自動設定 HSACO 名稱: {args.hsaco_name}")
-    
-    # 檢查文件存在
+    # 檢查必要文件存在
     if not kernel_src.exists():
         raise FileNotFoundError(f"Kernel 源碼不存在: {kernel_src}")
-    if not host_src.exists():
-        raise FileNotFoundError(f"Host 源碼不存在: {host_src}")
     if not pipeline_script.exists():
         raise FileNotFoundError(f"Pipeline 腳本不存在: {pipeline_script}")
+    
+    # 根據模式驗證參數
+    if args.use_universal_runner:
+        # Universal Runner 模式
+        if args.kernel_name is None:
+            raise ValueError("Universal Runner 模式需要指定 --kernel-name")
+        if args.kernel_type is None:
+            raise ValueError("Universal Runner 模式需要指定 --kernel-type")
+        
+        runner_path = args.runner.resolve()
+        if not runner_path.exists():
+            raise FileNotFoundError(f"universal_hsaco_runner 不存在: {runner_path}")
+        
+        print("="*60)
+        print("E2E 測試開始 (Universal Runner 模式)")
+        print("="*60)
+        print(f"Kernel:      {kernel_src}")
+        print(f"Runner:      {runner_path}")
+        print(f"Kernel Name: {args.kernel_name}")
+        print(f"Kernel Type: {args.kernel_type}")
+        print(f"Test Size:   {args.test_size}")
+        print(f"Pipeline:    {pipeline_script}")
+        print(f"架構:        {args.arch}")
+        print(f"工作目錄:    {workdir}")
+        if args.use_mdr_isa:
+            print(f"MDR ISA:     {args.use_mdr_isa.resolve()}")
+            print(f"編譯模式:    MDR Assemble")
+        else:
+            print(f"編譯模式:    一般 HIPCC")
+    else:
+        # 原本模式
+        host_src = args.host.resolve()
+        if not host_src.exists():
+            raise FileNotFoundError(f"Host 源碼不存在: {host_src}")
+        
+        # 如果沒有指定 hsaco-name，從 kernel 文件名自動提取
+        if args.hsaco_name is None:
+            args.hsaco_name = f"{kernel_src.stem}.hsaco"
+            print(f"[INFO] 自動設定 HSACO 名稱: {args.hsaco_name}")
+        
+        print("="*60)
+        print("E2E 測試開始 (原本模式)")
+        print("="*60)
+        print(f"Kernel:     {kernel_src}")
+        print(f"Host:       {host_src}")
+        print(f"Pipeline:   {pipeline_script}")
+        print(f"架構:       {args.arch}")
+        print(f"工作目錄:   {workdir}")
+        print(f"HSACO 名稱: {args.hsaco_name}")
+        if args.use_mdr_isa:
+            print(f"MDR ISA:    {args.use_mdr_isa.resolve()}")
+            print(f"編譯模式:   MDR Assemble")
+        else:
+            print(f"編譯模式:   一般 HIPCC")
     
     # 創建工作目錄
     workdir.mkdir(parents=True, exist_ok=True)
     
-    print("="*60)
-    print("E2E 測試開始")
-    print("="*60)
-    print(f"Kernel:     {kernel_src}")
-    print(f"Host:       {host_src}")
-    print(f"Pipeline:   {pipeline_script}")
-    print(f"架構:       {args.arch}")
-    print(f"工作目錄:   {workdir}")
-    print(f"HSACO 名稱: {args.hsaco_name}")
-    if args.use_mdr_isa:
-        print(f"MDR ISA:    {args.use_mdr_isa.resolve()}")
-        print(f"編譯模式:   MDR Assemble")
-    else:
-        print(f"編譯模式:   一般 HIPCC")
-    
     try:
-        # Step 1: 編譯（根據模式選擇）
-        if args.use_mdr_isa:
-            # 使用 MDR assemble 模式
-            if not args.use_mdr_isa.exists():
-                raise FileNotFoundError(f"MDR ISA 文件不存在: {args.use_mdr_isa}")
+        if args.use_universal_runner:
+            # ============================================================
+            # Universal Runner 模式
+            # ============================================================
             
-            print("\n[模式] 使用 MDR Assemble 模式")
-            hsaco_original, isa_original, executable = step1_assemble_mdr(
-                kernel_src, host_src, args.use_mdr_isa, args.arch, workdir
+            # Step 1: 編譯 kernel（根據是否使用 MDR ISA 選擇）
+            if args.use_mdr_isa:
+                # 使用 MDR assemble 模式
+                if not args.use_mdr_isa.exists():
+                    raise FileNotFoundError(f"MDR ISA 文件不存在: {args.use_mdr_isa}")
+                
+                print("\n[模式] 使用 MDR Assemble 模式")
+                hsaco_original, isa_original, _ = step1_assemble_mdr(
+                    kernel_src, None, args.use_mdr_isa, args.arch, workdir
+                )
+            else:
+                # 使用一般 hipcc 編譯模式（只編譯 kernel，不編譯 host）
+                print("\n[模式] 使用一般 HIPCC 編譯模式")
+                hsaco_original, isa_original, executable = step1_compile_original(
+                    kernel_src, None, args.arch, workdir
+                )
+            
+            # Step 2: 用 universal_hsaco_runner 執行原始版本
+            output_original, original_hash = step2_run_with_universal_runner(
+                hsaco_original, runner_path, args.kernel_name,
+                args.kernel_type, args.test_size, workdir, "原始"
             )
+            
+            # Step 3: 用 pipeline 重建
+            hsaco_rebuilt = step3_rebuild_with_pipeline(
+                isa_original, pipeline_script, args.arch, workdir
+            )
+            
+            # Step 4: 用 universal_hsaco_runner 執行重建版本
+            output_rebuilt, rebuilt_hash = step2_run_with_universal_runner(
+                hsaco_rebuilt, runner_path, args.kernel_name,
+                args.kernel_type, args.test_size, workdir, "重建"
+            )
+            
+            # 驗證使用了不同的 HSACO
+            if original_hash == rebuilt_hash:
+                print("\n⚠️  警告：原始和重建的 HSACO hash 相同！")
+            else:
+                print(f"\n✓ 確認使用了不同的 HSACO")
+                print(f"  原始: {original_hash[:16]}...")
+                print(f"  重建: {rebuilt_hash[:16]}...")
+            
+            # Step 5: 比較結果
+            success = step5_compare_outputs(output_original, output_rebuilt)
+            
         else:
-            # 使用一般 hipcc 編譯模式
-            print("\n[模式] 使用一般 HIPCC 編譯模式")
-            hsaco_original, isa_original, executable = step1_compile_original(
-                kernel_src, host_src, args.arch, workdir
+            # ============================================================
+            # 原本模式
+            # ============================================================
+            
+            # Step 1: 編譯（根據模式選擇）
+            if args.use_mdr_isa:
+                # 使用 MDR assemble 模式
+                if not args.use_mdr_isa.exists():
+                    raise FileNotFoundError(f"MDR ISA 文件不存在: {args.use_mdr_isa}")
+                
+                print("\n[模式] 使用 MDR Assemble 模式")
+                hsaco_original, isa_original, executable = step1_assemble_mdr(
+                    kernel_src, host_src, args.use_mdr_isa, args.arch, workdir
+                )
+            else:
+                # 使用一般 hipcc 編譯模式
+                print("\n[模式] 使用一般 HIPCC 編譯模式")
+                hsaco_original, isa_original, executable = step1_compile_original(
+                    kernel_src, host_src, args.arch, workdir
+                )
+            
+            # Step 2: 執行原始版本
+            output_original, original_hash = step2_run_original(
+                executable, hsaco_original, workdir, args.hsaco_name
             )
+            
+            # Step 3: 用 pipeline 重建
+            hsaco_rebuilt = step3_rebuild_with_pipeline(
+                isa_original, pipeline_script, args.arch, workdir
+            )
+            
+            # Step 4: 執行重建版本
+            output_rebuilt = step4_run_rebuilt(
+                executable, hsaco_rebuilt, workdir, args.hsaco_name, original_hash
+            )
+            
+            # Step 5: 比較結果
+            success = step5_compare_outputs(output_original, output_rebuilt)
         
-        # Step 2: 執行原始版本
-        output_original, original_hash = step2_run_original(
-            executable, hsaco_original, workdir, args.hsaco_name
-        )
-        
-        # Step 3: 用 pipeline 重建
-        hsaco_rebuilt = step3_rebuild_with_pipeline(
-            isa_original, pipeline_script, args.arch, workdir
-        )
-        
-        # Step 4: 執行重建版本
-        output_rebuilt = step4_run_rebuilt(
-            executable, hsaco_rebuilt, workdir, args.hsaco_name, original_hash
-        )
-        
-        # Step 5: 比較結果
-        success = step5_compare_outputs(output_original, output_rebuilt)
-        
+        # 顯示最終結果
         print("\n" + "="*60)
         if success:
-            print("測試結果: ✓ 通過")
+            mode_str = "Universal Runner" if args.use_universal_runner else "原本"
+            print(f"測試結果: ✓ 通過 ({mode_str}模式)")
             print("="*60)
             return 0
         else:
-            print("測試結果: ✗ 失敗")
+            mode_str = "Universal Runner" if args.use_universal_runner else "原本"
+            print(f"測試結果: ✗ 失敗 ({mode_str}模式)")
             print("="*60)
             return 1
             
