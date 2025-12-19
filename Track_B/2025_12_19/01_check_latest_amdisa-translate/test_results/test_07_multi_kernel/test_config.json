@@ -1,0 +1,34 @@
+{
+  "test_name": "test_07_multi_kernel",
+  "description": "Multi-kernel HSACO test - 測試單一 HSACO 文件包含多個 kernel 的情況",
+  "input_file": "original.s",
+  "kernels": [
+    {
+      "name": "_Z9vectorAddPKfS0_Pfi",
+      "display_name": "vectorAdd",
+      "type": "float_add",
+      "test_size": 1024,
+      "description": "Float 向量加法: c[i] = a[i] + b[i]"
+    },
+    {
+      "name": "_Z9scalarOpsPii",
+      "display_name": "scalarOps",
+      "type": "int_scalar",
+      "test_size": 1024,
+      "description": "Int 純量運算: 複雜的位元運算和算術運算"
+    },
+    {
+      "name": "_Z9memoryOpsPKiPii",
+      "display_name": "memoryOps",
+      "type": "int_mem",
+      "test_size": 1024,
+      "description": "Int 記憶體操作: 從 global memory 讀取和寫入"
+    }
+  ],
+  "expected_results": {
+    "kernel_count": 3,
+    "can_execute_separately": true,
+    "metadata_preserved": true
+  }
+}
+
