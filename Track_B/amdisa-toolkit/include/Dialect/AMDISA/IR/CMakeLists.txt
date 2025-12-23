@@ -1,0 +1,6 @@
+set(LLVM_TARGET_DEFINITIONS AMDISAOps.td)
+mlir_tablegen(AMDISAOps.h.inc -gen-op-decls)
+mlir_tablegen(AMDISAOps.cpp.inc -gen-op-defs)
+mlir_tablegen(AMDISADialect.h.inc -gen-dialect-decls)
+mlir_tablegen(AMDISADialect.cpp.inc -gen-dialect-defs)
+add_public_tablegen_target(MLIRAMDISAIncGen)
