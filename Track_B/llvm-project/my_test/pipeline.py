@@ -21,6 +21,103 @@ def ensure_tool(name: str):
     if shutil.which(name) is None:
         raise RuntimeError(f"Required tool '{name}' not found in PATH")
 
+
+# ======================================
+# Register Clobber Functions
+# ======================================
+
+def analyze_registers_in_gpumlir(mlir_content: str) -> tuple:
+    """
+    分析 GPU MLIR 中所有 inline_asm 使用的暫存器
+    返回: (max_vgpr, max_sgpr)
+    """
+    vgprs = set()
+    sgprs = set()
+    
+    # 匹配所有 llvm.inline_asm 中的暫存器使用
+    asm_pattern = r'llvm\.inline_asm.*?"([^"]*)"'
+    
+    for match in re.finditer(asm_pattern, mlir_content, re.DOTALL):
+        asm_code = match.group(1)
+        
+        # 匹配 v123 格式
+        for v_match in re.finditer(r'\bv(\d+)\b', asm_code):
+            vgprs.add(int(v_match.group(1)))
+        
+        # 匹配 v[123:456] 格式
+        for v_range_match in re.finditer(r'\bv\[(\d+):(\d+)\]', asm_code):
+            start = int(v_range_match.group(1))
+            end = int(v_range_match.group(2))
+            for i in range(start, end + 1):
+                vgprs.add(i)
+        
+        # 匹配 s123 格式
+        for s_match in re.finditer(r'\bs(\d+)\b', asm_code):
+            sgprs.add(int(s_match.group(1)))
+        
+        # 匹配 s[123:456] 格式
+        for s_range_match in re.finditer(r'\bs\[(\d+):(\d+)\]', asm_code):
+            start = int(s_range_match.group(1))
+            end = int(s_range_match.group(2))
+            for i in range(start, end + 1):
+                sgprs.add(i)
+    
+    max_vgpr = max(vgprs) if vgprs else -1
+    max_sgpr = max(sgprs) if sgprs else -1
+    
+    return max_vgpr, max_sgpr
+
+
+def add_register_clobber_to_gpumlir(mlir_content: str) -> str:
+    """
+    自動分析並添加 register clobber 到 GPU MLIR
+    """
+    # 分析暫存器使用
+    max_vgpr, max_sgpr = analyze_registers_in_gpumlir(mlir_content)
+    
+    if max_vgpr < 0 and max_sgpr < 0:
+        print("[Info] No register usage detected, skipping clobber insertion")
+        return mlir_content
+    
+    print(f"[Info] Detected register usage: VGPR=0-{max_vgpr} ({max_vgpr+1 if max_vgpr >= 0 else 0}), SGPR=0-{max_sgpr} ({max_sgpr+1 if max_sgpr >= 0 else 0})")
+    
+    # 生成 clobber 代碼
+    clobber_lines = []
+    
+    if max_vgpr >= 0:
+        vgpr_count = max_vgpr + 1
+        clobber_lines.append(f'    // Auto-clobber VGPR: v[0:{max_vgpr}]')
+        clobber_lines.append(f'    %vgpr_reserved = llvm.inline_asm has_side_effects asm_dialect = att "", "={{v[0:{max_vgpr}]}}" : () -> vector<{vgpr_count}xi32>')
+    
+    if max_sgpr >= 0:
+        sgpr_count = max_sgpr + 1
+        clobber_lines.append(f'    // Auto-clobber SGPR: s[0:{max_sgpr}]')
+        clobber_lines.append(f'    %sgpr_reserved = llvm.inline_asm has_side_effects asm_dialect = att "", "={{s[0:{max_sgpr}]}}" : () -> vector<{sgpr_count}xi32>')
+    
+    # 插入 clobber
+    lines = mlir_content.splitlines()
+    new_lines = []
+    clobber_inserted = False
+    
+    for line in lines:
+        new_lines.append(line)
+        
+        # 找到 gpu.func ... kernel {
+        if re.search(r'gpu\.func\s+@\S+.*\bkernel\b.*\{', line) and not clobber_inserted:
+            new_lines.append('')
+            new_lines.append('    // ===== Auto-generated Register Clobber =====')
+            new_lines.extend(clobber_lines)
+            new_lines.append('    // ===========================================')
+            new_lines.append('')
+            clobber_inserted = True
+    
+    if not clobber_inserted:
+        print("[Warning] No gpu.func kernel found, clobber not inserted")
+        return mlir_content
+    
+    print("[Info] Register clobber added successfully")
+    return '\n'.join(new_lines)
+
 # ======================================
 # String decoding for gpu.binary assembly (ISA) – same as before
 # ======================================
@@ -155,7 +252,7 @@ def auto_detect_mlir_libs() -> tuple[pathlib.Path, pathlib.Path] | tuple[None, N
     return None, None
 
 
-def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_prefix: str = None):
+def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_prefix: str = None, auto_add_clobber: bool = False):
     """
     使用 amdisa-translate 將 .s 文件轉換為 .amdisamlir 和 .gpumlir
     
@@ -163,6 +260,7 @@ def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_p
         asm_file: 輸入的 .s assembly 文件
         workdir: 工作目錄
         output_prefix: 輸出文件前綴（如果為 None，使用輸入文件名）
+        auto_add_clobber: 是否自動添加 register clobber
     
     Returns:
         (amdisamlir_path, gpumlir_path): 生成的文件路徑
@@ -225,13 +323,18 @@ def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_p
     return amdisamlir_file, gpumlir_file
 
 
-def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
+def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, skip_resource_counts: bool = False) -> str:
     """
     修復 ISA metadata：從 GPU MLIR attributes 提取正確的 metadata
     
     MLIR pipeline (convert-gpu-to-rocdl, gpu-module-to-binary) 會丟失自定義的
     amdisa.* attributes，導致生成的 ISA metadata 不正確。
     此函數從原始 GPU MLIR 提取這些信息並修復 ISA。
+    
+    Args:
+        isa_text: ISA assembly 文本
+        gpumlir_file: GPU MLIR 文件路徑
+        skip_resource_counts: 如果為 True，跳過 VGPR/SGPR 計數修復（信任 LLVM）
     """
     
     # 讀取 GPU MLIR 獲取 attributes
@@ -301,15 +404,18 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
     if 'amdhsa.kernels' in metadata and len(metadata['amdhsa.kernels']) > 0:
         kernel = metadata['amdhsa.kernels'][0]
         
-        # 修復 GPR counts
-        if 'vgpr_count' in attrs:
-            kernel['.vgpr_count'] = attrs['vgpr_count']
-        if 'sgpr_count' in attrs:
-            kernel['.sgpr_count'] = attrs['sgpr_count']
-        if 'agpr_count' in attrs:
-            kernel['.agpr_count'] = attrs['agpr_count']
+        # 修復 GPR counts（可選）
+        if not skip_resource_counts:
+            if 'vgpr_count' in attrs:
+                kernel['.vgpr_count'] = attrs['vgpr_count']
+            if 'sgpr_count' in attrs:
+                kernel['.sgpr_count'] = attrs['sgpr_count']
+            if 'agpr_count' in attrs:
+                kernel['.agpr_count'] = attrs['agpr_count']
+        else:
+            print("[Info] Skipping resource count fixes (trusting LLVM)")
         
-        # 修復 kernarg_segment_size
+        # 修復 kernarg_segment_size（總是需要）
         if 'kernarg_segment_size' in attrs:
             kernel['.kernarg_segment_size'] = attrs['kernarg_segment_size']
         
@@ -356,25 +462,29 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
             fixed_isa
         )
     
-    if 'vgpr_count' in attrs and attrs['vgpr_count'] > 0:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_next_free_vgpr)\s+\d+',
-            rf'\1 {attrs["vgpr_count"]}',
-            fixed_isa
-        )
+    if not skip_resource_counts:
+        if 'vgpr_count' in attrs and attrs['vgpr_count'] > 0:
+            fixed_isa = re.sub(
+                r'(\.amdhsa_next_free_vgpr)\s+\d+',
+                rf'\1 {attrs["vgpr_count"]}',
+                fixed_isa
+            )
+        
+        if 'sgpr_count' in attrs and attrs['sgpr_count'] > 0:
+            fixed_isa = re.sub(
+                r'(\.amdhsa_next_free_sgpr)\s+\d+',
+                rf'\1 {attrs["sgpr_count"]}',
+                fixed_isa
+            )
     
-    if 'sgpr_count' in attrs and attrs['sgpr_count'] > 0:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_next_free_sgpr)\s+\d+',
-            rf'\1 {attrs["sgpr_count"]}',
-            fixed_isa
-        )
-    
-    print(f"[Info] Fixed ISA metadata:")
-    if 'vgpr_count' in attrs:
-        print(f"  - vgpr_count: {attrs['vgpr_count']}")
-    if 'sgpr_count' in attrs:
-        print(f"  - sgpr_count: {attrs['sgpr_count']}")
+    if skip_resource_counts:
+        print(f"[Info] Fixed ISA metadata (resource counts: trusting LLVM):")
+    else:
+        print(f"[Info] Fixed ISA metadata:")
+        if 'vgpr_count' in attrs:
+            print(f"  - vgpr_count: {attrs['vgpr_count']}")
+        if 'sgpr_count' in attrs:
+            print(f"  - sgpr_count: {attrs['sgpr_count']}")
     if 'kernarg_segment_size' in attrs:
         print(f"  - kernarg_segment_size: {attrs['kernarg_segment_size']}")
     if 'group_segment_fixed_size' in attrs:
@@ -385,7 +495,7 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
     return fixed_isa
 
 
-def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.Path, output_prefix: str = None):
+def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.Path, output_prefix: str = None, skip_resource_counts: bool = False):
     """
     從 GPU MLIR 繼續執行 pipeline，生成 ISA 和 HSACO
     
@@ -437,7 +547,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     isa = isa_list[0]
     
     # Fix ISA metadata: extract from GPU MLIR attributes
-    isa = fix_isa_metadata(isa, kernel_mlir)
+    isa = fix_isa_metadata(isa, kernel_mlir, skip_resource_counts=skip_resource_counts)
     
     kernel_isa_s.write_text(isa)
     print(f"Wrote ISA assembly to {kernel_isa_s}")
@@ -567,6 +677,11 @@ def main():
         help="also run device-only pipeline with gpu-module-to-binary{format=llvm} and dump LLVM IR (via llvm-dis)",
     )
     ap.add_argument(
+        "--trust-llvm-resources",
+        action="store_true",
+        help="trust LLVM's resource count calculation (skip VGPR/SGPR metadata fixes). Use this when GPU MLIR has register clobber declarations.",
+    )
+    ap.add_argument(
         "--output-prefix",
         default=None,
         help="output file prefix [default: <input_stem>_rebuilt for .s, <input_stem> for .mlir]",
@@ -616,7 +731,7 @@ def main():
         final_gpu_mlir = gpumlir_file
         
         if args.emit_isa:
-            build_isa_and_hsaco(gpumlir_file, args.chip, workdir, output_prefix)
+            build_isa_and_hsaco(gpumlir_file, args.chip, workdir, output_prefix, skip_resource_counts=args.trust_llvm_resources)
         
         if args.emit_llvm_ir:
             build_llvm_ir_via_binary(gpumlir_file, args.chip, workdir, output_prefix)
@@ -627,7 +742,7 @@ def main():
         final_gpu_mlir = input_file
         
         if args.emit_isa:
-            build_isa_and_hsaco(input_file, args.chip, workdir, output_prefix)
+            build_isa_and_hsaco(input_file, args.chip, workdir, output_prefix, skip_resource_counts=args.trust_llvm_resources)
         
         if args.emit_llvm_ir:
             build_llvm_ir_via_binary(input_file, args.chip, workdir, output_prefix)
