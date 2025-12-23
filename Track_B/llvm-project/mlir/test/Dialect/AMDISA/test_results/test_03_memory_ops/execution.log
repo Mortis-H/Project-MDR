@@ -1,9 +1,0 @@
-========================================
-HSACO Runner
-========================================
-HSACO:  /home/morhuang/Project-MDR/Track_B/llvm-project/mlir/test/Dialect/AMDISA/test_results/test_03_memory_ops/executable.hsaco
-Kernel: _Z9memoryOpsPKfS0_Pfi
-Size:   1024
-========================================
-✓ Module loaded successfully
-Failed to get function '_Z9memoryOpsPKfS0_Pfi': named symbol not found

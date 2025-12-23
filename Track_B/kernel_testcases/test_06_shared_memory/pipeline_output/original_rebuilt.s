@@ -186,7 +186,7 @@ _Z15sharedMemKernelPKiPii:
 	.section	.rodata,"a",@progbits
 	.p2align	6, 0x0
 	.amdhsa_kernel _Z15sharedMemKernelPKiPii
-		.amdhsa_group_segment_fixed_size 0
+		.amdhsa_group_segment_fixed_size 1024
 		.amdhsa_private_segment_fixed_size 0
 		.amdhsa_kernarg_size 280
 		.amdhsa_user_sgpr_count 2
@@ -301,7 +301,7 @@ amdhsa.kernels:
   - .offset: 88
     .size: 2
     .value_kind: hidden_grid_dims
-  .group_segment_fixed_size: 0
+  .group_segment_fixed_size: 1024
   .kernarg_segment_align: 8
   .kernarg_segment_size: 280
   .max_flat_workgroup_size: 256

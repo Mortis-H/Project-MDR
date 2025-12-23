@@ -1,0 +1,21 @@
+========================================
+Universal HSACO Runner
+========================================
+HSACO:  /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_07_multi_kernels/test_07.hsaco
+Kernel: _Z5saxpyfPKfPfi
+Type:   float_saxpy
+Size:   1024
+========================================
+✓ Module loaded successfully
+✓ Function found: _Z5saxpyfPKfPfi
+========================================
+✓ Kernel launched (grid=4, block=256)
+✓ Kernel execution completed
+✅ PASS: All 1024 elements correct
+Sample results (alpha=2.5):
+  [0] 2.5 * 0 + 0 = 0
+  [1] 2.5 * 1 + 0.5 = 3
+  [2] 2.5 * 2 + 1 = 6
+  [3] 2.5 * 3 + 1.5 = 9
+  [4] 2.5 * 4 + 2 = 12
+========================================
