@@ -29,10 +29,11 @@ def ensure_tool(name: str):
 def analyze_registers_in_gpumlir(mlir_content: str) -> tuple:
     """
     分析 GPU MLIR 中所有 inline_asm 使用的暫存器
-    返回: (max_vgpr, max_sgpr)
+    返回: (max_vgpr, max_sgpr, max_agpr)
     """
     vgprs = set()
     sgprs = set()
+    agprs = set()
     
     # 匹配所有 llvm.inline_asm 中的暫存器使用
     asm_pattern = r'llvm\.inline_asm.*?"([^"]*)"'
@@ -61,28 +62,57 @@ def analyze_registers_in_gpumlir(mlir_content: str) -> tuple:
             end = int(s_range_match.group(2))
             for i in range(start, end + 1):
                 sgprs.add(i)
+        
+        # 匹配 a123 格式 (AGPR - Accumulation GPR)
+        for a_match in re.finditer(r'\ba(\d+)\b', asm_code):
+            agprs.add(int(a_match.group(1)))
+        
+        # 匹配 a[123:456] 格式
+        for a_range_match in re.finditer(r'\ba\[(\d+):(\d+)\]', asm_code):
+            start = int(a_range_match.group(1))
+            end = int(a_range_match.group(2))
+            for i in range(start, end + 1):
+                agprs.add(i)
+        
+        # 匹配 a[0xNN:0xNN] 格式 (十六進制)
+        for a_hex_match in re.finditer(r'\ba\[0x([0-9a-fA-F]+):0x([0-9a-fA-F]+)\]', asm_code):
+            start = int(a_hex_match.group(1), 16)
+            end = int(a_hex_match.group(2), 16)
+            for i in range(start, end + 1):
+                agprs.add(i)
     
     max_vgpr = max(vgprs) if vgprs else -1
     max_sgpr = max(sgprs) if sgprs else -1
+    max_agpr = max(agprs) if agprs else -1
     
-    return max_vgpr, max_sgpr
+    return max_vgpr, max_sgpr, max_agpr
 
 
 def add_register_clobber_to_gpumlir(mlir_content: str) -> str:
     """
     自動分析並添加 register clobber (reserve & release) 到 GPU MLIR
     這是新的默認行為，確保 LLVM 能正確計算資源需求
+    支持 VGPR, SGPR, 和 AGPR (Accumulation GPR)
     """
     # 分析暫存器使用
-    max_vgpr, max_sgpr = analyze_registers_in_gpumlir(mlir_content)
+    max_vgpr, max_sgpr, max_agpr = analyze_registers_in_gpumlir(mlir_content)
     
-    if max_vgpr < 0 and max_sgpr < 0:
+    if max_vgpr < 0 and max_sgpr < 0 and max_agpr < 0:
         print("[Info] No inline_asm register usage detected, skipping clobber")
         return mlir_content
     
     vgpr_count = max_vgpr + 1 if max_vgpr >= 0 else 0
     sgpr_count = max_sgpr + 1 if max_sgpr >= 0 else 0
-    print(f"[Info] Detected register usage: VGPR=0-{max_vgpr} ({vgpr_count}), SGPR=0-{max_sgpr} ({sgpr_count})")
+    agpr_count = max_agpr + 1 if max_agpr >= 0 else 0
+    
+    info_parts = []
+    if max_vgpr >= 0:
+        info_parts.append(f"VGPR=0-{max_vgpr} ({vgpr_count})")
+    if max_sgpr >= 0:
+        info_parts.append(f"SGPR=0-{max_sgpr} ({sgpr_count})")
+    if max_agpr >= 0:
+        info_parts.append(f"AGPR=0-{max_agpr} ({agpr_count})")
+    print(f"[Info] Detected register usage: {', '.join(info_parts)}")
     
     # 生成 reserve 和 release 代碼
     reserve_lines = []
@@ -99,6 +129,13 @@ def add_register_clobber_to_gpumlir(mlir_content: str) -> str:
         reserve_lines.append(f'    %sgpr_reserved = llvm.inline_asm has_side_effects asm_dialect = att "", "={{s[0:{max_sgpr}]}}" : () -> vector<{sgpr_count}xi32>')
         release_lines.append(f'    // Release SGPR clobber')
         release_lines.append(f'    llvm.inline_asm has_side_effects asm_dialect = att "", "{{s[0:{max_sgpr}]}}" %sgpr_reserved : (vector<{sgpr_count}xi32>) -> ()')
+    
+    # AGPR Clobber: LLVM AMDGPU backend 不支持 'a' 約束字符的 inline asm clobber
+    # 目前需要依賴 LLVM backend 自動檢測 AGPR 使用或手動修復 metadata
+    if max_agpr >= 0:
+        reserve_lines.append(f'    // ⚠️  Detected AGPR usage: a[0:{max_agpr}] ({agpr_count} registers)')
+        reserve_lines.append(f'    // Note: LLVM does not support AGPR clobber constraints')
+        reserve_lines.append(f'    // AGPR count may need manual adjustment in metadata')
     
     # 插入 reserve 和 release
     lines = mlir_content.splitlines()
@@ -426,8 +463,14 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
     if 'amdhsa.kernels' in metadata and len(metadata['amdhsa.kernels']) > 0:
         kernel = metadata['amdhsa.kernels'][0]
         
-        # 注意：不再修復 GPR counts，由 LLVM 通過 register clobber 自動計算
+        # 注意：不再修復 VGPR/SGPR counts，由 LLVM 通過 register clobber 自動計算
+        # 但是 AGPR 必須手動修復，因為 LLVM 不支持 AGPR clobber約束
         print("[Info] Trusting LLVM for resource counts (VGPR/SGPR)")
+        
+        # 修復 AGPR count (LLVM 無法通過 clobber 計算)
+        if 'agpr_count' in attrs:
+            kernel['.agpr_count'] = attrs['agpr_count']
+            print(f"[Info] Fixed AGPR count: {attrs['agpr_count']} (LLVM limitation workaround)")
         
         # 修復 kernarg_segment_size
         if 'kernarg_segment_size' in attrs:
