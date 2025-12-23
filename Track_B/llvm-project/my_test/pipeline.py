@@ -130,12 +130,11 @@ def add_register_clobber_to_gpumlir(mlir_content: str) -> str:
         release_lines.append(f'    // Release SGPR clobber')
         release_lines.append(f'    llvm.inline_asm has_side_effects asm_dialect = att "", "{{s[0:{max_sgpr}]}}" %sgpr_reserved : (vector<{sgpr_count}xi32>) -> ()')
     
-    # AGPR Clobber: LLVM AMDGPU backend 不支持 'a' 約束字符的 inline asm clobber
-    # 目前需要依賴 LLVM backend 自動檢測 AGPR 使用或手動修復 metadata
     if max_agpr >= 0:
-        reserve_lines.append(f'    // ⚠️  Detected AGPR usage: a[0:{max_agpr}] ({agpr_count} registers)')
-        reserve_lines.append(f'    // Note: LLVM does not support AGPR clobber constraints')
-        reserve_lines.append(f'    // AGPR count may need manual adjustment in metadata')
+        reserve_lines.append(f'    // Auto: Reserve AGPR a[0:{max_agpr}] ({agpr_count} registers)')
+        reserve_lines.append(f'    %agpr_reserved = llvm.inline_asm has_side_effects asm_dialect = att "", "={{a[0:{max_agpr}]}}" : () -> vector<{agpr_count}xi32>')
+        release_lines.append(f'    // Release AGPR clobber')
+        release_lines.append(f'    llvm.inline_asm has_side_effects asm_dialect = att "", "{{a[0:{max_agpr}]}}" %agpr_reserved : (vector<{agpr_count}xi32>) -> ()')
     
     # 插入 reserve 和 release
     lines = mlir_content.splitlines()
@@ -463,14 +462,8 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
     if 'amdhsa.kernels' in metadata and len(metadata['amdhsa.kernels']) > 0:
         kernel = metadata['amdhsa.kernels'][0]
         
-        # 注意：不再修復 VGPR/SGPR counts，由 LLVM 通過 register clobber 自動計算
-        # 但是 AGPR 必須手動修復，因為 LLVM 不支持 AGPR clobber約束
-        print("[Info] Trusting LLVM for resource counts (VGPR/SGPR)")
-        
-        # 修復 AGPR count (LLVM 無法通過 clobber 計算)
-        if 'agpr_count' in attrs:
-            kernel['.agpr_count'] = attrs['agpr_count']
-            print(f"[Info] Fixed AGPR count: {attrs['agpr_count']} (LLVM limitation workaround)")
+        # 注意：不再修復任何 GPR counts (VGPR/SGPR/AGPR)，完全由 LLVM 通過 register clobber 自動計算
+        print("[Info] Trusting LLVM for all resource counts (VGPR/SGPR/AGPR)")
         
         # 修復 kernarg_segment_size
         if 'kernarg_segment_size' in attrs:
