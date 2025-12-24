@@ -6,6 +6,10 @@
 	.type	_Z15sharedMemKernelPKiPii,@function
 _Z15sharedMemKernelPKiPii:
 	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
 		s_load_dword s3, s[0:1], 0x24
 	;;#ASMEND
 	;;#ASMSTART
@@ -182,6 +186,11 @@ _Z15sharedMemKernelPKiPii:
 	;;#ASMSTART
 	__hip_cuid_17741c13aa0204ab:
 	;;#ASMEND
+	s_nop 0
+	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
+	;;#ASMEND
 	s_endpgm
 	.section	.rodata,"a",@progbits
 	.p2align	6, 0x0
@@ -205,8 +214,8 @@ _Z15sharedMemKernelPKiPii:
 		.amdhsa_system_sgpr_workgroup_info 0
 		.amdhsa_system_vgpr_workitem_id 0
 		.amdhsa_next_free_vgpr 6
-		.amdhsa_next_free_sgpr 15
-		.amdhsa_accum_offset 4
+		.amdhsa_next_free_sgpr 9
+		.amdhsa_accum_offset 8
 		.amdhsa_reserve_vcc 0
 		.amdhsa_float_round_mode_32 0
 		.amdhsa_float_round_mode_16_64 0
@@ -228,9 +237,9 @@ _Z15sharedMemKernelPKiPii:
 .Lfunc_end0:
 	.size	_Z15sharedMemKernelPKiPii, .Lfunc_end0-_Z15sharedMemKernelPKiPii
 
-	.set _Z15sharedMemKernelPKiPii.num_vgpr, 0
+	.set _Z15sharedMemKernelPKiPii.num_vgpr, 6
 	.set _Z15sharedMemKernelPKiPii.num_agpr, 0
-	.set _Z15sharedMemKernelPKiPii.numbered_sgpr, 0
+	.set _Z15sharedMemKernelPKiPii.numbered_sgpr, 9
 	.set _Z15sharedMemKernelPKiPii.num_named_barrier, 0
 	.set _Z15sharedMemKernelPKiPii.private_seg_size, 0
 	.set _Z15sharedMemKernelPKiPii.uses_vcc, 0

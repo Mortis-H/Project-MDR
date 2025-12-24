@@ -6,6 +6,10 @@
 	.type	_Z9memoryOpsPKiPii,@function
 _Z9memoryOpsPKiPii:
 	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
 		s_load_dword s3, s[0:1], 0x24
 	;;#ASMEND
 	;;#ASMSTART
@@ -71,6 +75,11 @@ _Z9memoryOpsPKiPii:
 	;;#ASMSTART
 	__hip_cuid_c6dc5a7f7c4ba8ea:
 	;;#ASMEND
+	s_nop 0
+	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
+	;;#ASMEND
 	s_endpgm
 	.section	.rodata,"a",@progbits
 	.p2align	6, 0x0
@@ -94,7 +103,7 @@ _Z9memoryOpsPKiPii:
 		.amdhsa_system_sgpr_workgroup_info 0
 		.amdhsa_system_vgpr_workitem_id 0
 		.amdhsa_next_free_vgpr 4
-		.amdhsa_next_free_sgpr 11
+		.amdhsa_next_free_sgpr 5
 		.amdhsa_accum_offset 4
 		.amdhsa_reserve_vcc 0
 		.amdhsa_float_round_mode_32 0
@@ -117,9 +126,9 @@ _Z9memoryOpsPKiPii:
 .Lfunc_end0:
 	.size	_Z9memoryOpsPKiPii, .Lfunc_end0-_Z9memoryOpsPKiPii
 
-	.set _Z9memoryOpsPKiPii.num_vgpr, 0
+	.set _Z9memoryOpsPKiPii.num_vgpr, 4
 	.set _Z9memoryOpsPKiPii.num_agpr, 0
-	.set _Z9memoryOpsPKiPii.numbered_sgpr, 0
+	.set _Z9memoryOpsPKiPii.numbered_sgpr, 5
 	.set _Z9memoryOpsPKiPii.num_named_barrier, 0
 	.set _Z9memoryOpsPKiPii.private_seg_size, 0
 	.set _Z9memoryOpsPKiPii.uses_vcc, 0

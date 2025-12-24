@@ -6,6 +6,10 @@
 	.type	_Z9scalarOpsPii,@function
 _Z9scalarOpsPii:
 	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
 		s_load_dword s3, s[0:1], 0x1c
 	;;#ASMEND
 	;;#ASMSTART
@@ -83,6 +87,11 @@ _Z9scalarOpsPii:
 	;;#ASMSTART
 	__hip_cuid_7a5baad9fd261234:
 	;;#ASMEND
+	s_nop 0
+	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
+	;;#ASMEND
 	s_endpgm
 	.section	.rodata,"a",@progbits
 	.p2align	6, 0x0
@@ -106,8 +115,8 @@ _Z9scalarOpsPii:
 		.amdhsa_system_sgpr_workgroup_info 0
 		.amdhsa_system_vgpr_workitem_id 0
 		.amdhsa_next_free_vgpr 6
-		.amdhsa_next_free_sgpr 11
-		.amdhsa_accum_offset 4
+		.amdhsa_next_free_sgpr 5
+		.amdhsa_accum_offset 8
 		.amdhsa_reserve_vcc 0
 		.amdhsa_float_round_mode_32 0
 		.amdhsa_float_round_mode_16_64 0
@@ -129,9 +138,9 @@ _Z9scalarOpsPii:
 .Lfunc_end0:
 	.size	_Z9scalarOpsPii, .Lfunc_end0-_Z9scalarOpsPii
 
-	.set _Z9scalarOpsPii.num_vgpr, 0
+	.set _Z9scalarOpsPii.num_vgpr, 6
 	.set _Z9scalarOpsPii.num_agpr, 0
-	.set _Z9scalarOpsPii.numbered_sgpr, 0
+	.set _Z9scalarOpsPii.numbered_sgpr, 5
 	.set _Z9scalarOpsPii.num_named_barrier, 0
 	.set _Z9scalarOpsPii.private_seg_size, 0
 	.set _Z9scalarOpsPii.uses_vcc, 0

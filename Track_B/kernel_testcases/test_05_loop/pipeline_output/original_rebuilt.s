@@ -6,6 +6,10 @@
 	.type	_Z10loopKernelPii,@function
 _Z10loopKernelPii:
 	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
 		s_load_dword s3, s[0:1], 0x1c
 	;;#ASMEND
 	;;#ASMSTART
@@ -59,6 +63,11 @@ _Z10loopKernelPii:
 	;;#ASMSTART
 	__hip_cuid_da09c19f6c899ecb:
 	;;#ASMEND
+	s_nop 0
+	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
+	;;#ASMEND
 	s_endpgm
 	.section	.rodata,"a",@progbits
 	.p2align	6, 0x0
@@ -82,7 +91,7 @@ _Z10loopKernelPii:
 		.amdhsa_system_sgpr_workgroup_info 0
 		.amdhsa_system_vgpr_workitem_id 0
 		.amdhsa_next_free_vgpr 3
-		.amdhsa_next_free_sgpr 11
+		.amdhsa_next_free_sgpr 5
 		.amdhsa_accum_offset 4
 		.amdhsa_reserve_vcc 0
 		.amdhsa_float_round_mode_32 0
@@ -105,9 +114,9 @@ _Z10loopKernelPii:
 .Lfunc_end0:
 	.size	_Z10loopKernelPii, .Lfunc_end0-_Z10loopKernelPii
 
-	.set _Z10loopKernelPii.num_vgpr, 0
+	.set _Z10loopKernelPii.num_vgpr, 3
 	.set _Z10loopKernelPii.num_agpr, 0
-	.set _Z10loopKernelPii.numbered_sgpr, 0
+	.set _Z10loopKernelPii.numbered_sgpr, 5
 	.set _Z10loopKernelPii.num_named_barrier, 0
 	.set _Z10loopKernelPii.private_seg_size, 0
 	.set _Z10loopKernelPii.uses_vcc, 0
