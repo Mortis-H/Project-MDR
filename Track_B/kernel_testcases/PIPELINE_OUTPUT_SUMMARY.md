@@ -65,7 +65,17 @@
 5. **`original_rebuilt.o`**: 目標檔案
 6. **`original_rebuilt.hsaco`**: 可執行的 HSACO 二進制檔案
 
-## Register Clobber 範例
+## Register Clobber 機制
+
+### 支援的暫存器類型
+
+Pipeline.py 透過 inline asm clobber 約束完全支援所有 AMD GPU 暫存器類型：
+
+- ✅ **VGPR** (Vector GPR): `"={v[0:N]}"` - LLVM 自動計算
+- ✅ **SGPR** (Scalar GPR): `"={s[0:N]}"` - LLVM 自動計算  
+- ✅ **AGPR** (Accumulation GPR): `"={a[0:N]}"` - LLVM 自動計算
+
+所有暫存器計數都由 LLVM 根據 clobber 約束自動產生，無需手動修復。
 
 ### test_01_vector_add (original_rebuilt.gpumlir)
 
@@ -94,19 +104,22 @@ llvm.inline_asm has_side_effects asm_dialect = att "",
 ### 自動暫存器檢測
 Pipeline 自動分析原始 ISA 中使用的暫存器：
 - 掃描 `llvm.inline_asm` 中的暫存器引用
-- 支援單一暫存器 (`v0`, `s1`) 和範圍 (`v[0:7]`, `s[0:4]`)
-- 計算每種類型的最大暫存器編號
+- 支援單一暫存器 (`v0`, `s1`, `a0`) 和範圍 (`v[0:7]`, `s[0:4]`, `a[0:5]`)
+- 支援十六進制範圍 (`a[0x00:0x0F]`)
+- 計算每種類型（VGPR/SGPR/AGPR）的最大暫存器編號
 
 ### Register Clobber 生成
 自動插入 reserve 和 release：
-- **Reserve**: 在 `gpu.func` 開始處聲明暫存器使用
+- **Reserve**: 在 `gpu.func` 開始處聲明暫存器使用（`"={v[0:N]}"`, `"={s[0:N]}"`, `"={a[0:N]}"`）
 - **Release**: 在 `gpu.return` 前釋放暫存器
+- **支援所有類型**: VGPR, SGPR, AGPR 都透過相同機制處理
 
 ### LLVM 自動計算
 LLVM 的 register allocator 根據 clobber 聲明：
-- 自動計算需要的暫存器數量
+- 自動計算需要的 VGPR/SGPR/AGPR 數量
 - 正確設置 `.vgpr_count`, `.sgpr_count`, `.agpr_count`
-- 無需手動修復 metadata
+- 生成 `.set kernel.num_vgpr`, `.set kernel.num_sgpr`, `.set kernel.num_agpr`
+- **所有暫存器類型都完全自動化，無需手動修復 metadata**
 
 ## 驗證狀態
 

@@ -92,7 +92,7 @@ def add_register_clobber_to_gpumlir(mlir_content: str) -> str:
     """
     自動分析並添加 register clobber (reserve & release) 到 GPU MLIR
     這是新的默認行為，確保 LLVM 能正確計算資源需求
-    支持 VGPR, SGPR, 和 AGPR (Accumulation GPR)
+    完全支持 VGPR, SGPR, 和 AGPR (Accumulation GPR) - 所有類型都透過 clobber 機制自動計算
     """
     # 分析暫存器使用
     max_vgpr, max_sgpr, max_agpr = analyze_registers_in_gpumlir(mlir_content)
@@ -387,7 +387,7 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
     """
     修復 ISA metadata：從 GPU MLIR attributes 提取 kernarg_segment_size 等信息
     
-    注意：資源計數（VGPR/SGPR）現在由 LLVM 通過 register clobber 自動計算
+    注意：資源計數（VGPR/SGPR/AGPR）現在由 LLVM 通過 register clobber 自動計算
     這個函數只修復 kernarg_segment_size 和 hidden parameters 等非資源相關的 metadata
     
     Args:
@@ -463,6 +463,7 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
         kernel = metadata['amdhsa.kernels'][0]
         
         # 注意：不再修復任何 GPR counts (VGPR/SGPR/AGPR)，完全由 LLVM 通過 register clobber 自動計算
+        # 所有暫存器類型（包括 AGPR）都透過 inline asm clobber 約束告知 LLVM，由 LLVM 自動產生正確的計數
         print("[Info] Trusting LLVM for all resource counts (VGPR/SGPR/AGPR)")
         
         # 修復 kernarg_segment_size
@@ -529,7 +530,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     """
     從 GPU MLIR 繼續執行 pipeline，生成 ISA 和 HSACO
     
-    注意：資源計數現在由 LLVM 通過 register clobber 自動計算
+    注意：所有資源計數（VGPR/SGPR/AGPR）現在由 LLVM 通過 register clobber 自動計算
     
     Args:
         kernel_mlir: GPU MLIR 文件 (帶有 gpu.func，應包含 register clobber)
@@ -579,7 +580,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     isa = isa_list[0]
     
     # Fix ISA metadata: extract kernarg_segment_size etc. from GPU MLIR attributes
-    # Note: Resource counts are now handled by LLVM via register clobber
+    # Note: All resource counts (VGPR/SGPR/AGPR) are now handled by LLVM via register clobber
     isa = fix_isa_metadata(isa, kernel_mlir)
     
     kernel_isa_s.write_text(isa)

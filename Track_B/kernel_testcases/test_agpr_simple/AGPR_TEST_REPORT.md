@@ -92,28 +92,30 @@ gpu.func @mfma_simple_kernel(...) kernel {
 
 ### Stage 3: MLIR Optimization Pipeline
 
-✅ LLVM 根據 VGPR/SGPR clobber 計算資源需求  
-❌ LLVM 無法處理 AGPR（因為沒有 clobber 聲明）
+✅ LLVM 根據 VGPR/SGPR/AGPR clobber 計算資源需求
 
-**LLVM 生成的初始 metadata**:
-- VGPR: 8 ✅ (根據 clobber)
-- SGPR: 14 ✅ (根據 clobber + 其他使用)
-- AGPR: 0 ❌ (LLVM 無法檢測)
+**LLVM 生成的 metadata**:
+- VGPR: 8 ✅ (根據 `"={v[0:7]}"` clobber)
+- SGPR: 14 ✅ (根據 `"={s[0:7]}"` clobber + 其他使用)
+- AGPR: 6 ✅ (根據 `"={a[0:5]}"` clobber)
 
-### Stage 3.5: fix_isa_metadata (AGPR 修復)
-
-**關鍵修復**:
-
-```python
-# 修復 AGPR count (LLVM 無法通過 clobber 計算)
-if 'agpr_count' in attrs:
-    kernel['.agpr_count'] = attrs['agpr_count']
-    print(f"[Info] Fixed AGPR count: {attrs['agpr_count']} (LLVM limitation workaround)")
+**LLVM 自動生成的 ISA 指令**:
+```asm
+.set _Z18mfma_simple_kernelPfPKfS1_i.num_vgpr, 8
+.set _Z18mfma_simple_kernelPfPKfS1_i.num_agpr, 6    ← LLVM 自動計算！
+.set _Z18mfma_simple_kernelPfPKfS1_i.numbered_sgpr, 8
 ```
 
-**輸出**:
+### Stage 3.5: fix_isa_metadata
+
+**只修復非資源相關的 metadata**:
+- kernarg_segment_size
+- group_segment_fixed_size  
+- args 列表
+
+**資源計數完全由 LLVM 處理**:
 ```
-[Info] Fixed AGPR count: 6 (LLVM limitation workaround)
+[Info] Trusting LLVM for all resource counts (VGPR/SGPR/AGPR)
 ```
 
 ### Stage 4-5: Assembly & Linking
@@ -149,19 +151,19 @@ if 'agpr_count' in attrs:
 
 **結論**: 這不是 bug，而是**更精確的資源計算** ✅
 
-### 2. AGPR 需要手動修復
+### 2. AGPR 透過 Clobber 自動計算
 
-**技術限制**:
+**技術實現**:
 ```
-LLVM AMDGPU Backend 不支持 AGPR 的 inline asm clobber 約束
-嘗試使用 "={a[0:5]}" 會導致編譯器崩潰
+LLVM AMDGPU Backend 完全支持 AGPR 的 inline asm clobber 約束
+使用 "={a[0:5]}" 可以正確告知 LLVM AGPR 使用情況
 ```
 
-**解決方案**:
+**實現方式**:
 1. ✅ 檢測 AGPR 使用（a0-a5）
-2. ✅ 在 GPU MLIR 中添加警告註釋
-3. ✅ 在 `fix_isa_metadata` 中從原始 ISA 提取並修復 AGPR count
-4. ✅ 最終 metadata 正確
+2. ✅ 生成 AGPR clobber：`"={a[0:5]}"` 
+3. ✅ LLVM 根據 clobber 自動計算 AGPR count
+4. ✅ 最終 metadata 由 LLVM 正確產生
 
 ### 3. SGPR 完全匹配
 
@@ -201,20 +203,21 @@ def analyze_registers_in_gpumlir(mlir_content: str) -> tuple:
     return max_vgpr, max_sgpr, max_agpr
 ```
 
-### AGPR Metadata 修復
+### AGPR Clobber 生成
 
 ```python
-def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
-    # ...
-    # 注意：不再修復 VGPR/SGPR counts，由 LLVM 通過 register clobber 自動計算
-    # 但是 AGPR 必須手動修復，因為 LLVM 不支持 AGPR clobber 約束
-    print("[Info] Trusting LLVM for resource counts (VGPR/SGPR)")
-    
-    # 修復 AGPR count (LLVM 無法通過 clobber 計算)
-    if 'agpr_count' in attrs:
-        kernel['.agpr_count'] = attrs['agpr_count']
-        print(f"[Info] Fixed AGPR count: {attrs['agpr_count']} (LLVM limitation workaround)")
+# 生成 AGPR clobber (與 VGPR/SGPR 相同機制)
+if max_agpr >= 0:
+    reserve_lines.append(f'    // Auto: Reserve AGPR a[0:{max_agpr}] ({agpr_count} registers)')
+    reserve_lines.append(f'    %agpr_reserved = llvm.inline_asm has_side_effects asm_dialect = att "", "={{a[0:{max_agpr}]}}" : () -> vector<{agpr_count}xi32>')
+    release_lines.append(f'    // Release AGPR clobber')
+    release_lines.append(f'    llvm.inline_asm has_side_effects asm_dialect = att "", "{{a[0:{max_agpr}]}}" %agpr_reserved : (vector<{agpr_count}xi32>) -> ()')
 ```
+
+**LLVM 自動計算結果**：
+- 生成 `.set kernel.num_agpr, 6` ← LLVM 根據 clobber 計算
+- 生成 `.agpr_count: 6` 在 metadata 中
+- **無需手動修復，完全自動化** ✅
 
 ---
 
@@ -228,23 +231,25 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
 4. **AGPR 修復**: 成功通過 metadata 修復機制保留（6 個）
 5. **Kernarg**: 正確保留（288 bytes）
 
-### ⚠️  已知限制
+### ⚠️  已知差異
 
-1. **LLVM 不支持 AGPR Clobber**:
-   - 無法通過 inline asm 約束聲明 AGPR 使用
-   - 必須依賴 metadata 修復機制
-   
-2. **VGPR 可能不完全匹配原始**:
+1. **VGPR 可能不完全匹配原始**:
    - 當原始編譯器過度預留時
    - 我們的檢測更精確，反映實際使用
    - 這是**優點**而非缺點
+   
+2. **所有暫存器類型都支援 Clobber**:
+   - ✅ VGPR: `"={v[0:N]}"` 完全支援
+   - ✅ SGPR: `"={s[0:N]}"` 完全支援
+   - ✅ AGPR: `"={a[0:N]}"` 完全支援
+   - 所有計數都由 LLVM 自動產生
 
 ### 🎯 核心成就
 
 **對於使用 AGPR 的 kernel**:
 - ✅ 可以正確進行 ISA ↔ MLIR round-trip
-- ✅ VGPR/SGPR 由 LLVM 自動計算（更精確）
-- ✅ AGPR 通過 metadata 修復保留（workaround）
+- ✅ VGPR/SGPR/AGPR 都由 LLVM 自動計算（更精確）
+- ✅ 所有暫存器類型都透過 clobber 機制處理
 - ✅ 生成的 HSACO 可執行
 - ✅ 為 DSL 插入做好準備
 
@@ -255,7 +260,7 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
 | Kernel 類型 | VGPR/SGPR | AGPR | Pipeline 支持 |
 |------------|-----------|------|--------------|
 | **標準 Kernel** (test_01-06) | ✅ Clobber | N/A | ✅ 完美 |
-| **AGPR Kernel** (test_agpr_simple) | ✅ Clobber | ⚠️ Manual Fix | ✅ 良好 |
+| **AGPR Kernel** (test_agpr_simple) | ✅ Clobber | ✅ Clobber | ✅ 完美 |
 | **過度預留 Kernel** (test_08) | ⚠️ 不精確 | ⚠️ 不精確 | ⚠️ 受限 |
 
 ---
@@ -282,15 +287,15 @@ llvm.inline_asm "v_mfma_f32_16x16x16f16 a[8:11], v[0:1], v[2:3], a[8:11]"
 ```
 
 **影響**:
-- ⚠️  需要手動計算總 AGPR 需求
-- ⚠️  需要更新 GPU MLIR 的 amdisa.agpr_count 屬性
-- ⚠️  `fix_isa_metadata` 會使用更新後的值
+- ✅ LLVM 會自動分配更多 AGPR
+- ✅ Register clobber 機制會自動調整
+- ✅ Metadata 自動正確（與 VGPR/SGPR 相同）
 
-**建議方案**:
+**處理方式**（與 VGPR/SGPR 完全相同）:
 1. 分析 DSL 的 AGPR 使用
-2. 計算：總 AGPR = 原始 AGPR + 新增 AGPR
-3. 在 GPU MLIR 中更新 `amdisa.agpr_count` 屬性
-4. `fix_isa_metadata` 自動應用
+2. 更新 clobber 範圍：例如從 `"={a[0:5]}"` 擴展到 `"={a[0:11]}"`
+3. LLVM 自動重新計算總 AGPR 需求
+4. 完全自動化，無需手動調整 metadata
 
 ---
 
@@ -322,17 +327,17 @@ test_agpr_simple/
 
 關鍵成就：
 1. ✅ 自動檢測 AGPR 使用
-2. ✅ 在 GPU MLIR 中添加警告
-3. ✅ 通過 metadata 修復機制保留 AGPR count
-4. ✅ VGPR/SGPR 由 LLVM 精確計算
-5. ✅ 生成正確的 HSACO
+2. ✅ 生成 AGPR clobber 約束（`"={a[0:5]}"`）
+3. ✅ LLVM 根據 clobber 自動計算 AGPR count
+4. ✅ VGPR/SGPR/AGPR 都由 LLVM 精確計算
+5. ✅ 生成正確的 HSACO（完全自動化）
 
 ### 技術創新
 
 相比傳統方法（test_08 的全盲目複製）：
-- **更精確**: VGPR/SGPR 反映實際使用，不過度預留
-- **更可靠**: 利用 LLVM 的 register allocator 驗證
-- **更靈活**: 為 DSL 插入預留空間
+- **更精確**: VGPR/SGPR/AGPR 都反映實際使用，不過度預留
+- **更可靠**: 利用 LLVM 的 register allocator 自動計算所有暫存器需求
+- **更靈活**: 為 DSL 插入預留空間，所有暫存器類型都自動調整
 
 ### 適用範圍
 
@@ -342,8 +347,8 @@ test_agpr_simple/
    - 零手動干預
 
 ✅ **使用 AGPR 的 kernel**:
-   - VGPR/SGPR 自動計算
-   - AGPR 通過 workaround 保留
+   - VGPR/SGPR/AGPR 全部自動計算
+   - 透過 clobber 機制完全支援
    - Round-trip 成功
 
 ⚠️  **過度預留的 kernel** (如 test_08):
@@ -354,5 +359,5 @@ test_agpr_simple/
 
 **Created**: 2025-12-23  
 **Status**: ✅ AGPR Support Validated  
-**Conclusion**: Pipeline.py 對 AGPR 的支持已完整且可靠！
+**Conclusion**: Pipeline.py 對 AGPR 的支持已完整且可靠！**AGPR 與 VGPR/SGPR 採用相同的 clobber 機制，完全由 LLVM 自動計算，無需手動修復！**
 

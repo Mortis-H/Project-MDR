@@ -1,0 +1,31 @@
+[INFO] 輸出文件前綴: agpr_test
+=== Processing AMD ISA Assembly: original.s ===
+[Info] Extracted group_segment_fixed_size from original ISA: 0
+
+=== Stage 1: Translating original.s to AMDISA MLIR ===
+Generated AMDISA MLIR: /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_agpr_simple/pipeline_output/agpr_test.amdisamlir
+
+=== Stage 2: Lowering AMDISA MLIR to GPU MLIR ===
+[Info] Injected amdisa.group_segment_fixed_size = 0 into GPU MLIR
+
+=== Stage 2.5: Adding Register Clobber ===
+[Info] Detected register usage: VGPR=0-7 (8), SGPR=0-7 (8), AGPR=0-5 (6)
+[Info] ✅ Register clobber (reserve + release) added
+Generated GPU MLIR: /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_agpr_simple/pipeline_output/agpr_test.gpumlir
+
+=== Stage 3: Running MLIR optimization pipeline ===
+[$] mlir-opt /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_agpr_simple/pipeline_output/agpr_test.gpumlir --pass-pipeline=builtin.module(gpu-kernel-outlining,rocdl-attach-target{chip=gfx950},gpu.module(convert-gpu-to-rocdl{index-bitwidth=32 runtime=HIP}),gpu-to-llvm,gpu-module-to-binary{format=isa}) -o /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_agpr_simple/pipeline_output/agpr_test_binary_isa.mlir
+[Info] Trusting LLVM for all resource counts (VGPR/SGPR/AGPR)
+[Info] Fixed ISA metadata (non-resource fields):
+  - kernarg_segment_size: 288
+  - group_segment_fixed_size: 0 (LDS/Shared Memory)
+  - args count: 17
+Wrote ISA assembly to /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_agpr_simple/pipeline_output/agpr_test.s
+
+=== Stage 4: Assembling ISA to object file ===
+[$] llvm-mc -triple amdgcn-amd-amdhsa -mcpu=gfx950 -filetype=obj /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_agpr_simple/pipeline_output/agpr_test.s -o /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_agpr_simple/pipeline_output/agpr_test.o
+
+=== Stage 5: Linking to HSACO ===
+[$] ld.lld -shared /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_agpr_simple/pipeline_output/agpr_test.o -o /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_agpr_simple/pipeline_output/agpr_test.hsaco
+
+✓ Successfully generated HSACO: /home/morhuang/Project-MDR/Track_B/kernel_testcases/test_agpr_simple/pipeline_output/agpr_test.hsaco
