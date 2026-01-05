@@ -4,14 +4,16 @@
 # 配置變量
 CHIP := gfx950
 WORKDIR := build_output
-WRAP_S := wrap.s
+WRAP_S := 0b66f7d63892c8d65fd11a9251b84e0488021ea1_wrapped.s
 HOST_CPP := matrix_add_host.cpp
-PIPELINE_PY := pipeline.py
+PIPELINE_PY := ../examples/pipeline.py
 
 # 輸出文件
 HSACO := vec_add_kernel.hsaco
 HOST_BIN := matrix_add_host
-GENERATED_HSACO := $(WORKDIR)/wrap_rebuilt.hsaco
+# 自動從輸入 .s 檔案名稱生成輸出檔案名稱
+WRAP_S_BASE := $(basename $(WRAP_S))
+GENERATED_HSACO := $(WORKDIR)/$(WRAP_S_BASE)_rebuilt.hsaco
 
 # 編譯器和工具
 HIPCC := hipcc
