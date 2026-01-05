@@ -357,7 +357,10 @@ def step2_run_original(executable: pathlib.Path,
     print(f"  SHA256: {original_hash}")
     
     print(f"\n執行: {executable}")
-    stdout, stderr = run_cmd([str(executable)], cwd=workdir, capture=True)
+    # 傳遞必要的命令列參數：HSACO 路徑、kernel 名稱
+    cmd = [str(executable), str(hsaco_name), "vectorAdd"]
+    print(f"[$] {' '.join(cmd)}")
+    stdout, stderr = run_cmd(cmd, cwd=workdir, capture=True)
     
     output = stdout + stderr
     print("\n--- 原始版本輸出 ---")
@@ -489,7 +492,10 @@ def step4_run_rebuilt(executable: pathlib.Path,
     print("  ✓ 確認將使用重建的 HSACO 執行")
     
     print(f"\n執行: {executable}")
-    stdout, stderr = run_cmd([str(executable)], cwd=workdir, capture=True)
+    # 傳遞必要的命令列參數：HSACO 路徑、kernel 名稱
+    cmd = [str(executable), str(hsaco_name), "vectorAdd"]
+    print(f"[$] {' '.join(cmd)}")
+    stdout, stderr = run_cmd(cmd, cwd=workdir, capture=True)
     
     output = stdout + stderr
     print("\n--- 重建版本輸出 ---")
@@ -501,7 +507,7 @@ def step4_run_rebuilt(executable: pathlib.Path,
 
 def step5_compare_outputs(output_original: str, output_rebuilt: str) -> bool:
     """
-    Step 5: 比較兩次執行的輸出（忽略 HSACO 路徑差異）
+    Step 5: 比較兩次執行的輸出（忽略 HSACO 路徑和檔案大小差異）
     
     Returns:
         True 如果輸出相同
@@ -510,14 +516,17 @@ def step5_compare_outputs(output_original: str, output_rebuilt: str) -> bool:
     print("Step 5: 比較輸出")
     print("="*60)
     
-    # 過濾輸出：移除包含 HSACO 路徑的行
+    # 過濾輸出：移除包含 HSACO 路徑和檔案大小的行
     def filter_output(output):
-        """過濾掉路徑相關的行，只保留實際計算結果"""
+        """過濾掉路徑相關的行和檔案大小，只保留實際計算結果"""
         lines = output.splitlines()
         filtered = []
         for line in lines:
             # 跳過包含 HSACO 路徑的行
             if "HSACO:" in line and ("/" in line or "\\" in line):
+                continue
+            # 跳過 HSACO 檔案大小的行（重建後大小會不同）
+            if "HSACO file size:" in line:
                 continue
             filtered.append(line)
         return '\n'.join(filtered)
@@ -532,12 +541,12 @@ def step5_compare_outputs(output_original: str, output_rebuilt: str) -> bool:
     filtered_rebuilt = filter_output(output_rebuilt)
     
     if filtered_original == filtered_rebuilt:
-        print("\n✓ 測試通過！計算結果相同（已忽略 HSACO 路徑差異）。")
-        print("\n註：HSACO 路徑不同是正常的（原始 vs 重建），不影響測試結果。")
+        print("\n✓ 測試通過！計算結果相同（已忽略 HSACO 路徑和檔案大小差異）。")
+        print("\n註：HSACO 路徑和檔案大小不同是正常的（原始 vs 重建），不影響測試結果。")
         return True
     else:
         print("\n✗ 測試失敗！計算結果不同。\n")
-        print("差異如下（已過濾路徑）:")
+        print("差異如下（已過濾路徑和檔案大小）:")
         print("-" * 60)
         
         diff = difflib.unified_diff(

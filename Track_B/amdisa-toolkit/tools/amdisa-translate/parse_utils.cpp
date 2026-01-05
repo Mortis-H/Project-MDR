@@ -525,6 +525,85 @@ AMDGCNAssembly parseAMDGCNAssembly(const std::string &filename,
   assembly.setParsedProgram(program);
   assembly.setMetadata(metadata);
 
+  // 識別 kernel 區域（通過 .globl 和對應的 label）
+  std::map<std::string, size_t> kernelStarts;  // kernel name -> start line
+  std::map<std::string, size_t> kernelEnds;    // kernel name -> end line
+  std::vector<std::string> kernelOrder;        // kernel 出現順序
+  
+  // 第一遍：找到所有 .globl 宣告和對應的 label
+  for (size_t I = 0; I < Lines.size(); ++I) {
+    if (Kinds[I] == LineKind::KernelName) {
+      StringRef trimmed = Lines[I].ltrim();
+      if (trimmed.starts_with(".globl") || trimmed.starts_with(".global")) {
+        StringRef kernelPart = trimmed.substr(trimmed.starts_with(".globl") ? 6 : 7).ltrim();
+        std::string kernelName = kernelPart.str();
+        
+        // 查找對應的 label（通常緊接著 .globl，或在幾行之後）
+        for (size_t J = I + 1; J < Lines.size() && J < I + 20; ++J) {
+          if (Kinds[J] == LineKind::Label) {
+            StringRef labelTrimmed = Lines[J].ltrim();
+            StringRef labelName = labelTrimmed;
+            
+            // 去掉冒號
+            if (labelName.contains(":")) {
+              labelName = labelName.substr(0, labelName.find(":"));
+            }
+            
+            // 去掉註釋（分號之後的內容）
+            if (labelName.contains(";")) {
+              labelName = labelName.substr(0, labelName.find(";"));
+            }
+            
+            // 去掉前後空白
+            labelName = labelName.trim();
+            
+            // 檢查 label 名稱是否匹配 kernel 名稱
+            if (labelName == kernelName) {
+              kernelStarts[kernelName] = J + 1;  // 從 label 開始（1-based）
+              kernelOrder.push_back(kernelName);
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // 第二遍：確定每個 kernel 的結束位置
+  for (size_t i = 0; i < kernelOrder.size(); ++i) {
+    const std::string &kernelName = kernelOrder[i];
+    size_t startLine = kernelStarts[kernelName];
+    size_t endLine = Lines.size();  // 默認到文件結尾
+    
+    // 查找 .Lfunc_end 標記，或下一個 kernel 的開始
+    for (size_t J = startLine; J < Lines.size(); ++J) {
+      if (Kinds[J] == LineKind::Label) {
+        StringRef labelTrimmed = Lines[J].ltrim();
+        StringRef labelName = labelTrimmed;
+        if (labelName.ends_with(":")) {
+          labelName = labelName.drop_back();
+        }
+        
+        // 找到 .Lfunc_endN 標記（kernel 結束標記）
+        if (labelName.starts_with(".Lfunc_end")) {
+          endLine = J;  // 結束於 .Lfunc_end 之前
+          break;
+        }
+      }
+      
+      // 如果遇到下一個 kernel 的開始，當前 kernel 在此結束
+      if (i + 1 < kernelOrder.size()) {
+        const std::string &nextKernel = kernelOrder[i + 1];
+        if (kernelStarts.count(nextKernel) && J >= kernelStarts[nextKernel] - 5) {
+          endLine = kernelStarts[nextKernel] - 1;
+          break;
+        }
+      }
+    }
+    
+    kernelEnds[kernelName] = endLine;
+  }
+
   // 填充行資訊
   for (size_t I = 0; I < Lines.size(); ++I) {
     LineInfo lineInfo;
@@ -625,6 +704,33 @@ AMDGCNAssembly parseAMDGCNAssembly(const std::string &filename,
 
   // 構建 Label Blocks（建立 label 和指令的關係）
   assembly.buildLabelBlocks();
+
+  // 構建 kernel 區域（在設置 metadata 之後，這樣指針才有效）
+  for (const std::string &kernelName : kernelOrder) {
+    KernelRegion region;
+    region.name = kernelName;
+    region.startLine = kernelStarts[kernelName];
+    region.endLine = kernelEnds[kernelName];
+    
+    // 收集該 kernel 內的所有指令
+    for (const auto &inst : program.allInstructions) {
+      if (inst.lineNumber >= region.startLine && inst.lineNumber <= region.endLine) {
+        region.instructions.push_back(inst);
+      }
+    }
+    
+    // 收集該 kernel 內的所有標籤
+    for (const auto &label : program.labels) {
+      if (label.lineNumber >= region.startLine && label.lineNumber <= region.endLine) {
+        region.labels.push_back(label);
+      }
+    }
+    
+    // 查找對應的 metadata（使用 assembly 中的 metadata，而不是局部變量）
+    region.metadata = assembly.getMetadata().findKernel(kernelName);
+    
+    assembly.addKernelRegion(region);
+  }
 
   return assembly;
 }

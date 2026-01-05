@@ -82,4 +82,65 @@ def AMDISA_LabelOp : AMDISA_Op<"label", [Pure]> {
   let assemblyFormat = "attr-dict";
 }
 
+// ---- FuncOp ----
+//
+// Represents a kernel or function from the .s file.
+// Contains amdisa.inst and amdisa.label ops as body.
+// Each kernel has its own metadata (arguments, register usage, etc.)
+//
+def AMDISA_FuncOp : AMDISA_Op<"func"> {
+  let summary = "AMD ISA kernel/function";
+  let description = [{
+    Represents a kernel or function parsed from AMD GCN assembly.
+    Contains the body with instructions and labels, along with metadata
+    such as kernel arguments, register usage, and other properties.
+
+    Example:
+      amdisa.func @vec_add(%arg0: !amdisa.buffer, %arg1: !amdisa.buffer) 
+        attributes {
+          amdisa.sgpr_count = 32,
+          amdisa.vgpr_count = 16,
+          amdisa.kernargs = [...]
+        } {
+        amdisa.label { name = ".LBB0_1" }
+        amdisa.inst { mnemonic = "s_load_dwordx2", operands = [...], raw_text = "..." }
+        // ... more instructions ...
+        amdisa.return
+      }
+  }];
+
+  let arguments = (ins
+    SymbolNameAttr:$sym_name
+  );
+
+  let regions = (region SizedRegion<1>:$body);
+
+  let assemblyFormat = [{
+    $sym_name attr-dict-with-keyword $body
+  }];
+
+  let hasVerifier = 0;
+}
+
+// ---- ReturnOp ----
+//
+// Terminator for amdisa.func body
+//
+def AMDISA_ReturnOp : AMDISA_Op<"return", [Pure, Terminator]> {
+  let summary = "Return operation for amdisa.func";
+  let description = [{
+    Terminates the body of an amdisa.func operation.
+    
+    Example:
+      amdisa.func @kernel {
+        // ... instructions ...
+        amdisa.return
+      }
+  }];
+
+  let arguments = (ins);
+  let results = (outs);
+  let assemblyFormat = "attr-dict";
+}
+
 #endif // AMDISA_OPS

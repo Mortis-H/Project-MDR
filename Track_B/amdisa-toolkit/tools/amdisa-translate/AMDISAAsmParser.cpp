@@ -33,6 +33,27 @@
 #include <iostream>
 
 //===----------------------------------------------------------------------===//
+// Forward Declarations
+//===----------------------------------------------------------------------===//
+
+namespace mlir::amdisa {
+
+void processSingleKernelAsFunc(mlir::OpBuilder &builder, 
+                                const AMDGCNAssembly &assembly,
+                                const KernelRegion &kernel);
+
+void processKernelRegion(mlir::ModuleOp &module, 
+                          mlir::OpBuilder &builder,
+                          const AMDGCNAssembly &assembly, 
+                          const KernelRegion &kernel);
+
+void processLegacySingleKernel(mlir::ModuleOp &module, 
+                                mlir::OpBuilder &builder,
+                                const AMDGCNAssembly &assembly);
+
+} // namespace mlir::amdisa
+
+//===----------------------------------------------------------------------===//
 // Helper Functions
 //===----------------------------------------------------------------------===//
 
@@ -83,7 +104,168 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
   // Parse the AMD GCN assembly file
   AMDGCNAssembly assembly = parseAMDGCNAssembly(filename.str());
 
-  // Process each line of the assembly
+  // Set module-level attributes (target triple, code object version, etc.)
+  for (size_t lineNum = 1; lineNum <= assembly.getLineCount(); ++lineNum) {
+    const LineInfo *line = assembly.getLine(lineNum);
+    if (!line) continue;
+
+    if (line->kind == LineKind::AmdgcnTarget) {
+      // .amdgcn_target "amdgcn-amd-amdhsa--gfx950"
+      if (!module->hasAttr("llvm.target_triple")) {
+        auto tripleAttr = builder.getStringAttr(line->amdgcnTarget);
+        module->setAttr("llvm.target_triple", tripleAttr);
+      }
+    }
+
+    if (line->kind == LineKind::AmdhsaCodeObjectVersion) {
+      if (!module->hasAttr("amdgpu.code_object_version")) {
+        int version = 0;
+        if (!line->amdhsaCodeObjectVersion.empty()) {
+          version = std::stoi(line->amdhsaCodeObjectVersion);
+        }
+        auto verAttr = builder.getI32IntegerAttr(version);
+        module->setAttr("amdgpu.code_object_version", verAttr);
+      }
+    }
+  }
+
+  // Process each kernel separately
+  const std::vector<KernelRegion> &kernels = assembly.getAllKernels();
+  
+  // 如果沒有找到 kernel 區域，使用舊的單 kernel 模式（向後兼容）
+  if (kernels.empty()) {
+    // 舊版本單 kernel 處理邏輯
+    processLegacySingleKernel(module, builder, assembly);
+  } else {
+    // 新版本多 kernel 處理邏輯
+    for (const auto &kernel : kernels) {
+      processKernelRegion(module, builder, assembly, kernel);
+    }
+  }
+
+  return module;
+}
+
+/// Process a single kernel region and create an amdisa.func op
+void processSingleKernelAsFunc(mlir::OpBuilder &builder, 
+                                const AMDGCNAssembly &assembly,
+                                const KernelRegion &kernel) {
+  auto loc = builder.getUnknownLoc();
+  
+  // Create amdisa.func op
+  auto funcOp = builder.create<FuncOp>(loc, builder.getStringAttr(kernel.name));
+  
+  // Set insertion point to function body
+  mlir::Block *funcBody = new mlir::Block();
+  funcOp.getBody().push_back(funcBody);
+  builder.setInsertionPointToEnd(funcBody);
+  
+  // Process labels and instructions in this kernel
+  for (size_t lineNum = kernel.startLine; lineNum <= kernel.endLine; ++lineNum) {
+    const LineInfo *line = assembly.getLine(lineNum);
+    if (!line) continue;
+    
+    switch (line->kind) {
+      case LineKind::Label: {
+        std::string labelName = line->labelName;
+        
+        // Extract pure label name (remove comment part)
+        llvm::StringRef labelRef(labelName);
+        size_t colonPos = labelRef.find(':');
+        if (colonPos != llvm::StringRef::npos) {
+          labelRef = labelRef.substr(0, colonPos).trim();
+        }
+        std::string pureLabelName = labelRef.str();
+        
+        // Skip .Lfunc_end labels (function end markers)
+        if (pureLabelName.rfind(".Lfunc_end", 0) == 0) {
+          break;
+        }
+        
+        // Skip labels with same name as kernel (function entry)
+        if (pureLabelName == kernel.name) {
+          break;
+        }
+        
+        // Keep all other labels (including .LBB0_X basic block labels)
+        auto nameAttr = builder.getStringAttr(labelName);
+        builder.create<LabelOp>(loc, nameAttr);
+        break;
+      }
+      
+      case LineKind::Instruction: {
+        if (!line->instruction) {
+          // Skip instructions without data
+          break;
+        }
+        
+        const ParsedInstruction &inst = *line->instruction;
+        
+        auto mnemonicAttr = builder.getStringAttr(inst.opcode);
+        
+        // Convert operands to array of string attributes
+        llvm::SmallVector<mlir::Attribute> operandAttrs;
+        operandAttrs.reserve(inst.operands.size());
+        for (const auto &op : inst.operands) {
+          operandAttrs.push_back(builder.getStringAttr(op.text));
+        }
+        
+        auto opsAttr = builder.getArrayAttr(operandAttrs);
+        auto rawAttr = builder.getStringAttr(inst.originalText);
+        
+        builder.create<InstOp>(loc, mnemonicAttr, opsAttr, rawAttr);
+        break;
+      }
+      
+      default:
+        // Skip other line types inside kernel body
+        break;
+    }
+  }
+  
+  // Add terminator for the function body
+  builder.create<ReturnOp>(loc);
+  
+  // Add kernel metadata as attributes
+  if (kernel.hasMetadata() && kernel.metadata != nullptr) {
+    const KernelInfo *meta = kernel.metadata;
+    
+    // Build kernel arguments metadata
+    llvm::SmallVector<mlir::Attribute> argDicts;
+    argDicts.reserve(meta->args.size());
+    for (const auto &arg : meta->args) {
+      argDicts.push_back(propsToDictAttr(builder, arg));
+    }
+    
+    // Set function attributes
+    funcOp->setAttr("amdisa.sgpr_count", builder.getI32IntegerAttr(meta->sgprCount));
+    funcOp->setAttr("amdisa.vgpr_count", builder.getI32IntegerAttr(meta->vgprCount));
+    funcOp->setAttr("amdisa.agpr_count", builder.getI32IntegerAttr(meta->agprCount));
+    funcOp->setAttr("amdisa.kernarg_segment_size", builder.getI32IntegerAttr(meta->kernargSegmentSize));
+    
+    if (!argDicts.empty()) {
+      funcOp->setAttr("amdisa.kernargs", builder.getArrayAttr(argDicts));
+    }
+  }
+}
+
+/// Process kernel region and add to module
+void processKernelRegion(mlir::ModuleOp &module, 
+                          mlir::OpBuilder &builder,
+                          const AMDGCNAssembly &assembly, 
+                          const KernelRegion &kernel) {
+  // Set insertion point to module body
+  builder.setInsertionPointToEnd(module.getBody());
+  
+  // Create and process the kernel function
+  processSingleKernelAsFunc(builder, assembly, kernel);
+}
+
+/// Legacy single-kernel processing (backward compatibility)
+void processLegacySingleKernel(mlir::ModuleOp &module, 
+                                mlir::OpBuilder &builder,
+                                const AMDGCNAssembly &assembly) {
+  // Process each line of the assembly (old behavior)
   for (size_t lineNum = 1; lineNum <= assembly.getLineCount(); ++lineNum) {
     const LineInfo *line = assembly.getLine(lineNum);
     if (!line) continue;
@@ -96,7 +278,6 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
         std::string labelName = line->labelName;
         
         // Extract pure label name (remove comment part)
-        // Example: "vec_add: ; @vec_add" → "vec_add"
         llvm::StringRef labelRef(labelName);
         size_t colonPos = labelRef.find(':');
         if (colonPos != llvm::StringRef::npos) {
@@ -104,12 +285,12 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
         }
         std::string pureLabelName = labelRef.str();
         
-        // 1. Skip .Lfunc_end labels (function end markers, generated by outer scope)
+        // Skip .Lfunc_end labels
         if (pureLabelName.rfind(".Lfunc_end", 0) == 0) {
           break;
         }
         
-        // 2. Skip labels with same name as kernel (function entry, generated by gpu.func)
+        // Skip labels with same name as kernel
         llvm::StringRef kname;
         if (auto a = module->getAttrOfType<mlir::StringAttr>("amdisa.kernel_name"))
           kname = a.getValue();
@@ -117,13 +298,18 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
           break;
         }
         
-        // 3. Keep all other labels (including .LBB0_X basic block labels)
+        // Keep all other labels
         auto nameAttr = builder.getStringAttr(labelName);
         builder.create<LabelOp>(loc, nameAttr);
         break;
       }
 
     case LineKind::Instruction: {
+      if (!line->instruction) {
+        // Skip instructions without data
+        break;
+      }
+      
       const ParsedInstruction &inst = *line->instruction;
 
       auto mnemonicAttr = builder.getStringAttr(inst.opcode);
@@ -151,44 +337,12 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
       break;
     }
 
-    case LineKind::AmdgcnTarget: {
-      // .amdgcn_target "amdgcn-amd-amdhsa--gfx950"
-      if (!module->hasAttr("llvm.target_triple")) {
-        auto tripleAttr = builder.getStringAttr(line->amdgcnTarget);
-        module->setAttr("llvm.target_triple", tripleAttr);
-      }
-      break;
-    }
-
-    case LineKind::AmdhsaCodeObjectVersion: {
-      if (!module->hasAttr("amdgpu.code_object_version")) {
-        int version = 0;
-
-        if (!line->amdhsaCodeObjectVersion.empty()) {
-          version = std::stoi(line->amdhsaCodeObjectVersion);
-        }
-
-        auto verAttr = builder.getI32IntegerAttr(version);
-        module->setAttr("amdgpu.code_object_version", verAttr);
-      }
-      break;
-    }
-
     case LineKind::Directive:
-      // Skip generic directives
-      break;
-
     case LineKind::Comment:
-      // Skip comments
-      break;
-
     case LineKind::Metadata:
-      // Metadata is processed separately below
-      break;
-
     case LineKind::Unknown:
     default:
-      // Skip unknown lines
+      // Skip
       break;
     }
   }
@@ -207,8 +361,6 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
       if (!kname.empty() && (k.symbol == kname.str() || k.name == kname.str())) {
         argDicts.reserve(k.args.size());
         for (const auto &arg : k.args) {
-          // Include ALL parameters (including hidden ones)
-          // Hidden parameters are required for correct kernarg_segment_size
           argDicts.push_back(propsToDictAttr(builder, arg));
         }
 
@@ -216,8 +368,6 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
         module->setAttr("amdisa.sgpr_count", builder.getI32IntegerAttr(k.sgprCount));
         module->setAttr("amdisa.vgpr_count", builder.getI32IntegerAttr(k.vgprCount));
         module->setAttr("amdisa.agpr_count", builder.getI32IntegerAttr(k.agprCount));
-        
-        // Store kernarg_segment_size for validation
         module->setAttr("amdisa.kernarg_segment_size", builder.getI32IntegerAttr(k.kernargSegmentSize));
         
         break;
@@ -228,8 +378,6 @@ AMDISAAsmParser::parseModule(mlir::MLIRContext &context) {
     if (!argDicts.empty())
       module->setAttr("amdisa.kernargs", builder.getArrayAttr(argDicts));
   }
-
-  return module;
 }
 
 } // namespace mlir::amdisa

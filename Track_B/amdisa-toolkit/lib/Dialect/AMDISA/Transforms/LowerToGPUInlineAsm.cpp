@@ -110,7 +110,127 @@ public:
     OpBuilder builder(ctx);
 
     //--------------------------------------------------------------------------
-    // (1) Collect all AMDISA operations (preserving order)
+    // (1) Check for amdisa.func ops (new multi-kernel mode) or legacy mode
+    //--------------------------------------------------------------------------
+    SmallVector<amdisa::FuncOp> funcOps;
+    module.walk([&](amdisa::FuncOp funcOp) {
+      funcOps.push_back(funcOp);
+    });
+
+    if (!funcOps.empty()) {
+      // New multi-kernel mode: process each amdisa.func separately
+      processMultiKernelMode(module, builder, funcOps);
+    } else {
+      // Legacy mode: process module-level amdisa.inst and amdisa.label
+      processLegacyMode(module, builder);
+    }
+  }
+
+private:
+  /// Process multi-kernel mode (with amdisa.func ops)
+  void processMultiKernelMode(ModuleOp module, OpBuilder &builder,
+                              ArrayRef<amdisa::FuncOp> funcOps) {
+    // Apply / normalize target triple + code object version at module level
+    normalizeModuleAttributes(module, builder);
+
+    Location loc = module.getLoc();
+
+    //--------------------------------------------------------------------------
+    // Create gpu.module @amdisa_kernels
+    //--------------------------------------------------------------------------
+    builder.setInsertionPointToStart(module.getBody());
+    auto gpuModule = builder.create<gpu::GPUModuleOp>(
+        loc, builder.getStringAttr("amdisa_kernels"));
+
+    //--------------------------------------------------------------------------
+    // Process each amdisa.func and create corresponding gpu.func
+    //--------------------------------------------------------------------------
+    for (auto funcOp : funcOps) {
+      processAMDISAFunc(gpuModule, builder, funcOp);
+    }
+
+    //--------------------------------------------------------------------------
+    // Remove original amdisa.func ops
+    //--------------------------------------------------------------------------
+    for (auto funcOp : funcOps) {
+      funcOp.erase();
+    }
+  }
+
+  /// Process a single amdisa.func and create gpu.func
+  void processAMDISAFunc(gpu::GPUModuleOp gpuModule, OpBuilder &builder,
+                         amdisa::FuncOp funcOp) {
+    Location loc = funcOp.getLoc();
+    std::string kernelName = funcOp.getSymName().str();
+
+    //--------------------------------------------------------------------------
+    // Collect all AMDISA operations from this function (skip terminator)
+    //--------------------------------------------------------------------------
+    SmallVector<Operation *, 32> amdisaOps;
+    funcOp.getBody().front().walk([&](Operation *op) {
+      if (isa<amdisa::LabelOp>(op) || isa<amdisa::InstOp>(op)) {
+        amdisaOps.push_back(op);
+      }
+      // Skip amdisa.return (terminator)
+    });
+
+    if (amdisaOps.empty()) {
+      funcOp.emitWarning() << "No AMDISA ops found in function " << kernelName;
+      return;
+    }
+
+    //--------------------------------------------------------------------------
+    // Determine input types from kernargs metadata
+    //--------------------------------------------------------------------------
+    SmallVector<Type> inputTypes;
+    if (auto kernargs = funcOp->getAttrOfType<ArrayAttr>("amdisa.kernargs")) {
+      inputTypes.reserve(kernargs.size());
+      for (mlir::Attribute elt : kernargs) {
+        if (auto d = llvm::dyn_cast<mlir::DictionaryAttr>(elt)) {
+          inputTypes.push_back(typeFromKernargDict(builder, d));
+        }
+      }
+    }
+
+    //--------------------------------------------------------------------------
+    // Create gpu.func
+    //--------------------------------------------------------------------------
+    builder.setInsertionPointToEnd(gpuModule.getBody());
+    auto funcType = builder.getFunctionType(inputTypes, TypeRange{});
+    auto gpuFunc = builder.create<gpu::GPUFuncOp>(loc, kernelName, funcType);
+    gpuFunc->setAttr(gpu::GPUDialect::getKernelFuncAttrName(),
+                     builder.getUnitAttr());
+
+    // Transfer register counts and other attributes
+    if (auto sgprCount = funcOp->getAttrOfType<IntegerAttr>("amdisa.sgpr_count")) {
+      gpuFunc->setAttr("amdisa.sgpr_count", sgprCount);
+    }
+    if (auto vgprCount = funcOp->getAttrOfType<IntegerAttr>("amdisa.vgpr_count")) {
+      gpuFunc->setAttr("amdisa.vgpr_count", vgprCount);
+    }
+    if (auto agprCount = funcOp->getAttrOfType<IntegerAttr>("amdisa.agpr_count")) {
+      gpuFunc->setAttr("amdisa.agpr_count", agprCount);
+    }
+    if (auto kernargSize = funcOp->getAttrOfType<IntegerAttr>("amdisa.kernarg_segment_size")) {
+      gpuFunc->setAttr("amdisa.kernarg_segment_size", kernargSize);
+    }
+
+    Block *entry = &gpuFunc.getBody().front();
+    builder.setInsertionPointToStart(entry);
+
+    //--------------------------------------------------------------------------
+    // Insert separate llvm.inline_asm for each AMDISA instruction
+    //--------------------------------------------------------------------------
+    emitInlineAsmFromOps(builder, loc, amdisaOps);
+
+    // Add terminator
+    builder.create<gpu::ReturnOp>(loc);
+  }
+
+  /// Process legacy mode (module-level amdisa.inst and amdisa.label)
+  void processLegacyMode(ModuleOp module, OpBuilder &builder) {
+    //--------------------------------------------------------------------------
+    // Collect all AMDISA operations (preserving order)
     //--------------------------------------------------------------------------
     SmallVector<Operation *, 32> amdisaOps;
     
@@ -133,7 +253,7 @@ public:
 
     // Prefer module attribute
     if (auto a = module->getAttrOfType<StringAttr>("amdisa.kernel_name")) {
-      kernel = a.getValue().str(); // NOTE: getValue() not .str() on attr itself
+      kernel = a.getValue().str();
     }
 
     // Fallback to pass option
@@ -146,29 +266,8 @@ public:
 
     // --------------------------------------------------------------------------
     // (3) Apply / normalize target triple + code object version
-    //     Prefer existing module attrs, else use pass options.
-    //     Also strip outer quotes on llvm.target_triple to avoid \22.
     // --------------------------------------------------------------------------
-
-    // llvm.target_triple
-    if (auto a = module->getAttrOfType<StringAttr>("llvm.target_triple")) {
-      llvm::StringRef v = stripOuterQuotes(a.getValue());
-      // If normalization changed it, rewrite attribute
-      if (v != a.getValue())
-        module->setAttr("llvm.target_triple", builder.getStringAttr(v));
-    } else if (!targetTriple.empty()) {
-      llvm::StringRef v = stripOuterQuotes(targetTriple);
-      module->setAttr("llvm.target_triple", builder.getStringAttr(v));
-    }
-
-    // amdgpu.code_object_version
-    if (!module->getAttr("amdgpu.code_object_version")) {
-      // Only set if pass option provides a meaningful value
-      // (codeObjectVersion is typically an int option; if you used std::string,
-      // parse it before calling getI32IntegerAttr).
-      module->setAttr("amdgpu.code_object_version",
-                      builder.getI32IntegerAttr(codeObjectVersion));
-    }
+    normalizeModuleAttributes(module, builder);
 
     Location loc = module.getLoc();
 
@@ -229,45 +328,7 @@ public:
     //--------------------------------------------------------------------------
     // (6) Insert separate llvm.inline_asm for each AMDISA instruction
     //--------------------------------------------------------------------------
-    StringRef constraintsRef = "";
-    LLVM::AsmDialectAttr dialectAttr;      // default-constructed = null attr
-    ArrayAttr operandAttrs;                // default-constructed = null attr
-    TypeRange resultTypes;
-    ValueRange operands;
-    auto tailKind = mlir::LLVM::tailcallkind::TailCallKind::None;
-
-    for (Operation *op : amdisaOps) {
-      std::string asmStr;
-      
-      if (auto label = dyn_cast<amdisa::LabelOp>(op)) {
-        // 將 label 作為獨立的 inline asm（label:）
-        asmStr = label.getName().str() + ":";
-        
-      } else if (auto inst = dyn_cast<amdisa::InstOp>(op)) {
-        // 每個指令作為獨立的 inline asm
-        if (auto raw = inst.getRawText()) {
-          asmStr = raw->str();
-        } else {
-          continue;  // 跳過沒有 raw text 的指令
-        }
-      }
-      
-      if (!asmStr.empty()) {
-        StringRef asmStrRef(asmStr);
-        LLVM::InlineAsmOp::create(
-            builder,
-            loc,
-            /*resultTypes=*/resultTypes,
-            /*operands=*/operands,
-            /*asm_string=*/asmStrRef,
-            /*constraints=*/constraintsRef,
-            /*has_side_effects=*/true,
-            /*is_align_stack=*/false,
-            /*tail_call_kind=*/tailKind,
-            /*asm_dialect=*/dialectAttr,
-            /*operand_attrs=*/operandAttrs);
-      }
-    }
+    emitInlineAsmFromOps(builder, loc, amdisaOps);
 
     // Add terminator
     builder.create<gpu::ReturnOp>(loc);
@@ -281,6 +342,66 @@ public:
 
     for (Operation *op : eraseList)
       op->erase();
+  }
+
+  /// Normalize module attributes (target triple, code object version)
+  void normalizeModuleAttributes(ModuleOp module, OpBuilder &builder) {
+    // llvm.target_triple
+    if (auto a = module->getAttrOfType<StringAttr>("llvm.target_triple")) {
+      llvm::StringRef v = stripOuterQuotes(a.getValue());
+      if (v != a.getValue())
+        module->setAttr("llvm.target_triple", builder.getStringAttr(v));
+    } else if (!targetTriple.empty()) {
+      llvm::StringRef v = stripOuterQuotes(targetTriple);
+      module->setAttr("llvm.target_triple", builder.getStringAttr(v));
+    }
+
+    // amdgpu.code_object_version
+    if (!module->getAttr("amdgpu.code_object_version")) {
+      module->setAttr("amdgpu.code_object_version",
+                      builder.getI32IntegerAttr(codeObjectVersion));
+    }
+  }
+
+  /// Emit inline asm for a list of AMDISA operations
+  void emitInlineAsmFromOps(OpBuilder &builder, Location loc,
+                            ArrayRef<Operation *> amdisaOps) {
+    StringRef constraintsRef = "";
+    LLVM::AsmDialectAttr dialectAttr;
+    ArrayAttr operandAttrs;
+    TypeRange resultTypes;
+    ValueRange operands;
+    auto tailKind = mlir::LLVM::tailcallkind::TailCallKind::None;
+
+    for (Operation *op : amdisaOps) {
+      std::string asmStr;
+      
+      if (auto label = dyn_cast<amdisa::LabelOp>(op)) {
+        asmStr = label.getName().str() + ":";
+      } else if (auto inst = dyn_cast<amdisa::InstOp>(op)) {
+        if (auto raw = inst.getRawText()) {
+          asmStr = raw->str();
+        } else {
+          continue;
+        }
+      }
+      
+      if (!asmStr.empty()) {
+        StringRef asmStrRef(asmStr);
+        LLVM::InlineAsmOp::create(
+            builder,
+            loc,
+            resultTypes,
+            operands,
+            asmStrRef,
+            constraintsRef,
+            /*has_side_effects=*/true,
+            /*is_align_stack=*/false,
+            tailKind,
+            dialectAttr,
+            operandAttrs);
+      }
+    }
   }
 };
 

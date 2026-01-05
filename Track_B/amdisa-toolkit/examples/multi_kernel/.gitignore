@@ -1,0 +1,22 @@
+# 編譯產出
+host_program
+benchmark
+*.o
+*.s
+*.ll
+*.bc
+*.hsaco
+
+# Pipeline 輸出
+pipeline_output/
+
+# 編輯器
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# 測試輸出
+*.log
+

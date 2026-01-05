@@ -225,52 +225,132 @@ def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_p
     return amdisamlir_file, gpumlir_file
 
 
-def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
+def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_file: pathlib.Path = None) -> str:
     """
-    修復 ISA metadata：從 GPU MLIR attributes 提取正確的 metadata
+    修復 ISA metadata：從原始 ISA 文件或 GPU MLIR attributes 提取正確的 metadata
     
     MLIR pipeline (convert-gpu-to-rocdl, gpu-module-to-binary) 會丟失自定義的
     amdisa.* attributes，導致生成的 ISA metadata 不正確。
-    此函數從原始 GPU MLIR 提取這些信息並修復 ISA。
+    
+    此函數首先嘗試從原始 ISA 文件提取 metadata（如果提供），
+    然後才嘗試從 GPU MLIR 提取（用於向後兼容）。
+    
+    Args:
+        isa_text: 需要修復的 ISA 文本
+        gpumlir_file: GPU MLIR 文件路徑（用於嘗試提取 amdisa.* attributes）
+        original_isa_file: 原始 ISA 文件路徑（如果提供，優先從此提取 metadata）
+    
+    Returns:
+        修復後的 ISA 文本
     """
     
-    # 讀取 GPU MLIR 獲取 attributes
-    gpumlir_text = gpumlir_file.read_text()
-    
-    # 提取 module attributes
     attrs = {}
-    
-    # 提取 vgpr_count, sgpr_count, agpr_count, kernarg_segment_size, group_segment_fixed_size
-    for attr_name in ['vgpr_count', 'sgpr_count', 'agpr_count', 'kernarg_segment_size', 'group_segment_fixed_size']:
-        pattern = rf'amdisa\.{attr_name}\s*=\s*(\d+)'
-        match = re.search(pattern, gpumlir_text)
-        if match:
-            attrs[attr_name] = int(match.group(1))
-    
-    # 提取 kernargs array
-    kernargs_pattern = r'amdisa\.kernargs\s*=\s*\[(.*?)\](?=,\s+amdisa\.|,\s+llvm\.|}\s+{)'
-    match = re.search(kernargs_pattern, gpumlir_text, re.DOTALL)
-    
     args_list = []
-    if match:
-        kernargs_str = match.group(1)
-        # 簡單解析：找到所有 {..} 字典
-        dict_pattern = r'\{([^{}]*?)\}'
-        for dict_match in re.finditer(dict_pattern, kernargs_str):
-            arg_dict = {}
-            dict_content = dict_match.group(1)
+    
+    # 優先從原始 ISA 文件提取 metadata（如果提供）
+    if original_isa_file is not None and original_isa_file.exists():
+        print(f"[Info] Extracting metadata from original ISA: {original_isa_file.name}")
+        original_isa_text = original_isa_file.read_text()
+        
+        # 提取 .amdhsa_* directives
+        amdhsa_patterns = {
+            'kernarg_segment_size': r'\.amdhsa_kernarg_size\s+(\d+)',
+            'group_segment_fixed_size': r'\.amdhsa_group_segment_fixed_size\s+(\d+)',
+            'vgpr_count': r'\.amdhsa_next_free_vgpr\s+(\d+)',
+            'sgpr_count': r'\.amdhsa_next_free_sgpr\s+(\d+)',
+            'user_sgpr_count': r'\.amdhsa_user_sgpr_count\s+(\d+)',
+            'dispatch_ptr': r'\.amdhsa_user_sgpr_dispatch_ptr\s+(\d+)',
+            'queue_ptr': r'\.amdhsa_user_sgpr_queue_ptr\s+(\d+)',
+            'workitem_id': r'\.amdhsa_system_vgpr_workitem_id\s+(\d+)',
+            'workgroup_id_x': r'\.amdhsa_system_sgpr_workgroup_id_x\s+(\d+)',
+            'workgroup_id_y': r'\.amdhsa_system_sgpr_workgroup_id_y\s+(\d+)',
+            'workgroup_id_z': r'\.amdhsa_system_sgpr_workgroup_id_z\s+(\d+)',
+        }
+        
+        for attr_name, pattern in amdhsa_patterns.items():
+            match = re.search(pattern, original_isa_text)
+            if match:
+                attrs[attr_name] = int(match.group(1))
+        
+        # 提取 YAML metadata 中的 args
+        yaml_match = re.search(r'\.amdgpu_metadata\s+---\s+(.*?)\.\.\.\s+\.end_amdgpu_metadata', 
+                               original_isa_text, re.DOTALL)
+        if yaml_match:
+            try:
+                yaml_text = yaml_match.group(1)
+                metadata = yaml.safe_load(yaml_text)
+                
+                if 'amdhsa.kernels' in metadata and len(metadata['amdhsa.kernels']) > 0:
+                    kernel = metadata['amdhsa.kernels'][0]
+                    
+                    # 提取 vgpr_count, sgpr_count, agpr_count（YAML 中的值更準確）
+                    for key in ['.vgpr_count', '.sgpr_count', '.agpr_count']:
+                        if key in kernel:
+                            attr_name = key[1:]  # 移除開頭的 '.'
+                            attrs[attr_name] = kernel[key]
+                    
+                    # 提取 args
+                    if '.args' in kernel and isinstance(kernel['.args'], list):
+                        args_list = []
+                        for arg in kernel['.args']:
+                            arg_dict = {}
+                            for k, v in arg.items():
+                                # 移除開頭的 '.'
+                                key_name = k[1:] if k.startswith('.') else k
+                                arg_dict[key_name] = v
+                            args_list.append(arg_dict)
+                
+                print(f"[Info] Extracted {len(attrs)} metadata attributes and {len(args_list)} args from original ISA")
+                
+                # 輸出關鍵的 SGPR 配置（用於調試）
+                sgpr_config = []
+                if 'dispatch_ptr' in attrs:
+                    sgpr_config.append(f"dispatch_ptr={attrs['dispatch_ptr']}")
+                if 'queue_ptr' in attrs:
+                    sgpr_config.append(f"queue_ptr={attrs['queue_ptr']}")
+                if 'workitem_id' in attrs:
+                    sgpr_config.append(f"workitem_id={attrs['workitem_id']}")
+                if sgpr_config:
+                    print(f"[Info] SGPR config: {', '.join(sgpr_config)}")
             
-            # 解析每個屬性
-            for prop_match in re.finditer(r'(\w+)\s*=\s*"([^"]+)"', dict_content):
-                arg_dict[prop_match.group(1)] = prop_match.group(2)
-            for prop_match in re.finditer(r'(\w+)\s*=\s*(\d+)', dict_content):
-                arg_dict[prop_match.group(1)] = int(prop_match.group(2))
+            except Exception as e:
+                print(f"[Warning] Failed to parse original ISA YAML metadata: {e}")
+    
+    # 如果從原始 ISA 沒有提取到足夠的信息，嘗試從 GPU MLIR 提取
+    if not attrs or not args_list:
+        print(f"[Info] Attempting to extract metadata from GPU MLIR: {gpumlir_file.name}")
+        gpumlir_text = gpumlir_file.read_text()
+        
+        # 提取 amdisa.* attributes
+        for attr_name in ['vgpr_count', 'sgpr_count', 'agpr_count', 'kernarg_segment_size', 'group_segment_fixed_size']:
+            if attr_name not in attrs:  # 只提取還沒有的屬性
+                pattern = rf'amdisa\.{attr_name}\s*=\s*(\d+)'
+                match = re.search(pattern, gpumlir_text)
+                if match:
+                    attrs[attr_name] = int(match.group(1))
+        
+        # 提取 kernargs array
+        if not args_list:
+            kernargs_pattern = r'amdisa\.kernargs\s*=\s*\[(.*?)\](?=,\s+amdisa\.|,\s+llvm\.|}\s+{)'
+            match = re.search(kernargs_pattern, gpumlir_text, re.DOTALL)
             
-            if arg_dict:
-                args_list.append(arg_dict)
+            if match:
+                kernargs_str = match.group(1)
+                dict_pattern = r'\{([^{}]*?)\}'
+                for dict_match in re.finditer(dict_pattern, kernargs_str):
+                    arg_dict = {}
+                    dict_content = dict_match.group(1)
+                    
+                    for prop_match in re.finditer(r'(\w+)\s*=\s*"([^"]+)"', dict_content):
+                        arg_dict[prop_match.group(1)] = prop_match.group(2)
+                    for prop_match in re.finditer(r'(\w+)\s*=\s*(\d+)', dict_content):
+                        arg_dict[prop_match.group(1)] = int(prop_match.group(2))
+                    
+                    if arg_dict:
+                        args_list.append(arg_dict)
     
     if not args_list and not attrs:
-        print("[Warning] No amdisa attributes found in GPU MLIR, ISA metadata may be incorrect")
+        print("[Warning] No metadata found in original ISA or GPU MLIR, ISA metadata may be incorrect")
         return isa_text
     
     # 找到 ISA 中的 .amdgpu_metadata 部分
@@ -370,6 +450,109 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
             fixed_isa
         )
     
+    if 'user_sgpr_count' in attrs and attrs['user_sgpr_count'] > 0:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_user_sgpr_count)\s+\d+',
+            rf'\1 {attrs["user_sgpr_count"]}',
+            fixed_isa
+        )
+    
+    # 修復 dispatch_ptr 和 queue_ptr（關鍵！影響 SGPR 映射）
+    if 'dispatch_ptr' in attrs:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_user_sgpr_dispatch_ptr)\s+\d+',
+            rf'\1 {attrs["dispatch_ptr"]}',
+            fixed_isa
+        )
+    
+    if 'queue_ptr' in attrs:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_user_sgpr_queue_ptr)\s+\d+',
+            rf'\1 {attrs["queue_ptr"]}',
+            fixed_isa
+        )
+    
+    # 修復 workitem_id 編碼模式（影響 v0 的格式）
+    if 'workitem_id' in attrs:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_system_vgpr_workitem_id)\s+\d+',
+            rf'\1 {attrs["workitem_id"]}',
+            fixed_isa
+        )
+    
+    # 修復 workgroup_id 維度啟用
+    if 'workgroup_id_x' in attrs:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_system_sgpr_workgroup_id_x)\s+\d+',
+            rf'\1 {attrs["workgroup_id_x"]}',
+            fixed_isa
+        )
+    
+    if 'workgroup_id_y' in attrs:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_system_sgpr_workgroup_id_y)\s+\d+',
+            rf'\1 {attrs["workgroup_id_y"]}',
+            fixed_isa
+        )
+    
+    if 'workgroup_id_z' in attrs:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_system_sgpr_workgroup_id_z)\s+\d+',
+            rf'\1 {attrs["workgroup_id_z"]}',
+            fixed_isa
+        )
+    
+    # 根據 kernarg_segment_size 決定是否需要 kernarg pointer
+    if 'kernarg_segment_size' in attrs and attrs['kernarg_segment_size'] > 0:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_user_sgpr_kernarg_segment_ptr)\s+\d+',
+            rf'\1 1',
+            fixed_isa
+        )
+    
+    # 檢測是否使用了 workgroup_id_y (檢查是否有 s3 寄存器的使用)
+    # 從原始 ISA 中提取 system_sgpr_workgroup_id_y 的值
+    if original_isa_file is not None and original_isa_file.exists():
+        original_text = original_isa_file.read_text()
+        workgroup_id_y_match = re.search(r'\.amdhsa_system_sgpr_workgroup_id_y\s+(\d+)', original_text)
+        if workgroup_id_y_match:
+            workgroup_id_y = int(workgroup_id_y_match.group(1))
+            fixed_isa = re.sub(
+                r'(\.amdhsa_system_sgpr_workgroup_id_y)\s+\d+',
+                rf'\1 {workgroup_id_y}',
+                fixed_isa
+            )
+        
+        # 提取 system_vgpr_workitem_id 的值
+        workitem_id_match = re.search(r'\.amdhsa_system_vgpr_workitem_id\s+(\d+)', original_text)
+        if workitem_id_match:
+            workitem_id = int(workitem_id_match.group(1))
+            fixed_isa = re.sub(
+                r'(\.amdhsa_system_vgpr_workitem_id)\s+\d+',
+                rf'\1 {workitem_id}',
+                fixed_isa
+            )
+        
+        # 提取 reserve_vcc 的值
+        reserve_vcc_match = re.search(r'\.amdhsa_reserve_vcc\s+(\d+)', original_text)
+        if reserve_vcc_match:
+            reserve_vcc = int(reserve_vcc_match.group(1))
+            fixed_isa = re.sub(
+                r'(\.amdhsa_reserve_vcc)\s+\d+',
+                rf'\1 {reserve_vcc}',
+                fixed_isa
+            )
+        
+        # 提取 accum_offset 的值（對於 gfx950 很重要）
+        accum_offset_match = re.search(r'\.amdhsa_accum_offset\s+(\d+)', original_text)
+        if accum_offset_match:
+            accum_offset = int(accum_offset_match.group(1))
+            fixed_isa = re.sub(
+                r'(\.amdhsa_accum_offset)\s+\d+',
+                rf'\1 {accum_offset}',
+                fixed_isa
+            )
+    
     print(f"[Info] Fixed ISA metadata:")
     if 'vgpr_count' in attrs:
         print(f"  - vgpr_count: {attrs['vgpr_count']}")
@@ -385,7 +568,7 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path) -> str:
     return fixed_isa
 
 
-def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.Path, output_prefix: str = None):
+def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.Path, output_prefix: str = None, original_isa_file: pathlib.Path = None):
     """
     從 GPU MLIR 繼續執行 pipeline，生成 ISA 和 HSACO
     
@@ -394,6 +577,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
         chip: 目標晶片型號
         workdir: 工作目錄
         output_prefix: 輸出文件前綴（如果為 None，使用輸入文件名）
+        original_isa_file: 原始 ISA 文件路徑（如果提供，用於提取 metadata）
     """
     for tool in ["mlir-opt", "llvm-mc", "ld.lld"]:
         ensure_tool(tool)
@@ -436,8 +620,8 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
 
     isa = isa_list[0]
     
-    # Fix ISA metadata: extract from GPU MLIR attributes
-    isa = fix_isa_metadata(isa, kernel_mlir)
+    # Fix ISA metadata: extract from original ISA (if provided) or GPU MLIR attributes
+    isa = fix_isa_metadata(isa, kernel_mlir, original_isa_file)
     
     kernel_isa_s.write_text(isa)
     print(f"Wrote ISA assembly to {kernel_isa_s}")
@@ -527,9 +711,18 @@ def build_llvm_ir_via_binary(kernel_mlir: pathlib.Path, chip: str, workdir: path
         "-o",
         str(kernel_llvm_ll),
     ]
-    run_cmd(llvm_dis_cmd)
     
-    print(f"✓ Wrote human-readable LLVM IR to {kernel_llvm_ll}")
+    # llvm-dis 可能因版本不兼容失败（如 LLVM 22 生成的 bitcode vs LLVM 18 的 llvm-dis）
+    # 這不影響 HSACO 生成，所以我們只是警告而不失敗
+    try:
+        run_cmd(llvm_dis_cmd)
+        print(f"✓ Wrote human-readable LLVM IR to {kernel_llvm_ll}")
+    except subprocess.CalledProcessError as e:
+        print(f"[Warning] llvm-dis 失敗（可能是版本不兼容）")
+        print(f"[Reason] LLVM bitcode 由 LLVM 22 產生，但系統的 llvm-dis 是較舊版本")
+        print(f"[Info] LLVM bitcode 已保存在: {kernel_llvm_bc}")
+        print(f"[Info] 您可以使用匹配版本的 llvm-dis 來反組譯此 bitcode")
+        print(f"[Info] 這不影響 HSACO 生成，可以安全忽略")
 
 # ------------------------------------------------------------
 # Main Logic
@@ -616,7 +809,8 @@ def main():
         final_gpu_mlir = gpumlir_file
         
         if args.emit_isa:
-            build_isa_and_hsaco(gpumlir_file, args.chip, workdir, output_prefix)
+            # 傳遞原始 ISA 文件給 build_isa_and_hsaco，用於提取 metadata
+            build_isa_and_hsaco(gpumlir_file, args.chip, workdir, output_prefix, original_isa_file=input_file)
         
         if args.emit_llvm_ir:
             build_llvm_ir_via_binary(gpumlir_file, args.chip, workdir, output_prefix)
