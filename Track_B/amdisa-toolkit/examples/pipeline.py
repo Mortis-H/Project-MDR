@@ -225,6 +225,334 @@ def translate_asm_to_gpu(asm_file: pathlib.Path, workdir: pathlib.Path, output_p
     return amdisamlir_file, gpumlir_file
 
 
+def append_global_symbols(isa_text: str, original_isa_file: pathlib.Path) -> str:
+    """
+    從原始 ISA 文件提取全局變數定義並附加到重建的 ISA
+    
+    只提取 .bss, .data, .rodata 段中的全局變數，排除函數定義和已存在的符號。
+    **重要**：保留 .protected, .hidden, .type 等可見性和類型屬性，這些屬性對於
+    支持 PC-relative 重定位（如 @rel32@lo/hi）至關重要。
+    
+    Args:
+        isa_text: 重建的 ISA 文本
+        original_isa_file: 原始 ISA 文件路徑
+    
+    Returns:
+        附加了全局符號定義的 ISA 文本
+    """
+    if not original_isa_file or not original_isa_file.exists():
+        return isa_text
+    
+    original_text = original_isa_file.read_text()
+    lines = original_text.split('\n')
+    
+    # 提取 rebuilt ISA 中已經存在的符號，避免重複定義
+    existing_symbols = set()
+    for match in re.finditer(r'\.(globl|protected|hidden)\s+([\w.$]+)', isa_text):
+        existing_symbols.add(match.group(2))
+    for match in re.finditer(r'\.type\s+([\w.$]+),@object', isa_text):
+        existing_symbols.add(match.group(1))
+    # 匹配標籤定義，允許前導空白，匹配包含 . 的符號
+    for match in re.finditer(r'^\s*([\w.$]+):', isa_text, re.MULTILINE):
+        symbol = match.group(1)
+        if not symbol.startswith('.L'): # 排除局部標籤
+            existing_symbols.add(symbol)
+    
+    # 找到所有全局/protected/hidden 符號
+    # 我們採用基於符號的策略：找到每個符號的完整定義塊
+    symbol_blocks = {}  # symbol_name -> (start_line, end_line)
+    
+    # 第一步：找到所有可能的全局符號定義
+    # 查找所有 .globl, .protected, .hidden 聲明，以及 .type xxx,@object 聲明
+    for i, line in enumerate(lines):
+        # 匹配 .globl/.protected/.hidden 指令
+        match = re.match(r'^\s*\.(globl|protected|hidden)\s+([\w.$]+)', line)
+        if match:
+            symbol_name = match.group(2)
+            if symbol_name not in existing_symbols:
+                if symbol_name not in symbol_blocks:
+                    symbol_blocks[symbol_name] = {'start': i, 'end': i, 'has_definition': False}
+        
+        # 也匹配 .type xxx,@object 聲明（用於字符串常量等沒有可見性聲明的符號）
+        type_match = re.match(r'^\s*\.type\s+([\w.$]+),@object', line)
+        if type_match:
+            symbol_name = type_match.group(1)
+            if symbol_name not in existing_symbols:
+                if symbol_name not in symbol_blocks:
+                    symbol_blocks[symbol_name] = {'start': i, 'end': i, 'has_definition': False}
+    
+    # 第二步：為每個符號找到其定義範圍
+    for symbol_name in list(symbol_blocks.keys()):
+        start_line = symbol_blocks[symbol_name]['start']
+        
+        # 向前查找，看是否還有相關的屬性指令（.type, .protected 等）
+        # 例如：.protected 在前，.type 在後
+        for i in range(start_line - 1, max(0, start_line - 10), -1):
+            line = lines[i].strip()
+            # 如果是空行，跳過
+            if not line:
+                continue
+            # 如果是與當前符號相關的屬性指令，擴展範圍
+            if re.match(rf'^\.(protected|hidden|type|weak|local)\s+{re.escape(symbol_name)}\b', line):
+                symbol_blocks[symbol_name]['start'] = i
+            # 如果遇到其他內容（不相關的指令），停止
+            elif not re.match(r'^\s*[;#]', line):  # 允許註釋
+                break
+        
+        # 向後查找符號定義和內容
+        found_label = False
+        found_section = False
+        for i in range(start_line, len(lines)):
+            line = lines[i]
+            stripped = line.strip()
+            
+            # 檢查是否到達符號定義（標籤）
+            if re.match(rf'^{re.escape(symbol_name)}:', stripped):
+                found_label = True
+                symbol_blocks[symbol_name]['has_definition'] = True
+                symbol_blocks[symbol_name]['end'] = i
+                continue
+            
+            # 找到 .section 指令
+            if re.match(r'^\s*\.section', line):
+                found_section = True
+                symbol_blocks[symbol_name]['end'] = i
+                continue
+            
+            # 如果已經找到標籤，繼續往後看內容（.zero, .size 等）
+            if found_label:
+                # 如果遇到下一個段、另一個符號定義、或者特殊段標記，停止
+                if (stripped.startswith('.section') or 
+                    stripped.startswith('.text') or
+                    stripped.startswith('.amdgpu_metadata') or
+                    stripped.startswith('.ident') or
+                    stripped.startswith('.addrsig') or
+                    (re.match(r'^[\w.$]+:', stripped) and stripped.split(':')[0] != symbol_name)):
+                    break
+                
+                # 如果是符號相關的指令或數據，包含它
+                if (stripped.startswith('.') or 
+                    stripped.startswith('#') or 
+                    stripped.startswith(';') or
+                    not stripped):
+                    symbol_blocks[symbol_name]['end'] = i
+                else:
+                    # 可能是符號的實際數據內容
+                    symbol_blocks[symbol_name]['end'] = i
+    
+    # 第三步：追蹤每個符號所在的段
+    # 掃描整個文件，追蹤當前活動段
+    current_section = None
+    for i, line in enumerate(lines):
+        # 檢查段切換（支持兩種格式：.section .data 和 .data）
+        section_match = re.search(r'\.section\s+\.(bss|data|rodata)(\.[\w.]+)?', line)
+        if section_match:
+            current_section = section_match.group(1)  # bss, data, or rodata
+            continue
+        
+        # 檢查簡短格式的段切換（如 .data, .bss, .rodata）
+        short_section_match = re.match(r'^\s*\.(bss|data|rodata)(\s|$)', line)
+        if short_section_match:
+            current_section = short_section_match.group(1)
+            continue
+        
+        # 檢查其他會切換段的指令
+        if re.match(r'^\s*\.(text|amdgpu_metadata)', line):
+            current_section = None
+            continue
+        
+        # 為符號塊記錄段信息
+        for symbol_name, info in symbol_blocks.items():
+            if info['start'] <= i <= info['end']:
+                if 'section' not in info:
+                    info['section'] = current_section
+    
+    # 第四步：提取符號塊並檢查是否在允許的段中
+    global_sections = []
+    new_symbols_found = []
+    
+    for symbol_name, info in symbol_blocks.items():
+        if not info['has_definition']:
+            continue
+        
+        # 提取符號塊
+        start = info['start']
+        end = info['end'] + 1
+        symbol_block_lines = lines[start:end]
+        symbol_block = '\n'.join(symbol_block_lines)
+        
+        # 檢查是否包含函數定義
+        if re.search(r'\.type\s+\w+,@function', symbol_block):
+            continue
+        
+        # 檢查是否在允許的段中
+        # 方法1：符號塊內有 .section 指令或簡短格式段聲明
+        has_section_directive = False
+        for line in symbol_block_lines:
+            # 檢查完整格式：.section .data
+            if re.search(r'\.section\s+\.(bss|data|rodata)(\.|,|\s|$)', line):
+                has_section_directive = True
+                break
+            # 檢查簡短格式：.data, .bss, .rodata
+            if re.match(r'^\s*\.(bss|data|rodata)(\s|$)', line):
+                has_section_directive = True
+                break
+        
+        # 方法2：符號繼承了當前活動段
+        in_data_section = info.get('section') in ('bss', 'data', 'rodata')
+        
+        if has_section_directive or in_data_section:
+            # 如果符號沒有自己的 .section 指令，需要添加一個
+            if not has_section_directive and in_data_section:
+                section_name = info.get('section')
+                if section_name == 'bss':
+                    section_directive = f'\t.section\t.{section_name},"aw",@nobits'
+                elif section_name == 'data':
+                    section_directive = f'\t.section\t.{section_name},"aw",@progbits'
+                else:  # rodata
+                    section_directive = f'\t.section\t.{section_name},"a",@progbits'
+                symbol_block = section_directive + '\n' + symbol_block
+            
+            global_sections.append(symbol_block.strip())
+            new_symbols_found.append(symbol_name)
+            print(f"[Info] Found global data symbols (not in rebuilt ISA): {symbol_name}")
+    
+    # 如果沒有找到任何新的全局變數段，直接返回
+    if not global_sections:
+        print("[Info] No additional global data symbols found in original ISA")
+        return isa_text
+    
+    # 找到 .amdgpu_metadata 的位置
+    metadata_pos = isa_text.find('.amdgpu_metadata')
+    
+    if metadata_pos == -1:
+        # 如果沒有 metadata 段，附加到文件末尾
+        print(f"[Info] Appending {len(global_sections)} global data section(s) to end of ISA")
+        return isa_text + '\n\n' + '\n\n'.join(global_sections) + '\n'
+    
+    # 插入到 metadata 之前
+    before_metadata = isa_text[:metadata_pos].rstrip()
+    metadata_and_after = isa_text[metadata_pos:]
+    
+    print(f"[Info] Appending {len(global_sections)} global data section(s) before .amdgpu_metadata")
+    
+    global_text = '\n\n'.join(global_sections)
+    return f"{before_metadata}\n\n{global_text}\n\n\t{metadata_and_after}"
+
+
+def append_device_functions(isa_text: str, original_isa_file: pathlib.Path) -> str:
+    """
+    從原始 ISA 文件提取設備函數（device functions）並附加到重建的 ISA
+    
+    設備函數是非 kernel 函數，它們：
+    - 有 .type xxx,@function 標記
+    - 沒有 .amdhsa_kernel metadata
+    - 通常被 kernels 或 vtables 調用
+    
+    Args:
+        isa_text: 重建的 ISA 文本
+        original_isa_file: 原始 ISA 文件路徑
+    
+    Returns:
+        附加了設備函數的 ISA 文本
+    """
+    if not original_isa_file or not original_isa_file.exists():
+        return isa_text
+    
+    original_text = original_isa_file.read_text()
+    lines = original_text.split('\n')
+    
+    # 提取 rebuilt ISA 中已存在的函數名稱（kernels）
+    existing_functions = set()
+    for match in re.finditer(r'\.amdhsa_kernel\s+([\w.$]+)', isa_text):
+        existing_functions.add(match.group(1))
+    
+    # 查找原始文件中的所有函數
+    device_functions = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        
+        # 查找 .type xxx,@function 聲明
+        func_match = re.match(r'^\s*\.type\s+([\w.$]+),@function', line)
+        if func_match:
+            func_name = func_match.group(1)
+            
+            # 檢查是否是 kernel（有 .amdhsa_kernel）
+            is_kernel = False
+            # 向前查找 50 行，看是否有 .amdhsa_kernel
+            for j in range(i, min(i + 50, len(lines))):
+                if re.search(rf'\.amdhsa_kernel\s+{re.escape(func_name)}', lines[j]):
+                    is_kernel = True
+                    break
+            
+            # 如果不是 kernel 且不在 rebuilt ISA 中，則提取它
+            if not is_kernel and func_name not in existing_functions:
+                # 找到函數的開始位置（向前查找可見性聲明）
+                func_start = i
+                for k in range(i - 1, max(0, i - 10), -1):
+                    if re.match(r'^\s*\.(protected|hidden|globl|weak)\s+' + re.escape(func_name), lines[k]):
+                        func_start = k
+                    elif re.match(r'^\s*\.p2align', lines[k]):
+                        func_start = k
+                    elif lines[k].strip() and not re.match(r'^\s*[;#]', lines[k]):
+                        break
+                
+                # 找到函數的結束位置（查找 .size 指令或下一個函數/段）
+                func_end = i + 1
+                for j in range(i + 1, len(lines)):
+                    if re.search(rf'\.size\s+{re.escape(func_name)}', lines[j]):
+                        func_end = j + 1
+                        break
+                    # 如果遇到下一個函數或段定義，停止
+                    if (re.match(r'^\s*\.type\s+[\w.$]+,@(function|object)', lines[j]) or
+                        re.match(r'^\s*\.section', lines[j]) or
+                        re.match(r'^\s*\.amdgpu_metadata', lines[j])):
+                        break
+                    func_end = j + 1
+                
+                # 提取函數代碼
+                func_lines = lines[func_start:func_end]
+                func_text = '\n'.join(func_lines)
+                
+                # 重命名局部標籤以避免衝突
+                # 局部標籤格式：.Lxxx（如 .Lfunc_end0, .LBB0_1）
+                # 為每個函數的局部標籤添加唯一後綴
+                local_label_suffix = f"_devfunc_{len(device_functions)}"
+                # 匹配所有局部標籤的定義和引用
+                # 不使用 \b，因為 . 不是單詞字符
+                func_text = re.sub(r'(\.L[\w]+)', rf'\1{local_label_suffix}', func_text)
+                
+                device_functions.append(func_text.strip())
+                existing_functions.add(func_name)
+                print(f"[Info] Found device function (not in rebuilt ISA): {func_name}")
+        
+        i += 1
+    
+    if not device_functions:
+        print("[Info] No device functions to append")
+        return isa_text
+    
+    # 找到 .amdgpu_metadata 或全局數據段的位置，在其之前插入設備函數
+    metadata_pos = isa_text.find('.amdgpu_metadata')
+    
+    if metadata_pos == -1:
+        # 如果沒有 metadata，附加到末尾
+        print(f"[Info] Appending {len(device_functions)} device function(s) to end of ISA")
+        device_text = '\n\n'.join(device_functions)
+        return f"{isa_text}\n\n{device_text}"
+    
+    # 在 metadata 之前插入
+    before_metadata = isa_text[:metadata_pos].rstrip()
+    metadata_and_after = isa_text[metadata_pos:]
+    
+    print(f"[Info] Appending {len(device_functions)} device function(s) before .amdgpu_metadata")
+    
+    # 設備函數必須在 .text 段中
+    device_text = '\t.text\n\n' + '\n\n'.join(device_functions)
+    return f"{before_metadata}\n\n{device_text}\n\n\t{metadata_and_after}"
+
+
 def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_file: pathlib.Path = None) -> str:
     """
     修復 ISA metadata：從原始 ISA 文件或 GPU MLIR attributes 提取正確的 metadata
@@ -283,8 +611,10 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
                 if 'amdhsa.kernels' in metadata and len(metadata['amdhsa.kernels']) > 0:
                     kernel = metadata['amdhsa.kernels'][0]
                     
-                    # 提取 vgpr_count, sgpr_count, agpr_count（YAML 中的值更準確）
-                    for key in ['.vgpr_count', '.sgpr_count', '.agpr_count']:
+                    # 提取 vgpr_count, agpr_count（YAML 中的值更準確）
+                    # 注意：不提取 sgpr_count，因為 YAML 中的 .sgpr_count 與彙編指令中的
+                    # .amdhsa_next_free_sgpr 是不同的概念。後者必須 <= 102，而前者可以更大。
+                    for key in ['.vgpr_count', '.agpr_count']:
                         if key in kernel:
                             attr_name = key[1:]  # 移除開頭的 '.'
                             attrs[attr_name] = kernel[key]
@@ -579,7 +909,7 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
         output_prefix: 輸出文件前綴（如果為 None，使用輸入文件名）
         original_isa_file: 原始 ISA 文件路徑（如果提供，用於提取 metadata）
     """
-    for tool in ["mlir-opt", "llvm-mc", "ld.lld"]:
+    for tool in ["mlir-opt", "llvm-mc", "lld"]:
         ensure_tool(tool)
 
     kernel_stem = output_prefix if output_prefix else kernel_mlir.stem
@@ -623,6 +953,11 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     # Fix ISA metadata: extract from original ISA (if provided) or GPU MLIR attributes
     isa = fix_isa_metadata(isa, kernel_mlir, original_isa_file)
     
+    # Append global symbols from original ISA (if provided)
+    if original_isa_file is not None:
+        isa = append_global_symbols(isa, original_isa_file)
+        isa = append_device_functions(isa, original_isa_file)
+    
     kernel_isa_s.write_text(isa)
     print(f"Wrote ISA assembly to {kernel_isa_s}")
 
@@ -640,9 +975,16 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
 
     print(f"\n=== Stage 5: Linking to HSACO ===")
     ld_cmd = [
-        "ld.lld",
+        "lld",
+        "-flavor", "gnu",
+        "-m", "elf64_amdgpu",
+        "--no-undefined",
         "-shared",
+        "-plugin-opt=-amdgpu-internalize-symbols",
+        f"-plugin-opt=mcpu={chip}",
+        "--whole-archive",
         str(kernel_o),
+        "--no-whole-archive",
         "-o",
         str(kernel_hsaco),
     ]
