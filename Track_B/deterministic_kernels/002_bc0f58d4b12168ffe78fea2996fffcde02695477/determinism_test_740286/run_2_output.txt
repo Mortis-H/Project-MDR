@@ -1,0 +1,7 @@
+Generate value completed!
+thread per block is : 1024
+block per grid is : 313 , 313
+---------------------------
+Calulate completed
+
+estimate using time : 4.00000
