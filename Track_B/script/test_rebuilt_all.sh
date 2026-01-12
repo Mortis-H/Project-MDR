@@ -297,9 +297,6 @@ main() {
     echo -e "${CYAN}搜尋目錄：${NC}$SEARCH_DIR"
     echo ""
     
-    # 記錄腳本開始時的時間戳，用於識別測試期間產生的檔案
-    local START_TIMESTAMP=$(date +%s)
-    
     # 如果提供了 kernel 參數，只測試指定的 kernel
     if [ ${#KERNEL_ARGS[@]} -gt 0 ]; then
         KERNEL_DIRS=("${KERNEL_ARGS[@]}")
@@ -489,55 +486,6 @@ main() {
         
         echo -e "${GREEN}✓ 所有失敗的 kernel 已複製到：${NC}"
         echo -e "  ${CYAN}$FAILED_DIR${NC}"
-        echo ""
-    fi
-    
-    # 清理測試期間產生的臨時檔案
-    echo ""
-    echo -e "${MAGENTA}======================================${NC}"
-    echo -e "${MAGENTA}清理臨時檔案${NC}"
-    echo -e "${MAGENTA}======================================${NC}"
-    echo ""
-    
-    # 創建 temp 目錄
-    local TEMP_DIR="${SEARCH_DIR}/temp_files_$(date +%Y%m%d_%H%M%S)"
-    
-    # 尋找測試期間產生的臨時檔案（在 SEARCH_DIR 根目錄下）
-    local temp_files_found=0
-    declare -a temp_files
-    
-    # 查找常見的臨時檔案類型
-    for pattern in "*.out" "*.log" "*.tmp" "trace.*" "*.trace" "core.*"; do
-        while IFS= read -r file; do
-            # 只處理檔案（非目錄）且在根目錄下
-            if [ -f "$file" ]; then
-                local file_mtime=$(stat -c %Y "$file" 2>/dev/null || echo "0")
-                # 只移動在測試開始後修改的檔案
-                if [ "$file_mtime" -ge "$START_TIMESTAMP" ]; then
-                    temp_files+=("$file")
-                    temp_files_found=$((temp_files_found + 1))
-                fi
-            fi
-        done < <(find "$SEARCH_DIR" -maxdepth 1 -type f -name "$pattern" 2>/dev/null)
-    done
-    
-    if [ $temp_files_found -gt 0 ]; then
-        mkdir -p "$TEMP_DIR"
-        echo -e "${YELLOW}發現 $temp_files_found 個測試期間產生的臨時檔案${NC}"
-        echo ""
-        
-        for file in "${temp_files[@]}"; do
-            local filename=$(basename "$file")
-            echo -e "  - 移動 $filename 到 temp 目錄"
-            mv "$file" "$TEMP_DIR/"
-        done
-        
-        echo ""
-        echo -e "${GREEN}✓ 臨時檔案已移動到：${NC}"
-        echo -e "  ${CYAN}$TEMP_DIR${NC}"
-        echo ""
-    else
-        echo -e "${GREEN}✓ 沒有發現需要清理的臨時檔案${NC}"
         echo ""
     fi
     

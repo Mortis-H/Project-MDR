@@ -1107,6 +1107,11 @@ def main():
         help="output file prefix [default: <input_stem>_rebuilt for .s, <input_stem> for .mlir]",
     )
     ap.add_argument(
+        "--original-isa",
+        default=None,
+        help="original complete ISA file (for extracting metadata and global symbols, optional)",
+    )
+    ap.add_argument(
         "input_file",
         help="Input file: either .s (AMD ISA assembly) or .mlir (GPU MLIR with gpu.func kernel)"
     )
@@ -1144,6 +1149,16 @@ def main():
     # 用於記錄最終生成的 GPU MLIR 文件（用於後續的 run-host）
     final_gpu_mlir = None
     
+    # 處理 --original-isa 參數
+    original_isa_for_metadata = None
+    if args.original_isa:
+        original_isa_for_metadata = pathlib.Path(args.original_isa).resolve()
+        if not original_isa_for_metadata.exists():
+            print(f"[Warning] --original-isa file not found: {original_isa_for_metadata}")
+            original_isa_for_metadata = None
+        else:
+            print(f"[Info] Using original ISA for metadata extraction: {original_isa_for_metadata.name}")
+    
     if suffix == ".s":
         # 完整流程：.s -> .amdisamlir -> .gpumlir -> ISA/HSACO
         print(f"=== Processing AMD ISA Assembly: {input_file.name} ===")
@@ -1151,8 +1166,9 @@ def main():
         final_gpu_mlir = gpumlir_file
         
         if args.emit_isa:
-            # 傳遞原始 ISA 文件給 build_isa_and_hsaco，用於提取 metadata
-            build_isa_and_hsaco(gpumlir_file, args.chip, workdir, output_prefix, original_isa_file=input_file)
+            # 如果提供了 --original-isa，使用它；否則使用 input_file
+            isa_for_metadata = original_isa_for_metadata if original_isa_for_metadata else input_file
+            build_isa_and_hsaco(gpumlir_file, args.chip, workdir, output_prefix, original_isa_file=isa_for_metadata)
         
         if args.emit_llvm_ir:
             build_llvm_ir_via_binary(gpumlir_file, args.chip, workdir, output_prefix)

@@ -33,7 +33,10 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-DEFAULT_BASE_DIR="/home/andycha/workspaces/multi_kernel_testcases"
+# 獲取腳本所在目錄並推斷預設目錄
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+DEFAULT_BASE_DIR="${PROJECT_ROOT}/multi_kernel_testcases"
 
 # 解析參數
 AUTO_YES=true  # 預設為自動確認

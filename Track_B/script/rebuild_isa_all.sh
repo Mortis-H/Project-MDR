@@ -33,8 +33,9 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 預設配置
-DEFAULT_BASE_DIR="/home/andycha/workspaces/multi_kernel_testcases"
-PIPELINE_SCRIPT="/home/andycha/workspaces/Project-MDR/Track_B/amdisa-toolkit/examples/pipeline.py"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+DEFAULT_BASE_DIR="${PROJECT_ROOT}/multi_kernel_testcases"
+PIPELINE_SCRIPT="$(cd "$SCRIPT_DIR/.." && pwd)/amdisa-toolkit/examples/pipeline.py"
 CHIP="gfx950"
 KERNEL_FILTER="${KERNEL_FILTER:-*}"  # 預設處理所有 kernel，可用環境變數指定過濾
 
