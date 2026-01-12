@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 
 # 使用說明
 usage() {
-    echo "用法: $0 <目錄>"
+    echo "用法: $0 <目錄> [選項]"
     echo ""
     echo "這個腳本會遞迴搜尋指定目錄及其子資料夾，尋找成對的 ISA 文件："
     echo "  - *-hip-amdgcn-amd-amdhsa-*.s (舊的完整 ISA)"
@@ -23,18 +23,51 @@ usage() {
     echo ""
     echo "並自動生成包裝後的完整 ISA 文件（放在各自的資料夾中）。"
     echo ""
+    echo "選項:"
+    echo "  -k, --kernel HASH    只處理指定的 kernel（kernel hash）"
+    echo "  -h, --help           顯示此說明"
+    echo ""
     echo "範例:"
-    echo "  $0 /path/to/isa/directory"
-    echo "  $0 /path/to/run_success"
+    echo "  $0 /path/to/isa/directory                    # 處理所有 kernel"
+    echo "  $0 /path/to/run_success                      # 處理所有 kernel"
+    echo "  $0 /path/to/run_success -k 0a32840d...       # 只處理指定的 kernel"
     exit 1
 }
 
-# 檢查參數
-if [ $# -ne 1 ]; then
+# 解析參數
+TARGET_DIR=""
+SPECIFIC_KERNEL=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -k|--kernel)
+            SPECIFIC_KERNEL="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        -*)
+            echo -e "${RED}未知選項: $1${NC}"
+            usage
+            ;;
+        *)
+            if [ -z "$TARGET_DIR" ]; then
+                TARGET_DIR="$1"
+                shift
+            else
+                echo -e "${RED}錯誤: 只能指定一個目錄${NC}"
+                usage
+            fi
+            ;;
+    esac
+done
+
+# 檢查是否指定了目錄
+if [ -z "$TARGET_DIR" ]; then
+    echo -e "${RED}錯誤: 必須指定目錄${NC}"
     usage
 fi
-
-TARGET_DIR="$1"
 
 if [ ! -d "$TARGET_DIR" ]; then
     echo -e "${RED}錯誤: 目錄不存在: $TARGET_DIR${NC}"
@@ -60,6 +93,24 @@ total=0
 success=0
 failed=0
 
+# 記錄失敗的 kernel 目錄（使用關聯陣列）
+declare -a failed_kernels
+
+# 確定搜尋路徑
+if [ -n "$SPECIFIC_KERNEL" ]; then
+    # 指定了特定 kernel，只在該目錄下搜尋
+    SEARCH_PATH="${TARGET_DIR}/${SPECIFIC_KERNEL}"
+    if [ ! -d "$SEARCH_PATH" ]; then
+        echo -e "${RED}錯誤: 找不到指定的 kernel 目錄: $SEARCH_PATH${NC}"
+        exit 1
+    fi
+    echo -e "${YELLOW}只處理指定的 kernel: $SPECIFIC_KERNEL${NC}"
+    echo ""
+else
+    # 處理整個目錄
+    SEARCH_PATH="$TARGET_DIR"
+fi
+
 # 遞迴尋找所有 *_func.s 文件
 while IFS= read -r -d '' new_isa; do
     total=$((total + 1))
@@ -77,6 +128,7 @@ while IFS= read -r -d '' new_isa; do
         echo -e "${YELLOW}[跳過]${NC} $base_name ($(realpath --relative-to="$TARGET_DIR" "$file_dir"))"
         echo "  原因: 找不到對應的舊 ISA 文件"
         failed=$((failed + 1))
+        failed_kernels+=("$file_dir")
         echo ""
         continue
     fi
@@ -102,9 +154,10 @@ while IFS= read -r -d '' new_isa; do
     else
         echo -e "${RED}  ✗ 失敗${NC}"
         failed=$((failed + 1))
+        failed_kernels+=("$file_dir")
     fi
     echo ""
-done < <(find "$TARGET_DIR" -type f -name "*_func.s" -print0)
+done < <(find "$SEARCH_PATH" -type f -name "*_func.s" -print0)
 
 # 顯示統計
 echo -e "${GREEN}=== 處理完成 ===${NC}"
@@ -114,4 +167,52 @@ if [ $failed -gt 0 ]; then
     echo -e "${RED}失敗: $failed${NC}"
 else
     echo "失敗: $failed"
+fi
+echo ""
+
+# 複製失敗的 kernel 資料夾
+if [ ${#failed_kernels[@]} -gt 0 ]; then
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    FAIL_DIR="${TARGET_DIR}/fail_wrap_${TIMESTAMP}"
+    
+    echo -e "${YELLOW}=== 複製失敗的 Kernel 資料夾 ===${NC}"
+    echo "目標目錄: $FAIL_DIR"
+    echo "失敗數量: ${#failed_kernels[@]}"
+    echo ""
+    
+    mkdir -p "$FAIL_DIR"
+    
+    # 去重並複製（使用 associative array 去重）
+    declare -A seen
+    for kernel_dir in "${failed_kernels[@]}"; do
+        # 獲取 kernel 資料夾的絕對路徑
+        kernel_abs_path=$(realpath "$kernel_dir")
+        
+        # 如果已經處理過這個目錄，跳過
+        if [ -n "${seen[$kernel_abs_path]}" ]; then
+            continue
+        fi
+        seen[$kernel_abs_path]=1
+        
+        # 獲取 kernel 資料夾名稱
+        kernel_name=$(basename "$kernel_abs_path")
+        
+        # 獲取相對路徑（用於顯示）
+        rel_path=$(realpath --relative-to="$TARGET_DIR" "$kernel_abs_path")
+        
+        echo -e "${YELLOW}複製:${NC} $rel_path"
+        
+        # 複製整個 kernel 資料夾
+        cp -r "$kernel_abs_path" "$FAIL_DIR/" 2>/dev/null
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}  ✓ 已複製到: fail_wrap_${TIMESTAMP}/${kernel_name}${NC}"
+        else
+            echo -e "${RED}  ✗ 複製失敗${NC}"
+        fi
+    done
+    
+    echo ""
+    echo -e "${GREEN}失敗的 Kernel 已複製到: $FAIL_DIR${NC}"
+    echo ""
 fi

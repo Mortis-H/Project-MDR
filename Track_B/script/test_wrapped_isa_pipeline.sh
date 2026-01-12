@@ -17,10 +17,9 @@ NC='\033[0m' # No Color
 
 # 獲取腳本所在目錄並自動推斷路徑
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 # 配置
-RUN_SUCCESS_DIR="${PROJECT_ROOT}/pure_function_level_assembly_and_hip_and_complete_hip/run_success"
+RUN_SUCCESS_DIR=""  # 必須由使用者指定
 PIPELINE_SCRIPT="$(cd "$SCRIPT_DIR/.." && pwd)/amdisa-toolkit/examples/pipeline.py"
 RELINK_SCRIPT="${SCRIPT_DIR}/relink_and_compare.sh"
 CHIP="gfx950"
@@ -39,10 +38,12 @@ SUMMARY_FILE=""
 
 # 使用說明
 usage() {
-    echo "用法: $0 [選項]"
+    echo "用法: $0 -d DIR [選項]"
     echo ""
-    echo "選項:"
-    echo "  -d, --dir DIR           指定 run_success 目錄（預設：$RUN_SUCCESS_DIR）"
+    echo "必需參數:"
+    echo "  -d, --dir DIR           指定 run_success 目錄（必需）"
+    echo ""
+    echo "可選參數:"
     echo "  -c, --chip CHIP         指定 GPU 晶片型號（預設：$CHIP）"
     echo "  -t, --timeout SECONDS   執行超時時間（預設：$EXECUTION_TIMEOUT 秒）"
     echo "  -k, --kernel HASH       只測試指定的 kernel（kernel hash）"
@@ -51,10 +52,10 @@ usage() {
     echo "  -h, --help              顯示此幫助信息"
     echo ""
     echo "範例:"
-    echo "  $0                                           # 測試所有 kernel"
-    echo "  $0 -l 5                                      # 只測試前 5 個 kernel"
-    echo "  $0 -k 0a32840dac54a492de687e418c588476d324dcdc  # 測試特定 kernel"
-    echo "  $0 -t 120                                    # 設定超時時間為 120 秒"
+    echo "  $0 -d /path/to/run_success                       # 測試所有 kernel"
+    echo "  $0 -d ./run_success -l 5                         # 只測試前 5 個 kernel"
+    echo "  $0 -d ./run_success -k 0a32840dac54a492...       # 測試特定 kernel"
+    echo "  $0 -d ./run_success -t 120                       # 設定超時時間為 120 秒"
     exit 1
 }
 
@@ -98,6 +99,13 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# 檢查是否提供了必需的目錄參數
+if [ -z "$RUN_SUCCESS_DIR" ]; then
+    echo -e "${RED}錯誤：必須指定 run_success 目錄${NC}"
+    echo ""
+    usage
+fi
 
 # 檢查必要的目錄和腳本
 if [ ! -d "$RUN_SUCCESS_DIR" ]; then
@@ -183,7 +191,7 @@ test_kernel() {
     echo -e "${BLUE}[2/5]${NC} 找到原始 ISA: $(basename "$original_isa")"
     
     # 運行 pipeline.py 生成 .hsaco
-    local pipeline_workdir="${kernel_dir}/pipeline_wrapped_output"
+    local pipeline_workdir="${kernel_dir}/wrapped_output"
     local wrapped_basename=$(basename "$wrapped_isa" .s)
     local rebuilt_hsaco="${pipeline_workdir}/${wrapped_basename}_rebuilt.hsaco"
     
@@ -324,9 +332,12 @@ if [ -n "$SPECIFIC_KERNEL" ]; then
     # 測試特定 kernel
     kernel_dir="${RUN_SUCCESS_DIR}/${SPECIFIC_KERNEL}"
     if [ -d "$kernel_dir" ]; then
+        echo -e "${YELLOW}只測試指定的 kernel: $SPECIFIC_KERNEL${NC}"
+        echo ""
         test_kernel "$kernel_dir"
     else
         echo -e "${RED}錯誤：找不到指定的 kernel: $SPECIFIC_KERNEL${NC}"
+        echo "完整路徑：$kernel_dir"
         exit 1
     fi
 else

@@ -11,19 +11,22 @@
 #   3. 清除預設目錄的 relink 輸出（自動確認）：
 #      ./clean_results.sh --type relink
 #
-#   4. 清除預設目錄的 failed_kernels 資料夾（自動確認）：
+#   4. 清除預設目錄的 wrapped 輸出（自動確認）：
+#      ./clean_results.sh --type wrapped
+#
+#   5. 清除預設目錄的 failed_kernels 資料夾（自動確認）：
 #      ./clean_results.sh --type failed
 #
-#   5. 清除指定目錄的 relink 輸出：
+#   6. 清除指定目錄的 relink 輸出：
 #      ./clean_results.sh --type relink --path deterministic_kernels
 #
-#   6. 清除所有輸出：
+#   7. 清除所有輸出：
 #      ./clean_results.sh --type all
 #
-#   7. 互動確認模式：
+#   8. 互動確認模式：
 #      ./clean_results.sh --type pipeline --no
 #
-#   8. 只列出不刪除：
+#   9. 只列出不刪除：
 #      ./clean_results.sh --type pipeline --dry-run
 
 # 設定顏色輸出
@@ -33,10 +36,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# 獲取腳本所在目錄並推斷預設目錄
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-DEFAULT_BASE_DIR="${PROJECT_ROOT}/multi_kernel_testcases"
+DEFAULT_BASE_DIR="/home/andycha/workspaces/multi_kernel_testcases"
 
 # 解析參數
 AUTO_YES=true  # 預設為自動確認
@@ -92,6 +92,7 @@ while [[ $# -gt 0 ]]; do
             echo "  pipeline        清除 pipeline_test* 輸出"
             echo "  compile         清除 compiled_output* 輸出"
             echo "  relink          清除 relink_test_results* 輸出"
+            echo "  wrapped         清除 wrapped* 輸出"
             echo "  failed          清除 failed_kernels* 資料夾"
             echo "  all             清除以上所有輸出"
             echo ""
@@ -105,6 +106,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "範例："
             echo "  $0 --type pipeline                           # 清除預設目錄的 pipeline 輸出"
+            echo "  $0 --type wrapped                            # 清除預設目錄的 wrapped 輸出"
             echo "  $0 --type relink --path deterministic_kernels  # 清除特定目錄的 relink 輸出"
             echo "  $0 --type all --path ./my_kernels            # 清除指定目錄的所有輸出"
             echo "  $0 --type all --dry-run                      # 列出所有要清除的資料夾"
@@ -123,15 +125,15 @@ done
 # 檢查是否指定清除類型
 if [ -z "$CLEAN_TYPE" ]; then
     echo -e "${RED}錯誤: 必須指定清除類型${NC}"
-    echo "使用 --type [pipeline|compile|relink|failed|all]"
+    echo "使用 --type [pipeline|compile|relink|wrapped|failed|all]"
     echo "使用 --help 查看完整說明"
     exit 1
 fi
 
 # 驗證清除類型
-if [[ ! "$CLEAN_TYPE" =~ ^(pipeline|compile|relink|failed|all)$ ]]; then
+if [[ ! "$CLEAN_TYPE" =~ ^(pipeline|compile|relink|wrapped|failed|all)$ ]]; then
     echo -e "${RED}錯誤: 無效的清除類型: $CLEAN_TYPE${NC}"
-    echo "有效類型: pipeline, compile, relink, failed, all"
+    echo "有效類型: pipeline, compile, relink, wrapped, failed, all"
     exit 1
 fi
 
@@ -175,13 +177,17 @@ case "$CLEAN_TYPE" in
         SEARCH_PATTERNS=("relink_test_results*")
         TYPE_DESC="relink_test_results 輸出"
         ;;
+    wrapped)
+        SEARCH_PATTERNS=("wrapped*")
+        TYPE_DESC="wrapped 輸出"
+        ;;
     failed)
         SEARCH_PATTERNS=("failed_kernels*")
         TYPE_DESC="failed_kernels 資料夾"
         ;;
     all)
-        SEARCH_PATTERNS=("pipeline_test*" "compiled_output*" "relink_test_results*" "failed_kernels*")
-        TYPE_DESC="pipeline_test, compiled_output, relink_test_results 和 failed_kernels 輸出"
+        SEARCH_PATTERNS=("pipeline_test*" "compiled_output*" "relink_test_results*" "wrapped*" "failed_kernels*")
+        TYPE_DESC="pipeline_test, compiled_output, relink_test_results, wrapped 和 failed_kernels 輸出"
         ;;
 esac
 
