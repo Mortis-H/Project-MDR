@@ -5,8 +5,8 @@
 #
 # 用法：
 #   ./test_rebuilt_all.sh                          # 測試當前目錄下所有 kernel
-#   ./test_rebuilt_all.sh --path <目錄>            # 測試指定目錄下所有 kernel
-#   ./test_rebuilt_all.sh --path deterministic_kernels  # 測試 deterministic_kernels 下的所有 kernel
+#   ./test_rebuilt_all.sh -p <目錄>                # 測試指定目錄下所有 kernel
+#   ./test_rebuilt_all.sh -p deterministic_kernels  # 測試 deterministic_kernels 下的所有 kernel
 
 set -e
 
@@ -36,24 +36,24 @@ KERNEL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --path)
+        -p|--path)
             if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
                 SEARCH_DIR="$2"
                 shift 2
             else
-                echo -e "${RED}錯誤: --path 需要指定路徑參數${NC}"
+                echo -e "${RED}錯誤: -p 需要指定路徑參數${NC}"
                 exit 1
             fi
             ;;
-        --path=*)
+        -p=*|--path=*)
             SEARCH_DIR="${1#*=}"
             shift
             ;;
         --help|-h)
-            echo "用法: $0 [--path PATH] [kernel_dir1] [kernel_dir2] ..."
+            echo "用法: $0 [-p PATH] [kernel_dir1] [kernel_dir2] ..."
             echo ""
             echo "選項："
-            echo "  --path PATH     指定搜尋目錄（預設為當前目錄）"
+            echo "  -p, --path PATH 指定搜尋目錄（預設為當前目錄）"
             echo "                  可以是絕對路徑或相對路徑"
             echo "  --help          顯示此說明"
             echo ""
@@ -62,8 +62,8 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "範例："
             echo "  $0                                         # 測試當前目錄下所有 kernels"
-            echo "  $0 --path deterministic_kernels            # 測試指定目錄下所有 kernels"
-            echo "  $0 --path deterministic_kernels 002_*      # 測試指定目錄下的特定 kernels"
+            echo "  $0 -p deterministic_kernels                # 測試指定目錄下所有 kernels"
+            echo "  $0 -p deterministic_kernels 002_*          # 測試指定目錄下的特定 kernels"
             echo "  $0 002_kernel_A 003_kernel_B               # 測試當前目錄下的特定 kernels"
             exit 0
             ;;
@@ -265,9 +265,9 @@ test_kernel() {
     
     # 執行測試
     if [ -n "$test_args" ]; then
-        "$RELINK_SCRIPT" "$original_exe" "$host_obj" "$rebuilt_hsaco" $test_args
+        "$RELINK_SCRIPT" -p "$original_exe" -H "$host_obj" -G "$rebuilt_hsaco" -a "$test_args"
     else
-        "$RELINK_SCRIPT" "$original_exe" "$host_obj" "$rebuilt_hsaco"
+        "$RELINK_SCRIPT" -p "$original_exe" -H "$host_obj" -G "$rebuilt_hsaco"
     fi
     
     local test_result=$?

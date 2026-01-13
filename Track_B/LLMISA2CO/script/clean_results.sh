@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
             CLEAN_TYPE="${1#*=}"
             shift
             ;;
-        -p|--path)
+        -p)
             if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
                 BASE_DIR="$2"
                 shift 2
@@ -67,10 +67,6 @@ while [[ $# -gt 0 ]]; do
                 echo -e "${RED}錯誤: -p 需要指定路徑參數${NC}"
                 exit 1
             fi
-            ;;
-        -p=*|--path=*)
-            BASE_DIR="${1#*=}"
-            shift
             ;;
         --yes|-y)
             AUTO_YES=true
@@ -97,7 +93,7 @@ while [[ $# -gt 0 ]]; do
             echo "  all             清除以上所有輸出"
             echo ""
             echo "選項："
-            echo "  -p, --path PATH 指定目標目錄路徑（預設：$DEFAULT_BASE_DIR）"
+            echo "  -p PATH         指定目標目錄路徑（預設：$DEFAULT_BASE_DIR）"
             echo "                  可以是絕對路徑或相對路徑"
             echo "  --yes           自動確認（預設）"
             echo "  --no            詢問確認"

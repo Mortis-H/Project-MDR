@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 配置
 KERNEL_DIR=""  # 必須由使用者指定
-PIPELINE_SCRIPT="$(cd "$SCRIPT_DIR/.." && pwd)/amdisa-toolkit/examples/pipeline.py"
+PIPELINE_SCRIPT="$(cd "$SCRIPT_DIR" && pwd)/pipeline.py"
 RELINK_SCRIPT="${SCRIPT_DIR}/relink_and_compare.sh"
 CHIP="gfx950"
 EXECUTION_TIMEOUT=60  # 執行超時時間（秒）
@@ -41,7 +41,7 @@ usage() {
     echo "用法: $0 -p DIR [選項]"
     echo ""
     echo "必需參數:"
-    echo "  -p, --path DIR          指定 run_success 目錄（必需）"
+    echo "  -p PATH                 指定 run_success 目錄（必需）"
     echo ""
     echo "可選參數:"
     echo "  -c, --chip CHIP         指定 GPU 晶片型號（預設：$CHIP）"
@@ -66,7 +66,7 @@ SKIP_PIPELINE=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -p|--path)
+        -p)
             KERNEL_DIR="$2"
             shift 2
             ;;
@@ -123,9 +123,9 @@ if [ ! -f "$RELINK_SCRIPT" ]; then
     exit 1
 fi
 
-# 創建測試結果目錄（放在 KERNEL_DIR 的上一層）
+# 創建測試結果目錄
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-TEST_RESULTS_DIR="$(dirname "$KERNEL_DIR")/wrapped_isa_test_results_${TIMESTAMP}"
+TEST_RESULTS_DIR="${KERNEL_DIR}/../wrapped_isa_test_results_${TIMESTAMP}"
 mkdir -p "$TEST_RESULTS_DIR"
 SUMMARY_FILE="${TEST_RESULTS_DIR}/test_summary.txt"
 
@@ -285,8 +285,13 @@ test_kernel() {
     export EXECUTION_TIMEOUT="$EXECUTION_TIMEOUT"
     export OUTPUT_BASE_DIR="$kernel_dir"
     
-    if bash "$RELINK_SCRIPT" "$original_exe" "$host_o" "$rebuilt_hsaco" $test_args \
-        > "${TEST_RESULTS_DIR}/${kernel_hash}_relink.log" 2>&1; then
+    # 構建命令參數
+    local relink_cmd="bash $RELINK_SCRIPT -p $original_exe -H $host_o -G $rebuilt_hsaco"
+    if [ -n "$test_args" ]; then
+        relink_cmd="$relink_cmd -a \"$test_args\""
+    fi
+    
+    if eval "$relink_cmd" > "${TEST_RESULTS_DIR}/${kernel_hash}_relink.log" 2>&1; then
         relink_exit_code=$?
     else
         relink_exit_code=$?

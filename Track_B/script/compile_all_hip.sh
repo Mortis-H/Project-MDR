@@ -6,8 +6,8 @@
 #
 # 用法：
 #   ./compile_all_hip.sh                          # 編譯當前目錄下所有 HIP 檔案
-#   ./compile_all_hip.sh --path <目錄>            # 編譯指定目錄下所有 HIP 檔案
-#   ./compile_all_hip.sh --path deterministic_kernels  # 編譯 deterministic_kernels 下的所有 HIP 檔案
+#   ./compile_all_hip.sh -p <目錄>                # 編譯指定目錄下所有 HIP 檔案
+#   ./compile_all_hip.sh -p deterministic_kernels  # 編譯 deterministic_kernels 下的所有 HIP 檔案
 
 # 設定顏色輸出
 GREEN='\033[0;32m'
@@ -25,24 +25,24 @@ SEARCH_DIR=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --path)
+        -p|--path)
             if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
                 SEARCH_DIR="$2"
                 shift 2
             else
-                echo -e "${RED}錯誤: --path 需要指定路徑參數${NC}"
+                echo -e "${RED}錯誤: -p 需要指定路徑參數${NC}"
                 exit 1
             fi
             ;;
-        --path=*)
+        -p=*|--path=*)
             SEARCH_DIR="${1#*=}"
             shift
             ;;
         --help|-h)
-            echo "用法: $0 [--path PATH]"
+            echo "用法: $0 [-p PATH]"
             echo ""
             echo "選項："
-            echo "  --path PATH     指定搜尋目錄（預設為當前目錄）"
+            echo "  -p, --path PATH 指定搜尋目錄（預設為當前目錄）"
             echo "                  可以是絕對路徑或相對路徑"
             echo "  --help          顯示此說明"
             echo ""
@@ -51,8 +51,8 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "範例："
             echo "  $0                                    # 編譯當前目錄下所有 HIP"
-            echo "  $0 --path deterministic_kernels       # 編譯指定目錄下所有 HIP"
-            echo "  JOBS=8 $0 --path ./my_kernels         # 使用 8 個平行任務編譯"
+            echo "  $0 -p deterministic_kernels           # 編譯指定目錄下所有 HIP"
+            echo "  JOBS=8 $0 -p ./my_kernels             # 使用 8 個平行任務編譯"
             exit 0
             ;;
         *)

@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 
 # 使用說明
 usage() {
-    echo "用法: $0 -p <目錄> [選項]"
+    echo "用法: $0 -p PATH [選項]"
     echo ""
     echo "這個腳本會遞迴搜尋指定目錄及其子資料夾，尋找成對的 ISA 文件："
     echo "  - *-hip-amdgcn-amd-amdhsa-*.s (舊的完整 ISA)"
@@ -23,17 +23,15 @@ usage() {
     echo ""
     echo "並自動生成包裝後的完整 ISA 文件（放在各自的資料夾中）。"
     echo ""
-    echo "必需參數:"
-    echo "  -p, --path DIR       指定目錄（必需）"
-    echo ""
     echo "選項:"
+    echo "  -p PATH              指定目標目錄路徑（必需）"
     echo "  -k, --kernel HASH    只處理指定的 kernel（kernel hash）"
     echo "  -h, --help           顯示此說明"
     echo ""
     echo "範例:"
-    echo "  $0 -p /path/to/isa/directory                 # 處理所有 kernel"
-    echo "  $0 -p /path/to/run_success                   # 處理所有 kernel"
-    echo "  $0 -p /path/to/run_success -k 0a32840d...    # 只處理指定的 kernel"
+    echo "  $0 -p /path/to/isa/directory                    # 處理所有 kernel"
+    echo "  $0 -p /path/to/run_success                      # 處理所有 kernel"
+    echo "  $0 -p /path/to/run_success -k 0a32840d...       # 只處理指定的 kernel"
     exit 1
 }
 
@@ -43,7 +41,7 @@ SPECIFIC_KERNEL=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -p|--path)
+        -p)
             TARGET_DIR="$2"
             shift 2
             ;;
@@ -54,8 +52,13 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             usage
             ;;
-        *)
+        -*)
             echo -e "${RED}未知選項: $1${NC}"
+            usage
+            ;;
+        *)
+            echo -e "${RED}錯誤: 未知參數 $1${NC}"
+            echo "請使用 -p 指定目錄路徑"
             usage
             ;;
     esac
@@ -213,5 +216,4 @@ if [ ${#failed_kernels[@]} -gt 0 ]; then
     echo ""
     echo -e "${GREEN}失敗的 Kernel 已複製到: $FAIL_DIR${NC}"
     echo ""
-fi
 fi

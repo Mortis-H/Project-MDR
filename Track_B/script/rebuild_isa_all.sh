@@ -9,16 +9,16 @@
 #      ./rebuild_isa_all.sh
 #   
 #   2. 指定搜尋路徑：
-#      ./rebuild_isa_all.sh --path deterministic_kernels
+#      ./rebuild_isa_all.sh -p deterministic_kernels
 #
 #   3. 自訂平行任務數：
-#      JOBS=8 ./rebuild_isa_all.sh --path deterministic_kernels
+#      JOBS=8 ./rebuild_isa_all.sh -p deterministic_kernels
 #
 #   4. 只測試特定 kernel：
-#      KERNEL_FILTER="002_cuda_code*" ./rebuild_isa_all.sh --path deterministic_kernels
+#      KERNEL_FILTER="002_cuda_code*" ./rebuild_isa_all.sh -p deterministic_kernels
 #
 #   5. 設定 kernel 層級的平行數：
-#      KERNEL_JOBS=4 JOBS=8 ./rebuild_isa_all.sh --path deterministic_kernels
+#      KERNEL_JOBS=4 JOBS=8 ./rebuild_isa_all.sh -p deterministic_kernels
 
 # 設定顏色輸出
 GREEN='\033[0;32m'
@@ -44,24 +44,24 @@ SEARCH_DIR=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --path)
+        -p|--path)
             if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
                 SEARCH_DIR="$2"
                 shift 2
             else
-                echo -e "${RED}錯誤: --path 需要指定路徑參數${NC}"
+                echo -e "${RED}錯誤: -p 需要指定路徑參數${NC}"
                 exit 1
             fi
             ;;
-        --path=*)
+        -p=*|--path=*)
             SEARCH_DIR="${1#*=}"
             shift
             ;;
         --help|-h)
-            echo "用法: $0 [--path PATH]"
+            echo "用法: $0 [-p PATH]"
             echo ""
             echo "選項："
-            echo "  --path PATH     指定搜尋目錄（預設：$DEFAULT_BASE_DIR）"
+            echo "  -p, --path PATH 指定搜尋目錄（預設：$DEFAULT_BASE_DIR）"
             echo "                  可以是絕對路徑或相對路徑"
             echo "  --help          顯示此說明"
             echo ""
@@ -72,9 +72,9 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "範例："
             echo "  $0                                         # 測試預設目錄下所有 kernel"
-            echo "  $0 --path deterministic_kernels            # 測試指定目錄下所有 kernel"
-            echo "  JOBS=8 $0 --path ./my_kernels              # 使用 8 個平行任務"
-            echo "  KERNEL_FILTER=\"002_*\" $0 --path kernels  # 只處理 002_ 開頭的 kernel"
+            echo "  $0 -p deterministic_kernels                # 測試指定目錄下所有 kernel"
+            echo "  JOBS=8 $0 -p ./my_kernels                  # 使用 8 個平行任務"
+            echo "  KERNEL_FILTER=\"002_*\" $0 -p kernels      # 只處理 002_ 開頭的 kernel"
             exit 0
             ;;
         *)
