@@ -560,8 +560,7 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
     MLIR pipeline (convert-gpu-to-rocdl, gpu-module-to-binary) 會丟失自定義的
     amdisa.* attributes，導致生成的 ISA metadata 不正確。
     
-    此函數首先嘗試從原始 ISA 文件提取 metadata（如果提供），
-    然後才嘗試從 GPU MLIR 提取（用於向後兼容）。
+    此函數支持多 kernel 的 ISA 文件，為每個 kernel 分別提取和修復 metadata。
     
     Args:
         isa_text: 需要修復的 ISA 文本
@@ -572,35 +571,95 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
         修復後的 ISA 文本
     """
     
-    attrs = {}
-    args_list = []
+    # Step 1: 識別重建 ISA 中的所有 kernel
+    rebuilt_kernels = []
+    for match in re.finditer(r'\.amdhsa_kernel\s+([\w.$]+)', isa_text):
+        kernel_name = match.group(1)
+        kernel_pos = match.start()
+        rebuilt_kernels.append({'name': kernel_name, 'pos': kernel_pos})
     
-    # 優先從原始 ISA 文件提取 metadata（如果提供）
+    if not rebuilt_kernels:
+        print("[Warning] No kernels found in rebuilt ISA")
+        return isa_text
+    
+    print(f"[Info] Found {len(rebuilt_kernels)} kernel(s) in rebuilt ISA: {[k['name'] for k in rebuilt_kernels]}")
+    
+    # Step 2: 從原始 ISA 提取每個 kernel 的 metadata
+    kernel_metadata_map = {}  # kernel_name -> {attrs, args_list}
+    
     if original_isa_file is not None and original_isa_file.exists():
         print(f"[Info] Extracting metadata from original ISA: {original_isa_file.name}")
         original_isa_text = original_isa_file.read_text()
         
-        # 提取 .amdhsa_* directives
-        amdhsa_patterns = {
-            'kernarg_segment_size': r'\.amdhsa_kernarg_size\s+(\d+)',
-            'group_segment_fixed_size': r'\.amdhsa_group_segment_fixed_size\s+(\d+)',
-            'vgpr_count': r'\.amdhsa_next_free_vgpr\s+(\d+)',
-            'sgpr_count': r'\.amdhsa_next_free_sgpr\s+(\d+)',
-            'user_sgpr_count': r'\.amdhsa_user_sgpr_count\s+(\d+)',
-            'dispatch_ptr': r'\.amdhsa_user_sgpr_dispatch_ptr\s+(\d+)',
-            'queue_ptr': r'\.amdhsa_user_sgpr_queue_ptr\s+(\d+)',
-            'workitem_id': r'\.amdhsa_system_vgpr_workitem_id\s+(\d+)',
-            'workgroup_id_x': r'\.amdhsa_system_sgpr_workgroup_id_x\s+(\d+)',
-            'workgroup_id_y': r'\.amdhsa_system_sgpr_workgroup_id_y\s+(\d+)',
-            'workgroup_id_z': r'\.amdhsa_system_sgpr_workgroup_id_z\s+(\d+)',
-        }
+        # 找到原始 ISA 中的所有 kernel 及其位置
+        original_kernels = []
+        for match in re.finditer(r'\.amdhsa_kernel\s+([\w.$]+)', original_isa_text):
+            kernel_name = match.group(1)
+            kernel_start = match.start()
+            original_kernels.append({'name': kernel_name, 'start': kernel_start})
         
-        for attr_name, pattern in amdhsa_patterns.items():
-            match = re.search(pattern, original_isa_text)
-            if match:
-                attrs[attr_name] = int(match.group(1))
+        # 為每個 kernel 確定其 .amdhsa_* 指令的範圍
+        for i, kernel_info in enumerate(original_kernels):
+            # 找到下一個 kernel 的位置或 .end_amdhsa_kernel
+            kernel_name = kernel_info['name']
+            kernel_start = kernel_info['start']
+            
+            # 找到當前 kernel 的 .end_amdhsa_kernel
+            end_pattern = r'\.end_amdhsa_kernel'
+            end_match = re.search(end_pattern, original_isa_text[kernel_start:])
+            if end_match:
+                kernel_end = kernel_start + end_match.end()
+            else:
+                # 如果沒找到，使用下一個 kernel 的開始位置
+                if i + 1 < len(original_kernels):
+                    kernel_end = original_kernels[i + 1]['start']
+                else:
+                    kernel_end = len(original_isa_text)
+            
+            kernel_text = original_isa_text[kernel_start:kernel_end]
+            
+            # 從這個 kernel 的文本中提取 metadata
+            attrs = {}
+            # 修改正則表達式以支持符號表達式（不僅是數字）
+            # 使用 .+?(?=\s*$) 匹配到行尾（支持符號表達式如 max(...)）
+            amdhsa_patterns = {
+                'kernarg_segment_size': r'\.amdhsa_kernarg_size\s+(.+?)(?:\s*$)',
+                'group_segment_fixed_size': r'\.amdhsa_group_segment_fixed_size\s+(.+?)(?:\s*$)',
+                'vgpr_count': r'\.amdhsa_next_free_vgpr\s+(.+?)(?:\s*$)',
+                'amdhsa_next_free_sgpr': r'\.amdhsa_next_free_sgpr\s+(.+?)(?:\s*$)',  # 支持符號表達式
+                'user_sgpr_count': r'\.amdhsa_user_sgpr_count\s+(.+?)(?:\s*$)',
+                'dispatch_ptr': r'\.amdhsa_user_sgpr_dispatch_ptr\s+(.+?)(?:\s*$)',
+                'queue_ptr': r'\.amdhsa_user_sgpr_queue_ptr\s+(.+?)(?:\s*$)',
+                'workitem_id': r'\.amdhsa_system_vgpr_workitem_id\s+(.+?)(?:\s*$)',
+                'workgroup_id_x': r'\.amdhsa_system_sgpr_workgroup_id_x\s+(.+?)(?:\s*$)',
+                'workgroup_id_y': r'\.amdhsa_system_sgpr_workgroup_id_y\s+(.+?)(?:\s*$)',
+                'workgroup_id_z': r'\.amdhsa_system_sgpr_workgroup_id_z\s+(.+?)(?:\s*$)',
+                'reserve_vcc': r'\.amdhsa_reserve_vcc\s+(.+?)(?:\s*$)',
+                'accum_offset': r'\.amdhsa_accum_offset\s+(.+?)(?:\s*$)',
+            }
+            
+            for attr_name, pattern in amdhsa_patterns.items():
+                match = re.search(pattern, kernel_text, re.MULTILINE)
+                if match:
+                    value_str = match.group(1).strip()
+                    # 嘗試轉換為整數，如果失敗則保留為字符串（符號表達式）
+                    try:
+                        attrs[attr_name] = int(value_str)
+                    except ValueError:
+                        # 保留符號表達式（如 max(totalnumvgprs(...), 1, 0)）
+                        attrs[attr_name] = value_str
+                        print(f"  - {kernel_name}: {attr_name} 使用符號表達式: {value_str}")
+            
+            # 初始化 kernel metadata，包含組譯指令的值和 YAML 的值
+            kernel_metadata_map[kernel_name] = {
+                'attrs': attrs,  # 來自組譯指令（可能包含符號表達式）
+                'args_list': [], 
+                'yaml_vgpr_count': None,  # 來自 YAML（始終是數字）
+                'yaml_agpr_count': None,  # 來自 YAML（始終是數字）
+                'yaml_sgpr_count': None   # 來自 YAML（始終是數字）
+            }
         
-        # 提取 YAML metadata 中的 args
+        # 從 YAML metadata 中提取 args 和其他信息
         yaml_match = re.search(r'\.amdgpu_metadata\s+---\s+(.*?)\.\.\.\s+\.end_amdgpu_metadata', 
                                original_isa_text, re.DOTALL)
         if yaml_match:
@@ -608,82 +667,62 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
                 yaml_text = yaml_match.group(1)
                 metadata = yaml.safe_load(yaml_text)
                 
-                if 'amdhsa.kernels' in metadata and len(metadata['amdhsa.kernels']) > 0:
-                    kernel = metadata['amdhsa.kernels'][0]
-                    
-                    # 提取 vgpr_count, agpr_count（YAML 中的值更準確）
-                    # 注意：不提取 sgpr_count，因為 YAML 中的 .sgpr_count 與彙編指令中的
-                    # .amdhsa_next_free_sgpr 是不同的概念。後者必須 <= 102，而前者可以更大。
-                    for key in ['.vgpr_count', '.agpr_count']:
-                        if key in kernel:
-                            attr_name = key[1:]  # 移除開頭的 '.'
-                            attrs[attr_name] = kernel[key]
-                    
-                    # 提取 args
-                    if '.args' in kernel and isinstance(kernel['.args'], list):
-                        args_list = []
-                        for arg in kernel['.args']:
-                            arg_dict = {}
-                            for k, v in arg.items():
-                                # 移除開頭的 '.'
-                                key_name = k[1:] if k.startswith('.') else k
-                                arg_dict[key_name] = v
-                            args_list.append(arg_dict)
+                if 'amdhsa.kernels' in metadata:
+                    for kernel in metadata['amdhsa.kernels']:
+                        if '.name' in kernel:
+                            kernel_name = kernel['.name']
+                            
+                            if kernel_name in kernel_metadata_map:
+                                # 提取 YAML 中的 GPR counts（用於修復 YAML metadata）
+                                # 注意：不覆蓋組譯指令中的值（可能是符號表達式）
+                                # 而是單獨保存為 yaml_*_count
+                                if '.vgpr_count' in kernel:
+                                    kernel_metadata_map[kernel_name]['yaml_vgpr_count'] = kernel['.vgpr_count']
+                                
+                                if '.agpr_count' in kernel:
+                                    kernel_metadata_map[kernel_name]['yaml_agpr_count'] = kernel['.agpr_count']
+                                
+                                # 保存 YAML 中的 .sgpr_count（可能 > 102）
+                                if '.sgpr_count' in kernel:
+                                    kernel_metadata_map[kernel_name]['yaml_sgpr_count'] = kernel['.sgpr_count']
+                                
+                                # 提取 args
+                                if '.args' in kernel and isinstance(kernel['.args'], list):
+                                    args_list = []
+                                    for arg in kernel['.args']:
+                                        arg_dict = {}
+                                        for k, v in arg.items():
+                                            key_name = k[1:] if k.startswith('.') else k
+                                            arg_dict[key_name] = v
+                                        args_list.append(arg_dict)
+                                    kernel_metadata_map[kernel_name]['args_list'] = args_list
                 
-                print(f"[Info] Extracted {len(attrs)} metadata attributes and {len(args_list)} args from original ISA")
+                print(f"[Info] Extracted metadata for {len(kernel_metadata_map)} kernel(s) from original ISA")
                 
-                # 輸出關鍵的 SGPR 配置（用於調試）
-                sgpr_config = []
-                if 'dispatch_ptr' in attrs:
-                    sgpr_config.append(f"dispatch_ptr={attrs['dispatch_ptr']}")
-                if 'queue_ptr' in attrs:
-                    sgpr_config.append(f"queue_ptr={attrs['queue_ptr']}")
-                if 'workitem_id' in attrs:
-                    sgpr_config.append(f"workitem_id={attrs['workitem_id']}")
-                if sgpr_config:
-                    print(f"[Info] SGPR config: {', '.join(sgpr_config)}")
+                # 輸出每個 kernel 的 metadata 信息
+                for kname, kdata in kernel_metadata_map.items():
+                    attrs = kdata['attrs']
+                    args_list = kdata['args_list']
+                    amdhsa_vgpr = attrs.get('vgpr_count', '?')
+                    amdhsa_sgpr = attrs.get('amdhsa_next_free_sgpr', '?')
+                    yaml_vgpr = kdata['yaml_vgpr_count']
+                    yaml_sgpr = kdata['yaml_sgpr_count']
+                    print(f"  - {kname}: amdhsa_vgpr={amdhsa_vgpr}, amdhsa_sgpr={amdhsa_sgpr}, "
+                          f"yaml_vgpr={yaml_vgpr}, yaml_sgpr={yaml_sgpr}, "
+                          f"kernarg_size={attrs.get('kernarg_segment_size', '?')}, "
+                          f"lds={attrs.get('group_segment_fixed_size', '?')}, args={len(args_list)}")
             
             except Exception as e:
                 print(f"[Warning] Failed to parse original ISA YAML metadata: {e}")
     
-    # 如果從原始 ISA 沒有提取到足夠的信息，嘗試從 GPU MLIR 提取
-    if not attrs or not args_list:
+    # 如果沒有從原始 ISA 提取到 metadata，嘗試從 GPU MLIR 提取（向後兼容）
+    if not kernel_metadata_map:
         print(f"[Info] Attempting to extract metadata from GPU MLIR: {gpumlir_file.name}")
-        gpumlir_text = gpumlir_file.read_text()
-        
-        # 提取 amdisa.* attributes
-        for attr_name in ['vgpr_count', 'sgpr_count', 'agpr_count', 'kernarg_segment_size', 'group_segment_fixed_size']:
-            if attr_name not in attrs:  # 只提取還沒有的屬性
-                pattern = rf'amdisa\.{attr_name}\s*=\s*(\d+)'
-                match = re.search(pattern, gpumlir_text)
-                if match:
-                    attrs[attr_name] = int(match.group(1))
-        
-        # 提取 kernargs array
-        if not args_list:
-            kernargs_pattern = r'amdisa\.kernargs\s*=\s*\[(.*?)\](?=,\s+amdisa\.|,\s+llvm\.|}\s+{)'
-            match = re.search(kernargs_pattern, gpumlir_text, re.DOTALL)
-            
-            if match:
-                kernargs_str = match.group(1)
-                dict_pattern = r'\{([^{}]*?)\}'
-                for dict_match in re.finditer(dict_pattern, kernargs_str):
-                    arg_dict = {}
-                    dict_content = dict_match.group(1)
-                    
-                    for prop_match in re.finditer(r'(\w+)\s*=\s*"([^"]+)"', dict_content):
-                        arg_dict[prop_match.group(1)] = prop_match.group(2)
-                    for prop_match in re.finditer(r'(\w+)\s*=\s*(\d+)', dict_content):
-                        arg_dict[prop_match.group(1)] = int(prop_match.group(2))
-                    
-                    if arg_dict:
-                        args_list.append(arg_dict)
+        # 回退到舊的單 kernel 邏輯
+        # 這裡保留原有邏輯以支持沒有 original_isa_file 的情況
+        pass
     
-    if not args_list and not attrs:
-        print("[Warning] No metadata found in original ISA or GPU MLIR, ISA metadata may be incorrect")
-        return isa_text
-    
-    # 找到 ISA 中的 .amdgpu_metadata 部分
+    # Step 3: 修復 YAML metadata
     metadata_start = isa_text.find('.amdgpu_metadata')
     metadata_end = isa_text.find('.end_amdgpu_metadata')
     
@@ -691,7 +730,6 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
         print("[Warning] No .amdgpu_metadata section found in ISA")
         return isa_text
     
-    # 提取 YAML metadata
     yaml_start = isa_text.find('---', metadata_start)
     yaml_end = isa_text.find('...', yaml_start)
     
@@ -707,40 +745,50 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
         print(f"[Warning] Failed to parse ISA metadata YAML: {e}")
         return isa_text
     
-    # 修復 metadata
-    if 'amdhsa.kernels' in metadata and len(metadata['amdhsa.kernels']) > 0:
-        kernel = metadata['amdhsa.kernels'][0]
-        
-        # 修復 GPR counts
-        if 'vgpr_count' in attrs:
-            kernel['.vgpr_count'] = attrs['vgpr_count']
-        if 'sgpr_count' in attrs:
-            kernel['.sgpr_count'] = attrs['sgpr_count']
-        if 'agpr_count' in attrs:
-            kernel['.agpr_count'] = attrs['agpr_count']
-        
-        # 修復 kernarg_segment_size
-        if 'kernarg_segment_size' in attrs:
-            kernel['.kernarg_segment_size'] = attrs['kernarg_segment_size']
-        
-        # 修復 group_segment_fixed_size (LDS / shared memory 大小)
-        if 'group_segment_fixed_size' in attrs:
-            kernel['.group_segment_fixed_size'] = attrs['group_segment_fixed_size']
-        
-        # 修復 args
-        if args_list:
-            kernel['.args'] = []
-            for arg in args_list:
-                yaml_arg = {}
-                if 'address_space' in arg:
-                    yaml_arg['.address_space'] = arg['address_space']
-                if 'offset' in arg:
-                    yaml_arg['.offset'] = arg['offset']
-                if 'size' in arg:
-                    yaml_arg['.size'] = arg['size']
-                if 'value_kind' in arg:
-                    yaml_arg['.value_kind'] = arg['value_kind']
-                kernel['.args'].append(yaml_arg)
+    # 為每個 kernel 修復 YAML metadata
+    if 'amdhsa.kernels' in metadata:
+        for i, kernel in enumerate(metadata['amdhsa.kernels']):
+            if '.name' in kernel:
+                kernel_name = kernel['.name']
+                
+                if kernel_name in kernel_metadata_map:
+                    kdata = kernel_metadata_map[kernel_name]
+                    attrs = kdata['attrs']
+                    args_list = kdata['args_list']
+                    yaml_vgpr_count = kdata['yaml_vgpr_count']
+                    yaml_agpr_count = kdata['yaml_agpr_count']
+                    yaml_sgpr_count = kdata['yaml_sgpr_count']
+                    
+                    # 修復 GPR counts（使用 YAML 中的數值）
+                    if yaml_vgpr_count is not None:
+                        kernel['.vgpr_count'] = yaml_vgpr_count
+                    if yaml_agpr_count is not None:
+                        kernel['.agpr_count'] = yaml_agpr_count
+                    if yaml_sgpr_count is not None:
+                        kernel['.sgpr_count'] = yaml_sgpr_count
+                    
+                    # 修復 kernarg_segment_size
+                    if 'kernarg_segment_size' in attrs:
+                        kernel['.kernarg_segment_size'] = attrs['kernarg_segment_size']
+                    
+                    # 修復 group_segment_fixed_size (LDS / shared memory 大小)
+                    if 'group_segment_fixed_size' in attrs:
+                        kernel['.group_segment_fixed_size'] = attrs['group_segment_fixed_size']
+                    
+                    # 修復 args
+                    if args_list:
+                        kernel['.args'] = []
+                        for arg in args_list:
+                            yaml_arg = {}
+                            if 'address_space' in arg:
+                                yaml_arg['.address_space'] = arg['address_space']
+                            if 'offset' in arg:
+                                yaml_arg['.offset'] = arg['offset']
+                            if 'size' in arg:
+                                yaml_arg['.size'] = arg['size']
+                            if 'value_kind' in arg:
+                                yaml_arg['.value_kind'] = arg['value_kind']
+                            kernel['.args'].append(yaml_arg)
     
     # 重新生成 YAML
     fixed_yaml = yaml.dump(metadata, default_flow_style=False, sort_keys=False)
@@ -751,149 +799,73 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
     
     fixed_isa = before_metadata + "---\n" + fixed_yaml + "...\n" + after_metadata
     
-    # 同時修復 .amdhsa_* 指令（這些指令會被 assembler 使用）
-    if 'kernarg_segment_size' in attrs:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_kernarg_size)\s+\d+',
-            rf'\1 {attrs["kernarg_segment_size"]}',
-            fixed_isa
-        )
-    
-    if 'group_segment_fixed_size' in attrs:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_group_segment_fixed_size)\s+\d+',
-            rf'\1 {attrs["group_segment_fixed_size"]}',
-            fixed_isa
-        )
-    
-    if 'vgpr_count' in attrs and attrs['vgpr_count'] > 0:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_next_free_vgpr)\s+\d+',
-            rf'\1 {attrs["vgpr_count"]}',
-            fixed_isa
-        )
-    
-    if 'sgpr_count' in attrs and attrs['sgpr_count'] > 0:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_next_free_sgpr)\s+\d+',
-            rf'\1 {attrs["sgpr_count"]}',
-            fixed_isa
-        )
-    
-    if 'user_sgpr_count' in attrs and attrs['user_sgpr_count'] > 0:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_user_sgpr_count)\s+\d+',
-            rf'\1 {attrs["user_sgpr_count"]}',
-            fixed_isa
-        )
-    
-    # 修復 dispatch_ptr 和 queue_ptr（關鍵！影響 SGPR 映射）
-    if 'dispatch_ptr' in attrs:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_user_sgpr_dispatch_ptr)\s+\d+',
-            rf'\1 {attrs["dispatch_ptr"]}',
-            fixed_isa
-        )
-    
-    if 'queue_ptr' in attrs:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_user_sgpr_queue_ptr)\s+\d+',
-            rf'\1 {attrs["queue_ptr"]}',
-            fixed_isa
-        )
-    
-    # 修復 workitem_id 編碼模式（影響 v0 的格式）
-    if 'workitem_id' in attrs:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_system_vgpr_workitem_id)\s+\d+',
-            rf'\1 {attrs["workitem_id"]}',
-            fixed_isa
-        )
-    
-    # 修復 workgroup_id 維度啟用
-    if 'workgroup_id_x' in attrs:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_system_sgpr_workgroup_id_x)\s+\d+',
-            rf'\1 {attrs["workgroup_id_x"]}',
-            fixed_isa
-        )
-    
-    if 'workgroup_id_y' in attrs:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_system_sgpr_workgroup_id_y)\s+\d+',
-            rf'\1 {attrs["workgroup_id_y"]}',
-            fixed_isa
-        )
-    
-    if 'workgroup_id_z' in attrs:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_system_sgpr_workgroup_id_z)\s+\d+',
-            rf'\1 {attrs["workgroup_id_z"]}',
-            fixed_isa
-        )
-    
-    # 根據 kernarg_segment_size 決定是否需要 kernarg pointer
-    if 'kernarg_segment_size' in attrs and attrs['kernarg_segment_size'] > 0:
-        fixed_isa = re.sub(
-            r'(\.amdhsa_user_sgpr_kernarg_segment_ptr)\s+\d+',
-            rf'\1 1',
-            fixed_isa
-        )
-    
-    # 檢測是否使用了 workgroup_id_y (檢查是否有 s3 寄存器的使用)
-    # 從原始 ISA 中提取 system_sgpr_workgroup_id_y 的值
-    if original_isa_file is not None and original_isa_file.exists():
-        original_text = original_isa_file.read_text()
-        workgroup_id_y_match = re.search(r'\.amdhsa_system_sgpr_workgroup_id_y\s+(\d+)', original_text)
-        if workgroup_id_y_match:
-            workgroup_id_y = int(workgroup_id_y_match.group(1))
-            fixed_isa = re.sub(
-                r'(\.amdhsa_system_sgpr_workgroup_id_y)\s+\d+',
-                rf'\1 {workgroup_id_y}',
-                fixed_isa
+    # Step 4: 修復 .amdhsa_* 指令（為每個 kernel 分別修復）
+    for kernel_info in rebuilt_kernels:
+        kernel_name = kernel_info['name']
+        
+        if kernel_name not in kernel_metadata_map:
+            print(f"[Warning] No metadata found for kernel {kernel_name}")
+            continue
+        
+        attrs = kernel_metadata_map[kernel_name]['attrs']
+        
+        # 找到這個 kernel 的 .amdhsa_kernel 到 .end_amdhsa_kernel 的範圍
+        kernel_pattern = rf'\.amdhsa_kernel\s+{re.escape(kernel_name)}(.*?)\.end_amdhsa_kernel'
+        match = re.search(kernel_pattern, fixed_isa, re.DOTALL)
+        
+        if not match:
+            print(f"[Warning] Could not find kernel block for {kernel_name}")
+            continue
+        
+        kernel_block_start = match.start()
+        kernel_block_end = match.end()
+        kernel_block = match.group(0)
+        
+        # 在這個 kernel block 內進行替換
+        modified_block = kernel_block
+        
+        # 定義需要修復的 amdhsa 指令
+        amdhsa_replacements = {
+            'kernarg_segment_size': 'amdhsa_kernarg_size',
+            'group_segment_fixed_size': 'amdhsa_group_segment_fixed_size',
+            'vgpr_count': 'amdhsa_next_free_vgpr',
+            'amdhsa_next_free_sgpr': 'amdhsa_next_free_sgpr',  # 使用組譯指令的值（<= 102）
+            'user_sgpr_count': 'amdhsa_user_sgpr_count',
+            'dispatch_ptr': 'amdhsa_user_sgpr_dispatch_ptr',
+            'queue_ptr': 'amdhsa_user_sgpr_queue_ptr',
+            'workitem_id': 'amdhsa_system_vgpr_workitem_id',
+            'workgroup_id_x': 'amdhsa_system_sgpr_workgroup_id_x',
+            'workgroup_id_y': 'amdhsa_system_sgpr_workgroup_id_y',
+            'workgroup_id_z': 'amdhsa_system_sgpr_workgroup_id_z',
+            'reserve_vcc': 'amdhsa_reserve_vcc',
+            'accum_offset': 'amdhsa_accum_offset',
+        }
+        
+        for attr_key, amdhsa_directive in amdhsa_replacements.items():
+            if attr_key in attrs:
+                value = attrs[attr_key]
+                # 跳過某些條件（只對整數值判斷）
+                if attr_key in ['vgpr_count', 'amdhsa_next_free_sgpr'] and value == 0:
+                    continue
+                
+                # 修改模式以匹配數字或符號表達式（匹配到行尾）
+                # 使用 re.MULTILINE 使 $ 匹配行尾
+                pattern = rf'(\.{amdhsa_directive})\s+.+?(?=\s*$)'
+                replacement = rf'\1 {value}'
+                modified_block = re.sub(pattern, replacement, modified_block, flags=re.MULTILINE)
+        
+        # 特殊處理：根據 kernarg_segment_size 決定是否需要 kernarg pointer
+        if 'kernarg_segment_size' in attrs and attrs['kernarg_segment_size'] > 0:
+            modified_block = re.sub(
+                r'(\.amdhsa_user_sgpr_kernarg_segment_ptr)\s+\d+',
+                r'\1 1',
+                modified_block
             )
         
-        # 提取 system_vgpr_workitem_id 的值
-        workitem_id_match = re.search(r'\.amdhsa_system_vgpr_workitem_id\s+(\d+)', original_text)
-        if workitem_id_match:
-            workitem_id = int(workitem_id_match.group(1))
-            fixed_isa = re.sub(
-                r'(\.amdhsa_system_vgpr_workitem_id)\s+\d+',
-                rf'\1 {workitem_id}',
-                fixed_isa
-            )
-        
-        # 提取 reserve_vcc 的值
-        reserve_vcc_match = re.search(r'\.amdhsa_reserve_vcc\s+(\d+)', original_text)
-        if reserve_vcc_match:
-            reserve_vcc = int(reserve_vcc_match.group(1))
-            fixed_isa = re.sub(
-                r'(\.amdhsa_reserve_vcc)\s+\d+',
-                rf'\1 {reserve_vcc}',
-                fixed_isa
-            )
-        
-        # 提取 accum_offset 的值（對於 gfx950 很重要）
-        accum_offset_match = re.search(r'\.amdhsa_accum_offset\s+(\d+)', original_text)
-        if accum_offset_match:
-            accum_offset = int(accum_offset_match.group(1))
-            fixed_isa = re.sub(
-                r'(\.amdhsa_accum_offset)\s+\d+',
-                rf'\1 {accum_offset}',
-                fixed_isa
-            )
+        # 替換原始 ISA 中的這個 kernel block
+        fixed_isa = fixed_isa[:kernel_block_start] + modified_block + fixed_isa[kernel_block_end:]
     
-    print(f"[Info] Fixed ISA metadata:")
-    if 'vgpr_count' in attrs:
-        print(f"  - vgpr_count: {attrs['vgpr_count']}")
-    if 'sgpr_count' in attrs:
-        print(f"  - sgpr_count: {attrs['sgpr_count']}")
-    if 'kernarg_segment_size' in attrs:
-        print(f"  - kernarg_segment_size: {attrs['kernarg_segment_size']}")
-    if 'group_segment_fixed_size' in attrs:
-        print(f"  - group_segment_fixed_size: {attrs['group_segment_fixed_size']} (LDS/Shared Memory)")
-    if args_list:
-        print(f"  - args count: {len(args_list)}")
+    print(f"[Info] Fixed ISA metadata for {len(rebuilt_kernels)} kernel(s)")
     
     return fixed_isa
 

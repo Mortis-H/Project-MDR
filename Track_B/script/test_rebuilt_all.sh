@@ -264,10 +264,11 @@ test_kernel() {
     echo ""
     
     # 執行測試
+    # relink_and_compare.sh 使用位置參數：<原始執行檔> <host.o> <rebuilt.hsaco> [測試參數...]
     if [ -n "$test_args" ]; then
-        "$RELINK_SCRIPT" -p "$original_exe" -H "$host_obj" -G "$rebuilt_hsaco" -a "$test_args"
+        "$RELINK_SCRIPT" "$original_exe" "$host_obj" "$rebuilt_hsaco" $test_args
     else
-        "$RELINK_SCRIPT" -p "$original_exe" -H "$host_obj" -G "$rebuilt_hsaco"
+        "$RELINK_SCRIPT" "$original_exe" "$host_obj" "$rebuilt_hsaco"
     fi
     
     local test_result=$?
