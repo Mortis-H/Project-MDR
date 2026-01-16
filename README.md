@@ -20,8 +20,11 @@
 ### 環境設置
 
 ```bash
-export PATH="/home/morhuang/Project-MDR/Track_B/amdisa-toolkit/build/bin:/home/morhuang/llvm-project/build/bin:$PATH"
-cd /home/morhuang/Project-MDR
+# 設定 LLVM 和 amdisa-translate 路徑
+export PATH="<PROJECT_DIR>/Track_B/amdisa-toolkit/build/bin:<LLVM_BUILD_DIR>/bin:$PATH"
+
+# 進入專案目錄
+cd <PROJECT_DIR>
 ```
 
 ### 基本用法
