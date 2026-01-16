@@ -1,0 +1,62 @@
+module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "amdgcn-amd-amdhsa--gfx950"} {
+  gpu.module @amdisa_kernels {
+    gpu.func @_Z9vectorAddPKfS0_Pfi(%arg0: !llvm.ptr, %arg1: !llvm.ptr, %arg2: !llvm.ptr, %arg3: index) kernel attributes {amdisa.agpr_count = 0 : i32, amdisa.kernarg_segment_size = 288 : i32, amdisa.sgpr_count = 14 : i32, amdisa.vgpr_count = 8 : i32} {
+              // === Register Clobbering Start ===
+              // Save kernarg pointer for printf (to s[18:19])
+              llvm.inline_asm has_side_effects "s_mov_b64 s[18:19], s[0:1]", ""  : () -> ()
+              // Protecting 8 VGPRs
+              %reserved_vgpr_0 = llvm.inline_asm has_side_effects asm_dialect = att "", "={v[0:7]}": () -> vector<8xi32>
+              // Protecting 16 SGPRs (s[4:19])
+              %reserved_sgpr_0 = llvm.inline_asm has_side_effects asm_dialect = att "", "={s[4:19]}": () -> vector<16xi32>
+              // === End Clobbering Start ===
+
+      llvm.inline_asm has_side_effects "\09s_load_dword s3, s[0:1], 0x2c", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_load_dword s4, s[0:1], 0x18", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_waitcnt lgkmcnt(0)", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_and_b32 s3, s3, 0xffff", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_mul_i32 s2, s2, s3", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_add_u32_e32 v0, s2, v0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_cmp_gt_i32_e32 vcc, s4, v0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_and_saveexec_b64 s[2:3], vcc", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_cbranch_execz .LBB0_2", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_load_dwordx4 s[4:7], s[0:1], 0x0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_load_dwordx2 s[2:3], s[0:1], 0x10", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_ashrrev_i32_e32 v1, 31, v0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_lshlrev_b64 v[0:1], 2, v[0:1]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_waitcnt lgkmcnt(0)", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[4:5], s[4:5], 0, v[0:1]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[2:3], s[6:7], 0, v[0:1]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09global_load_dword v6, v[4:5], off      ; \E8\BC\89\E5\85\A5 A[tid]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09global_load_dword v7, v[2:3], off      ; \E8\BC\89\E5\85\A5 B[tid]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_waitcnt vmcnt(0)", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_add_f32_e32 v2, v6, v7               ; C = A + B", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09global_store_dword v[0:1], v2, off", ""  : () -> ()
+              // Restore kernarg pointer for printf (from s[18:19])
+              llvm.inline_asm has_side_effects "s_mov_b64 s[0:1], s[18:19]", ""  : () -> ()
+              // === @PRINT from line 31 ===
+              %print_val_0_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v6", "=v": () -> f32
+              %print_val_0_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v7", "=v": () -> f32
+              // Expression: v6*v7
+              %expr_0_0_reg_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v6", "=v": () -> f32
+              %expr_0_0_reg_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v7", "=v": () -> f32
+              %expr_0_0_tmp_2 = arith.mulf %expr_0_0_reg_0, %expr_0_0_reg_1 : f32
+              %tid_x_0 = gpu.thread_id x
+              %cmp_val_0 = arith.constant 0 : index
+              %cond_0 = arith.cmpi eq, %tid_x_0, %cmp_val_0 : index
+              scf.if %cond_0 {
+                gpu.printf "A=%f, B=%f, A*B=%f\0A", %print_val_0_0, %print_val_0_1, %expr_0_0_tmp_2 : f32, f32, f32
+              }
+              // === End @PRINT ===
+              // === Register Clobbering End ===
+              llvm.inline_asm has_side_effects asm_dialect = att "", "{v[0:7]}" %reserved_vgpr_0 : (vector<8xi32>)-> ()
+              llvm.inline_asm has_side_effects asm_dialect = att "", "{s[4:19]}" %reserved_sgpr_0 : (vector<16xi32>)-> ()
+              // === End Clobbering End ===
+
+      llvm.inline_asm has_side_effects ".LBB0_2:", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_endpgm", ""  : () -> ()
+      gpu.return
+    }
+  }
+}
+
