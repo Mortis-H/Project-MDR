@@ -117,16 +117,60 @@ python3 mdr_printf.py input.s --output-dir output
 |------|------|------|
 | **@PRINT 數量** | 每個 kernel 建議 1-2 個 | 超過 3 個可能影響程式執行 |
 | **暫存器類型** | 僅支援 VGPR（v0, v1, ...） | SGPR 印出尚不支援 |
-| **s_barrier 衝突** | shared memory kernel 可能卡住 | 使用 `--no-printf` 或 `cond=tid_eq(0)` |
+| **s_barrier 衝突** | 有 s_barrier 的 kernel 無法使用 printf | 使用 `--no-printf` 做功能驗證 |
 
 ### ❌ 不支援的功能
 
 | 功能 | 原因 |
 |------|------|
+| **有 s_barrier 的 kernel** | gpu.printf hostcall 機制衝突 |
 | SGPR 直接印出 | MLIR 轉換限制 |
 | AGPR 直接印出 | 需要額外指令 |
 | 複雜的控制流 | scf.if 與 EXEC mask 衝突 |
 | 無條件的多 thread 印出 | register pressure |
+
+### 🔴 s_barrier 與 printf 的已知問題
+
+**⚠️ 重要：有 `s_barrier` 的 kernel 目前無法使用 printf 功能**
+
+經過測試驗證，即使使用 `cond=tid_eq(0)` 限制單一 thread 執行 printf，仍會導致 **illegal memory access** 錯誤。
+
+#### 測試結果
+
+| 測試案例 | s_barrier | shared memory | printf 結果 |
+|----------|:---------:|:-------------:|:-----------:|
+| test_01 (vector_add) | ❌ | ❌ | ✅ 正常 |
+| barrier_only | ✅ | ❌ | ❌ illegal memory access |
+| test_06 (shared_mem) | ✅ | ✅ | ❌ illegal memory access |
+
+#### 初步分析：可能原因
+
+1. **hostcall buffer 與 barrier 的時序衝突**
+   - `gpu.printf` 使用 hostcall 機制，需要 GPU 與 host 之間的通訊
+   - `s_barrier` 要求 workgroup 內所有 thread 同步
+   - 當 thread 在等待 hostcall 回應時，可能破壞 barrier 的同步語義
+
+2. **EXEC mask 與 divergent control flow**
+   - printf 注入的 `scf.if`（條件執行）會修改 EXEC mask
+   - 這可能影響 barrier 之後的 wavefront 執行狀態
+
+3. **記憶體存取模式改變**
+   - printf 需要存取 hostcall buffer（在 kernarg 區域）
+   - 這可能與 barrier 同步的記憶體模型有衝突
+
+#### 解決方案
+
+對於有 `s_barrier` 的 kernel，請使用 `--no-printf` 選項進行功能驗證：
+
+```bash
+# 有 s_barrier 的 kernel：使用 --no-printf
+python3 mdr_printf.py kernel_with_barrier.s --output-dir output --no-printf
+```
+
+**工具會自動偵測 s_barrier 並給出警告：**
+- 🔴 **DANGER**: @PRINT 沒有使用 `cond=tid_eq(0)`，極可能 deadlock
+- 🟡 **WARNING**: 即使有 `cond=tid_eq(0)`，仍可能有 illegal memory access
+- 💡 **建議**: 有 s_barrier 的 kernel 請使用 `--no-printf`
 
 ---
 
@@ -232,10 +276,10 @@ python3 mdr_printf.py input.s [選項]
 | test_03_memory_ops | int_mem | ✅ | ✅ | ✅ |
 | test_04_conditional | int_cond | ✅ | ✅ | ✅ |
 | test_05_loop | int_loop | ✅ | ✅ | ✅ |
-| test_06_shared_memory | int_shared | ⚠️ | - | ⏱️* |
+| test_06_shared_memory | int_shared | ❌* | - | ❌* |
 | test_07_multi_kernels | multi | ✅ | - | ✅ |
 
-*test_06 因 s_barrier 衝突可能超時，但 printf 輸出正常
+*test_06 含有 s_barrier，printf 會導致 illegal memory access，請使用 `--no-printf` 做功能驗證
 
 ---
 
