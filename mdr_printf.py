@@ -155,30 +155,23 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     )
 
 
-@dataclass
-class BarrierInfo:
-    """s_barrier 指令的位置信息"""
-    line_number: int
-    line_content: str
-
-
-def parse_asm_file(asm_path: pathlib.Path) -> Tuple[List[str], List[PrintDirective], List[BarrierInfo]]:
+def parse_asm_file(asm_path: pathlib.Path) -> Tuple[List[str], List[PrintDirective], bool]:
     """
-    解析 .s 檔案，提取 @PRINT 指令和 s_barrier 位置
+    解析 .s 檔案，提取 @PRINT 指令
     
     對於每個 @PRINT，找到它之後的第一條非註解 ISA 指令，作為插入點的參考
     
     Returns:
-        (lines, print_directives, barriers): 原始行列表、解析出的 @PRINT 指令、s_barrier 位置列表
+        (lines, print_directives, has_barrier): 原始行列表、解析出的 @PRINT 指令、是否有 s_barrier
     """
     lines = asm_path.read_text().split('\n')
     directives = []
-    barriers = []
+    has_barrier = False
     
     for i, line in enumerate(lines):
         # 檢測 s_barrier 指令
         if 's_barrier' in line and not line.strip().startswith(';'):
-            barriers.append(BarrierInfo(line_number=i, line_content=line.strip()))
+            has_barrier = True
         
         if '@PRINT' in line:
             directive = parse_print_directive(line, i)
@@ -197,125 +190,7 @@ def parse_asm_file(asm_path: pathlib.Path) -> Tuple[List[str], List[PrintDirecti
                     instr_preview = directive.next_instruction[:50]
                     print(f"       After: {instr_preview}...")
     
-    return lines, directives, barriers
-
-
-def analyze_barrier_safety(directives: List[PrintDirective], barriers: List[BarrierInfo]) -> Dict:
-    """
-    分析 @PRINT 與 s_barrier 的關係，評估安全性
-    
-    Returns:
-        Dict with:
-        - has_barriers: 是否有 s_barrier
-        - unsafe_prints: 沒有使用單 thread 條件的 @PRINT 列表
-        - prints_before_barrier: 在 barrier 之前的 @PRINT
-        - prints_after_barrier: 在 barrier 之後的 @PRINT
-        - safety_level: 'safe', 'warning', 'danger'
-    """
-    result = {
-        'has_barriers': len(barriers) > 0,
-        'barrier_count': len(barriers),
-        'barrier_lines': [b.line_number for b in barriers],
-        'unsafe_prints': [],
-        'prints_before_barrier': [],
-        'prints_after_barrier': [],
-        'safety_level': 'safe'
-    }
-    
-    if not barriers:
-        return result
-    
-    first_barrier_line = min(b.line_number for b in barriers)
-    last_barrier_line = max(b.line_number for b in barriers)
-    
-    # 檢查每個 @PRINT
-    for d in directives:
-        # 檢查是否有單 thread 條件
-        is_single_thread = d.condition and 'tid_eq' in d.condition
-        
-        if not is_single_thread:
-            result['unsafe_prints'].append(d)
-        
-        # 檢查位置
-        if d.line_number < first_barrier_line:
-            result['prints_before_barrier'].append(d)
-        else:
-            result['prints_after_barrier'].append(d)
-    
-    # 評估安全等級
-    if result['unsafe_prints']:
-        result['safety_level'] = 'danger'
-    elif result['prints_before_barrier']:
-        result['safety_level'] = 'warning'
-    else:
-        result['safety_level'] = 'safe'
-    
-    return result
-
-
-def print_barrier_warning(analysis: Dict, directives: List[PrintDirective]):
-    """
-    根據分析結果印出適當的警告信息
-    """
-    if not analysis['has_barriers']:
-        return
-    
-    print("\n" + "=" * 70)
-    print("⚠️  BARRIER DETECTED: Kernel contains s_barrier instruction(s)")
-    print("=" * 70)
-    
-    # 說明問題
-    print("\n📋 問題說明:")
-    print("   s_barrier 需要 workgroup 內所有 thread 同步到達。")
-    print("   gpu.printf 使用 hostcall 機制，可能導致:")
-    print("   • 部分 thread 在 printf 時等待 host 回應")
-    print("   • 其他 thread 先到達 barrier 並等待")
-    print("   • 造成 deadlock（死鎖），kernel 永遠無法完成")
-    
-    # 顯示 barrier 位置
-    print(f"\n📍 偵測到 {analysis['barrier_count']} 個 s_barrier:")
-    for line_num in analysis['barrier_lines'][:5]:  # 最多顯示 5 個
-        print(f"   Line {line_num + 1}")
-    if analysis['barrier_count'] > 5:
-        print(f"   ... 還有 {analysis['barrier_count'] - 5} 個")
-    
-    # 根據安全等級給出建議
-    if analysis['safety_level'] == 'danger':
-        print("\n" + "🔴 " + "-" * 66)
-        print("🔴 DANGER: 偵測到不安全的 @PRINT 配置!")
-        print("🔴 " + "-" * 66)
-        print("\n   以下 @PRINT 沒有使用 cond=tid_eq(0)，極可能導致 deadlock:")
-        for d in analysis['unsafe_prints']:
-            print(f"   • Line {d.line_number + 1}: fmt=\"{d.format_string[:30]}...\"")
-        
-        print("\n   ✅ 建議修正方式:")
-        print("   將每個 @PRINT 加上 cond=tid_eq(0) 條件，例如:")
-        print("   ; @PRINT cond=tid_eq(0) fmt=\"value=%d\" reg=v0 type=i32")
-        
-    elif analysis['safety_level'] == 'warning':
-        print("\n" + "🟡 " + "-" * 66)
-        print("🟡 WARNING: @PRINT 位於 s_barrier 之前")
-        print("🟡 " + "-" * 66)
-        print("\n   這可能影響同步時機，建議:")
-        print("   1. 將 @PRINT 移到所有 s_barrier 之後")
-        print("   2. 或確保使用 cond=tid_eq(0) 限制為單一 thread")
-        
-    else:
-        print("\n" + "🟡 " + "-" * 66)
-        print("🟡 WARNING: 有 s_barrier，printf 可能導致 illegal memory access")
-        print("🟡 " + "-" * 66)
-        print("\n   即使使用 cond=tid_eq(0)，經測試仍可能導致 illegal memory access。")
-        print("   這是 gpu.printf 的 hostcall 機制與 s_barrier 同步語義的已知衝突。")
-        print("")
-        print("   💡 建議：對於有 s_barrier 的 kernel，請使用 --no-printf 做功能驗證")
-    
-    # 通用建議
-    print("\n💡 建議:")
-    print("   1. 【強烈建議】使用 --no-printf 進行功能驗證")
-    print("   2. 【已知問題】即使用 cond=tid_eq(0) 仍可能 illegal memory access")
-    print("   3. 【參考】詳見 README.md 中「s_barrier 與 printf 的已知問題」章節")
-    
-    print("\n" + "=" * 70 + "\n")
+    return lines, directives, has_barrier
 
 
 # ============================================================
@@ -1472,23 +1347,9 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
         'kernarg_segment_ptr': r'\.amdhsa_user_sgpr_kernarg_segment_ptr\s+(\d+)',  # 關鍵！
         'workitem_id': r'\.amdhsa_system_vgpr_workitem_id\s+(\d+)',
         'workgroup_id_x': r'\.amdhsa_system_sgpr_workgroup_id_x\s+(\d+)',
-        'next_free_vgpr': r'\.amdhsa_next_free_vgpr\s+(\d+)',
-        'next_free_sgpr': r'\.amdhsa_next_free_sgpr\s+(\d+)',
-    }
-    
-    # 從 YAML metadata 中提取 vgpr_count 和 sgpr_count
-    yaml_metadata_patterns = {
-        'vgpr_count': r'\.vgpr_count:\s*(\d+)',
-        'sgpr_count': r'\.sgpr_count:\s*(\d+)',
     }
     
     for attr_name, pattern in amdhsa_patterns.items():
-        match = re.search(pattern, original_isa_text)
-        if match:
-            attrs[attr_name] = int(match.group(1))
-    
-    # 提取 YAML metadata 中的 vgpr_count 和 sgpr_count
-    for attr_name, pattern in yaml_metadata_patterns.items():
         match = re.search(pattern, original_isa_text)
         if match:
             attrs[attr_name] = int(match.group(1))
@@ -1564,15 +1425,6 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
         if 'group_segment_fixed_size' in attrs:
             kernel['.group_segment_fixed_size'] = attrs['group_segment_fixed_size']
         
-        # 修復 vgpr_count 和 sgpr_count
-        # 當沒有 printf 時，使用原始 ISA 的值（MLIR pipeline 可能生成錯誤的值）
-        # 當有 printf 時，MLIR pipeline 的值應該是正確的（考慮了 printf 代碼）
-        if not has_printf:
-            if 'vgpr_count' in attrs:
-                kernel['.vgpr_count'] = attrs['vgpr_count']
-            if 'sgpr_count' in attrs:
-                kernel['.sgpr_count'] = attrs['sgpr_count']
-        
         # === 關鍵修復：合併 args ===
         if has_printf and original_non_hidden_args:
             # 有 printf：保留 MLIR pipeline 生成的 hidden 參數（特別是 hidden_hostcall_buffer）
@@ -1603,47 +1455,10 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
                     yaml_arg['.name'] = arg['name']
                 new_args.append(yaml_arg)
             
-            # 計算非 hidden 參數結束後的 offset（對齊到 8 字節）
-            max_non_hidden_end = 0
-            for arg in original_non_hidden_args:
-                arg_end = arg.get('offset', 0) + arg.get('size', 0)
-                max_non_hidden_end = max(max_non_hidden_end, arg_end)
-            
-            # 對齊到 8 字節邊界
-            hidden_base_offset = ((max_non_hidden_end + 7) // 8) * 8
-            
-            # 添加生成的 hidden 參數，修正 offset
-            hidden_args = gen_args[hidden_start_idx:]
-            max_hidden_end = hidden_base_offset
-            for hidden_arg in hidden_args:
-                # 複製參數並修正 offset
-                fixed_arg = dict(hidden_arg)
-                if '.offset' in fixed_arg:
-                    fixed_arg['.offset'] = fixed_arg['.offset'] + hidden_base_offset
-                    # 追蹤最大的 offset + size
-                    arg_end = fixed_arg['.offset'] + fixed_arg.get('.size', 0)
-                    max_hidden_end = max(max_hidden_end, arg_end)
-                new_args.append(fixed_arg)
+            # 添加生成的 hidden 參數（包含 hidden_hostcall_buffer）
+            new_args.extend(gen_args[hidden_start_idx:])
             
             kernel['.args'] = new_args
-            
-            # 【重要】kernarg_segment_size 必須正確計算
-            # 1. 從原始 ISA 取得基礎值
-            # 2. 因為加入了 printf (hidden_hostcall_buffer)，這個值必然會變大
-            original_kernarg_size = attrs.get('kernarg_segment_size', 0)
-            
-            # 計算新的 kernarg_segment_size：考慮所有 hidden args
-            calculated_size = ((max_hidden_end + 255) // 256) * 256
-            
-            # 安全檢查：加入 printf 後，kernarg_segment_size 必須 >= 原始值
-            if calculated_size < original_kernarg_size:
-                print(f"[Warning] Calculated kernarg_segment_size ({calculated_size}) < original ({original_kernarg_size})")
-                print(f"          Using original value to ensure compatibility")
-                calculated_size = original_kernarg_size
-            
-            kernel['.kernarg_segment_size'] = calculated_size
-            attrs['kernarg_segment_size'] = calculated_size
-            print(f"[Info] kernarg_segment_size: {original_kernarg_size} -> {calculated_size}")
             
             # 檢查是否有 hidden_hostcall_buffer
             has_hostcall = any(arg.get('.value_kind') == 'hidden_hostcall_buffer' for arg in new_args)
@@ -1674,17 +1489,11 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
     # 重新生成 YAML
     fixed_yaml = yaml.dump(gen_metadata, default_flow_style=False, sort_keys=False)
     
-    # 移除 yaml.dump 自動加上的文檔結束標記（如果有）
-    fixed_yaml = fixed_yaml.rstrip()
-    if fixed_yaml.endswith('...'):
-        fixed_yaml = fixed_yaml[:-3].rstrip()
-    
     # 替換 ISA 中的 metadata
     before_metadata = isa_text[:yaml_start]
-    # yaml_end 指向 '...' 的開始位置，需要跳過這 3 個字元
-    after_metadata = isa_text[yaml_end + 3:]
+    after_metadata = isa_text[yaml_end:]
     
-    fixed_isa = before_metadata + "---\n" + fixed_yaml + "\n...\n" + after_metadata
+    fixed_isa = before_metadata + "---\n" + fixed_yaml + "...\n" + after_metadata
     
     # 同時修復 .amdhsa_* 指令
     if 'kernarg_segment_size' in attrs:
@@ -1716,21 +1525,6 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
             fixed_isa
         )
         print(f"[Info] Fixed kernarg_segment_ptr = {attrs['kernarg_segment_ptr']}")
-    
-    # 修復 next_free_vgpr 和 next_free_sgpr（只在沒有 printf 時）
-    if not has_printf:
-        if 'next_free_vgpr' in attrs:
-            fixed_isa = re.sub(
-                r'(\.amdhsa_next_free_vgpr)\s+\d+',
-                rf'\1 {attrs["next_free_vgpr"]}',
-                fixed_isa
-            )
-        if 'next_free_sgpr' in attrs:
-            fixed_isa = re.sub(
-                r'(\.amdhsa_next_free_sgpr)\s+\d+',
-                rf'\1 {attrs["next_free_sgpr"]}',
-                fixed_isa
-            )
     
     return fixed_isa
 
@@ -2004,7 +1798,7 @@ def main():
     
     # 1. 解析 @PRINT 指令
     print(f"\n=== Parsing @PRINT directives ===")
-    lines, directives, barriers = parse_asm_file(input_path)
+    lines, directives, has_barrier = parse_asm_file(input_path)
     
     if not directives:
         if args.no_printf:
@@ -2014,12 +1808,18 @@ def main():
     else:
         print(f"\nFound {len(directives)} @PRINT directive(s)")
     
-    # 分析 s_barrier 安全性
-    barrier_analysis = analyze_barrier_safety(directives, barriers)
-    
     # 警告：s_barrier 與 printf 不兼容
-    if barrier_analysis['has_barriers'] and directives and not args.no_printf:
-        print_barrier_warning(barrier_analysis, directives)
+    if has_barrier and directives and not args.no_printf:
+        print("\n" + "=" * 60)
+        print("⚠️  WARNING: Kernel contains s_barrier instruction!")
+        print("   gpu.printf's hostcall mechanism may conflict with barrier")
+        print("   synchronization, causing kernel to hang or crash.")
+        print("")
+        print("   Recommendations:")
+        print("   1. Use --no-printf for functional verification")
+        print("   2. Use cond=tid_eq(0) to limit printf to single thread")
+        print("   3. Place @PRINT only after all barriers complete")
+        print("=" * 60 + "\n")
     
     if args.dry_run:
         print("\n[Dry Run] Stopping here.")
