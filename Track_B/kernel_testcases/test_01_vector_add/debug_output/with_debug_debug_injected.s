@@ -61,10 +61,10 @@ _Z9vectorAddPKfS0_Pfi:
 		v_lshl_add_u64 v[2:3], s[6:7], 0, v[0:1]
 	;;#ASMEND
 	;;#ASMSTART
-		global_load_dword v6, v[4:5], off      ; Ã¨Â¼ÂÃ¥ÂÂ¥ A[tid]
+		global_load_dword v6, v[4:5], off           ; Load A[tid]
 	;;#ASMEND
 	;;#ASMSTART
-		global_load_dword v7, v[2:3], off      ; Ã¨Â¼ÂÃ¥ÂÂ¥ B[tid]
+		global_load_dword v7, v[2:3], off           ; Load B[tid]
 	;;#ASMEND
 	;;#ASMSTART
 		v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]
@@ -82,7 +82,7 @@ _Z9vectorAddPKfS0_Pfi:
 	v_mov_b32 v10, v2
 	;;#ASMEND
 	;;#ASMSTART
-		v_add_f32_e32 v2, v6, v7               ; C = A + B
+		v_add_f32_e32 v2, v6, v7                    ; C = A + B
 	;;#ASMEND
 	;;#ASMSTART
 	v_mov_b32 v11, v6
@@ -108,7 +108,7 @@ _Z9vectorAddPKfS0_Pfi:
 	;;#ASMSTART
 	v_mov_b32 v31, v10
 	;;#ASMEND
-	s_load_dwordx2 s[2:3], s[0:1], 0x70
+	s_load_dwordx2 s[2:3], s[0:1], 0xa8
 	v_mbcnt_lo_u32_b32 v16, -1, 0
 	v_mbcnt_hi_u32_b32 v26, -1, v16
 	v_mov_b64_e32 v[20:21], 0
@@ -1702,46 +1702,46 @@ amdhsa.kernels:
   - .offset: 24
     .size: 4
     .value_kind: by_value
-  - .offset: 32
+  - .offset: 88
     .size: 4
     .value_kind: hidden_block_count_x
-  - .offset: 36
+  - .offset: 92
     .size: 4
     .value_kind: hidden_block_count_y
-  - .offset: 40
+  - .offset: 96
     .size: 4
     .value_kind: hidden_block_count_z
-  - .offset: 44
+  - .offset: 100
     .size: 2
     .value_kind: hidden_group_size_x
-  - .offset: 46
+  - .offset: 102
     .size: 2
     .value_kind: hidden_group_size_y
-  - .offset: 48
+  - .offset: 104
     .size: 2
     .value_kind: hidden_group_size_z
-  - .offset: 50
+  - .offset: 106
     .size: 2
     .value_kind: hidden_remainder_x
-  - .offset: 52
+  - .offset: 108
     .size: 2
     .value_kind: hidden_remainder_y
-  - .offset: 54
+  - .offset: 110
     .size: 2
     .value_kind: hidden_remainder_z
-  - .offset: 72
+  - .offset: 128
     .size: 8
     .value_kind: hidden_global_offset_x
-  - .offset: 80
+  - .offset: 136
     .size: 8
     .value_kind: hidden_global_offset_y
-  - .offset: 88
+  - .offset: 144
     .size: 8
     .value_kind: hidden_global_offset_z
-  - .offset: 96
+  - .offset: 152
     .size: 2
     .value_kind: hidden_grid_dims
-  - .offset: 112
+  - .offset: 168
     .size: 8
     .value_kind: hidden_hostcall_buffer
   .group_segment_fixed_size: 0

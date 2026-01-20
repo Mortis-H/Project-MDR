@@ -28,8 +28,9 @@ _Z9vectorAddPKfS0_Pfi:
 	global_load_dword v7, v[2:3], off      ; 載入 B[tid]
 	v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]
 	s_waitcnt vmcnt(0)
-; @PRINT cond=tid_eq(0) fmt="A=%f, B=%f, A*B=%f" reg=v6,v7 expr="v6*v7" type=f32,f32,f32
+; @PRINT fmt="Before ADD: A(v6)=%f, B(v7)=%f, C(v2)=%f" reg=v6,v7,v2 type=f32,f32,f32
 	v_add_f32_e32 v2, v6, v7               ; C = A + B
+; @PRINT fmt="After ADD:  A(v6)=%f, B(v7)=%f, C(v2)=%f" reg=v6,v7,v2 type=f32,f32,f32
 	global_store_dword v[0:1], v2, off
 .LBB0_2:
 	s_endpgm

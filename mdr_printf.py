@@ -635,17 +635,118 @@ def generate_printf(directive: PrintDirective, unique_id: int) -> str:
     return '\n'.join(lines)
 
 
+def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int, 
+                                   snapshots: List[Tuple[int, str, int]]) -> str:
+    """
+    生成使用快照暫存器的 gpu.printf MLIR 程式碼
+    
+    Args:
+        directive: @PRINT 指令
+        unique_id: 唯一識別碼
+        snapshots: [(reg_idx, original_reg, snapshot_vgpr), ...] 快照暫存器映射
+    
+    Returns:
+        MLIR 程式碼字串
+    """
+    lines = []
+    
+    # 生成註解標記
+    lines.append(f'              // === @PRINT from line {directive.line_number + 1} (using snapshots) ===')
+    
+    var_names = []
+    reg_types = directive.types[:len(directive.registers)]
+    expr_types = directive.types[len(directive.registers):]
+    
+    # 建立 reg_idx -> snapshot_vgpr 的映射
+    snapshot_map = {r_idx: snap_vgpr for r_idx, _, snap_vgpr in snapshots}
+    
+    # 1. 生成 value bindings（使用快照暫存器）
+    for i, (reg, typ) in enumerate(zip(directive.registers, reg_types)):
+        var_name = f'print_val_{unique_id}_{i}'
+        var_names.append(var_name)
+        
+        # 如果有快照，使用快照暫存器
+        if i in snapshot_map:
+            snapshot_reg = f'v{snapshot_map[i]}'
+            lines.append(f'              // Using snapshot v{snapshot_map[i]} for {reg}')
+            lines.append(generate_value_binding(snapshot_reg, typ, var_name))
+        else:
+            # 非 VGPR 或沒有快照的，使用原始暫存器
+            lines.append(generate_value_binding(reg, typ, var_name))
+    
+    # 2. 生成表達式計算（如果有）- 表達式使用快照暫存器
+    if directive.expressions:
+        for i, (expr, typ) in enumerate(zip(directive.expressions, expr_types)):
+            try:
+                # TODO: 表達式中的暫存器也應該替換為快照
+                # 目前暫時使用原始暫存器
+                expr_code, result_var = compile_expression_to_mlir(expr, typ, unique_id, i)
+                if expr_code:
+                    lines.append(f'              // Expression: {expr}')
+                    lines.append(expr_code)
+                var_names.append(result_var)
+            except Exception as e:
+                print(f"[Warning] Failed to compile expression '{expr}': {e}")
+                fallback_var = f'expr_fallback_{unique_id}_{i}'
+                mlir_type = map_type_to_mlir(typ)
+                if typ.startswith('f'):
+                    lines.append(f'              %{fallback_var} = arith.constant 0.0 : {mlir_type}')
+                else:
+                    lines.append(f'              %{fallback_var} = arith.constant 0 : {mlir_type}')
+                var_names.append(fallback_var)
+    
+    # 準備 printf 的參數列表
+    args = ', '.join(f'%{name}' for name in var_names)
+    types = ', '.join(map_type_to_mlir(t) for t in directive.types)
+    
+    # MLIR string 中的換行需使用 \0A
+    escaped_format = directive.format_string.replace('\\n', '\\0A')
+    if not escaped_format.endswith('\\0A'):
+        escaped_format += '\\0A'
+    
+    # 條件式 printf 支援
+    if directive.condition:
+        match = re.match(r'tid_(\w+)\((\d+)\)', directive.condition)
+        if match:
+            cmp_type, value = match.groups()
+            lines.append(f'              %tid_x_{unique_id} = gpu.thread_id x')
+            lines.append(f'              %cmp_val_{unique_id} = arith.constant {value} : index')
+            
+            cmp_ops = {
+                'eq': 'eq', 'ne': 'ne', 
+                'lt': 'slt', 'le': 'sle',
+                'gt': 'sgt', 'ge': 'sge'
+            }
+            mlir_cmp = cmp_ops.get(cmp_type, 'eq')
+            
+            lines.append(f'              %cond_{unique_id} = arith.cmpi {mlir_cmp}, %tid_x_{unique_id}, %cmp_val_{unique_id} : index')
+            lines.append(f'              scf.if %cond_{unique_id} {{')
+            lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
+            lines.append(f'              }}')
+            
+            print(f"[Info] Conditional printf: {directive.condition}")
+        else:
+            print(f"[Warning] Unknown condition format: {directive.condition}, printing unconditionally")
+            lines.append(f'              gpu.printf "{escaped_format}", {args} : {types}')
+    else:
+        lines.append(f'              gpu.printf "{escaped_format}", {args} : {types}')
+    
+    lines.append(f'              // === End @PRINT ===')
+    
+    return '\n'.join(lines)
+
+
 def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective], reg_info: Dict[str, int]) -> str:
     """
     將 printf 指令注入到 GPU MLIR 中
     
-    策略（與原版 /home/morhuang/my_tmp/asm_debug.py 一致）：
-    1. 在 kernel 函數開頭添加 register clobbering 開始
-    2. 在 .LBB0_2: 標籤之前（有效 thread 區域內）添加：
+    策略（快照版）：
+    1. 在每個 @PRINT 的實際位置插入快照指令（v_mov_b32），保存當時的暫存器值
+    2. 在 .LBB0_2: 標籤之前或 s_endpgm 之前：
        - Restore kernarg pointer
-       - 各個 @PRINT 的 value binding + printf
+       - 使用快照暫存器執行 printf
        - Register clobbering 結束
-    3. 如果沒有 .LBB0_2: 標籤，則在 s_endpgm 之前插入
+    3. 這樣可以真正觀察到「當時」的暫存器值
     
     Args:
         gpumlir_text: 原始 GPU MLIR 文字
@@ -658,25 +759,40 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     if not directives:
         return gpumlir_text
     
+    # === 計算快照暫存器需求 ===
+    # 每個 @PRINT 的每個暫存器都需要一個快照 VGPR
+    snapshot_regs = []  # [(directive_idx, reg_idx, reg_name, snapshot_vgpr_num), ...]
+    original_vgpr = reg_info.get('vgpr', 0)
+    snapshot_vgpr_start = original_vgpr  # 快照暫存器從原始 VGPR 之後開始
+    
+    snapshot_idx = 0
+    for d_idx, directive in enumerate(directives):
+        for r_idx, reg in enumerate(directive.registers):
+            # 只對 VGPR 進行快照（v0, v1, ...）
+            if reg.startswith('v') and not reg.startswith('vcc'):
+                snapshot_vgpr_num = snapshot_vgpr_start + snapshot_idx
+                snapshot_regs.append((d_idx, r_idx, reg, snapshot_vgpr_num))
+                snapshot_idx += 1
+    
+    total_snapshot_vgprs = snapshot_idx
+    print(f"[Info] Snapshot registers: {total_snapshot_vgprs} VGPRs (v{snapshot_vgpr_start} - v{snapshot_vgpr_start + total_snapshot_vgprs - 1})")
+    
+    # 建立 directive -> snapshot 映射
+    # directive_snapshots[d_idx] = [(r_idx, original_reg, snapshot_vgpr), ...]
+    directive_snapshots = {}
+    for d_idx, r_idx, reg, snap_vgpr in snapshot_regs:
+        if d_idx not in directive_snapshots:
+            directive_snapshots[d_idx] = []
+        directive_snapshots[d_idx].append((r_idx, reg, snap_vgpr))
+    
     # === 動態計算 clobber 範圍 ===
     MAX_VECTOR_SIZE = 32      # LLVM inline_asm vector 類型限制
     SGPR_KERNARG_BACKUP = 18  # 保存 kernarg pointer 到 s[18:19]
     SGPR_RESERVED_START = 4   # s[0:3] 是系統保留的，從 s4 開始保護
     SGPR_RESERVED_END = 17    # 保護到 s17（不含 s[18:19] 用於 kernarg backup）
     
-    original_vgpr = reg_info.get('vgpr', 0)
     original_sgpr = reg_info.get('sgpr', 0)
     original_agpr = reg_info.get('agpr', 0)
-    
-    # 只 clobber 原始 kernel 使用的暫存器數量
-    total_vgpr = max(1, original_vgpr) if original_vgpr > 0 else 0
-    total_agpr = max(1, original_agpr) if original_agpr > 0 else 0
-    
-    # SGPR: 保護 s[4:17]（14 個 SGPR，但 vector 必須是 2 的冪）
-    # 將範圍調整為 s[4:19]（16 個 SGPR）以符合 vector<16xi32> 的要求
-    # 但同時我們會保存 kernarg pointer 到 s[18:19]，所以需要在保存前後處理
-    sgpr_start = SGPR_RESERVED_START
-    sgpr_count_needed = max(original_sgpr, 20) - sgpr_start  # 確保至少到 s19
     
     # 向上取整到最近的 2 的冪
     def next_power_of_2(n):
@@ -689,6 +805,17 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         n |= n >> 8
         n |= n >> 16
         return n + 1
+    
+    # VGPR clobber 需要包含快照暫存器，並向上取整到 2 的冪
+    vgpr_count_needed = max(1, original_vgpr + total_snapshot_vgprs) if original_vgpr > 0 else total_snapshot_vgprs
+    total_vgpr = next_power_of_2(vgpr_count_needed)
+    total_agpr = max(1, original_agpr) if original_agpr > 0 else 0
+    
+    # SGPR: 保護 s[4:17]（14 個 SGPR，但 vector 必須是 2 的冪）
+    # 將範圍調整為 s[4:19]（16 個 SGPR）以符合 vector<16xi32> 的要求
+    # 但同時我們會保存 kernarg pointer 到 s[18:19]，所以需要在保存前後處理
+    sgpr_start = SGPR_RESERVED_START
+    sgpr_count_needed = max(original_sgpr, 20) - sgpr_start  # 確保至少到 s19
     
     total_sgpr = next_power_of_2(sgpr_count_needed) if sgpr_count_needed > 0 else 0
     # 限制最大為 32（因為 MAX_VECTOR_SIZE = 32）
@@ -754,11 +881,12 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     clobber_start_lines.append('              // === End Clobbering Start ===')
     clobber_start = '\n'.join(clobber_start_lines) + '\n'
     
-    # 生成 printf 區塊（所有 @PRINT 指令）- 包含 kernarg restore
+    # 生成 printf 區塊（使用快照暫存器）- 包含 kernarg restore
     printf_blocks = ['              // Restore kernarg pointer for printf (from s[18:19])']
     printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_mov_b64 s[0:1], s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}]", ""  : () -> ()')
     for i, directive in enumerate(directives):
-        printf_blocks.append(generate_printf(directive, i))
+        # 使用快照暫存器生成 printf
+        printf_blocks.append(generate_printf_with_snapshot(directive, i, directive_snapshots.get(i, [])))
     
     printf_section = '\n'.join(printf_blocks)
     
@@ -801,17 +929,35 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     clobber_end_lines.append('              // === End Clobbering End ===')
     clobber_end = '\n'.join(clobber_end_lines) + '\n'
     
-    # 找到函數開頭，在第一個 llvm.inline_asm 之前插入 clobber_start
-    # 在 .LBB0_2: 標籤之前插入 printf（因為跳轉目標之後是無效的 thread）
-    # 如果沒有 .LBB0_2:，則在 s_endpgm 之前插入
+    # === 生成每個 @PRINT 的快照指令 ===
+    # 建立 next_instruction -> snapshot_code 的映射
+    snapshot_insertions = {}  # {clean_instr: snapshot_code}
+    for d_idx, directive in enumerate(directives):
+        if directive.next_instruction and d_idx in directive_snapshots:
+            # 清理 next_instruction 以便匹配
+            clean_instr = directive.next_instruction.strip()
+            if ';' in clean_instr:
+                clean_instr = clean_instr.split(';')[0].strip()
+            clean_instr = ' '.join(clean_instr.split())
+            
+            # 生成快照指令
+            snap_lines = [f'              // === Snapshot for @PRINT at line {directive.line_number + 1} ===']
+            for r_idx, orig_reg, snap_vgpr in directive_snapshots[d_idx]:
+                snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{snap_vgpr}, {orig_reg}", ""  : () -> ()')
+            snap_lines.append(f'              // === End Snapshot ===')
+            
+            snapshot_insertions[clean_instr] = '\n'.join(snap_lines)
+            print(f"[Info] @PRINT #{d_idx+1} snapshot at: {clean_instr[:50]}...")
+    
+    # === 注入邏輯 ===
     lines = gpumlir_text.split('\n')
     modified_lines = []
     in_func = False
     clobber_inserted = False
     printf_inserted = False
+    inserted_snapshots = set()
     
-    # 先掃描是否有 .LBB0_2: 標籤（注意：必須是標籤定義，結尾有冒號）
-    # 匹配 '.LBB0_2:' 或 '.LBB0_2"' (在 inline_asm 字串中)
+    # 先掃描是否有 .LBB0_2: 標籤
     has_lbb0_2_label = any('.LBB0_2:' in line or '.LBB0_2"' in line for line in lines)
     
     for i, line in enumerate(lines):
@@ -824,9 +970,25 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             modified_lines.append(clobber_start)
             clobber_inserted = True
         
-        # 優先在 .LBB0_2: 標籤之前插入 printf（在計算分支內）
-        # 注意：只匹配標籤定義（結尾有冒號），不匹配跳轉指令中的引用
-        # 標籤在 inline_asm 中會是 '.LBB0_2:' 或 '.LBB0_2"'
+        # 檢查是否需要在這一行之前插入快照指令
+        if in_func and 'llvm.inline_asm' in line:
+            import re
+            mlir_match = re.search(r'"([^"]*)"', line)
+            if mlir_match:
+                mlir_instr = mlir_match.group(1)
+                mlir_instr = mlir_instr.lstrip('\\09').lstrip('\\t').strip()
+                if ';' in mlir_instr:
+                    mlir_instr = mlir_instr.split(';')[0].strip()
+                mlir_instr = ' '.join(mlir_instr.split())
+                
+                # 檢查是否匹配任何 next_instruction
+                for clean_instr, snap_code in snapshot_insertions.items():
+                    if clean_instr not in inserted_snapshots:
+                        if clean_instr == mlir_instr or clean_instr.startswith(mlir_instr) or mlir_instr.startswith(clean_instr):
+                            modified_lines.append(snap_code)
+                            inserted_snapshots.add(clean_instr)
+        
+        # 優先在 .LBB0_2: 標籤之前插入 printf
         is_lbb0_2_label = '.LBB0_2:' in line or ('.LBB0_2"' in line and 's_cbranch' not in line)
         if in_func and not printf_inserted and has_lbb0_2_label and is_lbb0_2_label:
             modified_lines.append(printf_section)
@@ -844,6 +1006,13 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         # 離開 gpu.func
         if in_func and 'gpu.return' in line:
             in_func = False
+    
+    # 警告未插入的快照
+    not_inserted = set(snapshot_insertions.keys()) - inserted_snapshots
+    if not_inserted:
+        print(f"[Warning] {len(not_inserted)} snapshot(s) could not be matched to MLIR instructions")
+        for instr in not_inserted:
+            print(f"          - {instr[:60]}...")
     
     return '\n'.join(modified_lines)
 

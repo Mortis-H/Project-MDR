@@ -1,0 +1,82 @@
+module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "amdgcn-amd-amdhsa--gfx950"} {
+  gpu.module @amdisa_kernels {
+    gpu.func @_Z9scalarOpsPii(%arg0: !llvm.ptr, %arg1: index, %arg2: index, %arg3: index, %arg4: index, %arg5: i16, %arg6: i16, %arg7: i16, %arg8: i16, %arg9: i16, %arg10: i16, %arg11: !llvm.ptr, %arg12: !llvm.ptr, %arg13: !llvm.ptr, %arg14: i16) kernel attributes {amdisa.agpr_count = 0 : i32, amdisa.kernarg_segment_size = 272 : i32, amdisa.sgpr_count = 11 : i32, amdisa.vgpr_count = 6 : i32} {
+              // === Register Clobbering Start ===
+              // Save kernarg pointer for printf (to s[18:19])
+              llvm.inline_asm has_side_effects "s_mov_b64 s[18:19], s[0:1]", ""  : () -> ()
+              // Protecting 16 VGPRs
+              %reserved_vgpr_0 = llvm.inline_asm has_side_effects asm_dialect = att "", "={v[0:15]}": () -> vector<16xi32>
+              // Protecting 16 SGPRs (s[4:19])
+              %reserved_sgpr_0 = llvm.inline_asm has_side_effects asm_dialect = att "", "={s[4:19]}": () -> vector<16xi32>
+              // === End Clobbering Start ===
+
+      llvm.inline_asm has_side_effects "\09s_load_dword s3, s[0:1], 0x1c", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_load_dword s4, s[0:1], 0x8", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_waitcnt lgkmcnt(0)", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_and_b32 s3, s3, 0xffff", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_mul_i32 s2, s2, s3", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_add_u32_e32 v0, s2, v0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_cmp_gt_i32_e32 vcc, s4, v0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_and_saveexec_b64 s[2:3], vcc", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_cbranch_execz .LBB0_2", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_load_dwordx2 s[0:1], s[0:1], 0x0", ""  : () -> ()
+              // === Snapshot for @PRINT at line 21 ===
+              llvm.inline_asm has_side_effects "v_mov_b32 v6, v0", ""  : () -> ()
+              llvm.inline_asm has_side_effects "v_mov_b32 v7, v1", ""  : () -> ()
+              // === End Snapshot ===
+      llvm.inline_asm has_side_effects "\09v_add_u32_e32 v1, 1, v0                     ; v1 = tid + 1", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_and_b32_e32 v2, v1, v0                    ; v2 = (tid+1) & tid", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_or_b32_e32 v3, v1, v0                     ; v3 = (tid+1) | tid", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_ashrrev_i32_e32 v4, 2, v0                 ; v4 = tid >> 2", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_add_u32_e32 v5, 7, v0                     ; v5 = tid + 7", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_xor_b32_e32 v1, v1, v0                    ; v1 = (tid+1) ^ tid", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_mul_lo_u32 v5, v5, v0                     ; v5 = (tid+7) * tid", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_add3_u32 v2, v2, v4, v3                   ; v2 = v2 + v4 + v3", ""  : () -> ()
+              // === Snapshot for @PRINT at line 30 ===
+              llvm.inline_asm has_side_effects "v_mov_b32 v8, v2", ""  : () -> ()
+              llvm.inline_asm has_side_effects "v_mov_b32 v9, v1", ""  : () -> ()
+              llvm.inline_asm has_side_effects "v_mov_b32 v10, v5", ""  : () -> ()
+              // === End Snapshot ===
+      llvm.inline_asm has_side_effects "\09v_add3_u32 v2, v2, v1, v5                   ; v2 = v2 + v1 + v5 (final)", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_ashrrev_i32_e32 v1, 31, v0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_waitcnt lgkmcnt(0)", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[0:1], v[0:1], 2, s[0:1]", ""  : () -> ()
+              // === Snapshot for @PRINT at line 35 ===
+              llvm.inline_asm has_side_effects "v_mov_b32 v11, v2", ""  : () -> ()
+              // === End Snapshot ===
+      llvm.inline_asm has_side_effects "\09global_store_dword v[0:1], v2, off", ""  : () -> ()
+              // Restore kernarg pointer for printf (from s[18:19])
+              llvm.inline_asm has_side_effects "s_mov_b64 s[0:1], s[18:19]", ""  : () -> ()
+              // === @PRINT from line 21 (using snapshots) ===
+              // Using snapshot v6 for v0
+              %print_val_0_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v6", "=v": () -> i32
+              // Using snapshot v7 for v1
+              %print_val_0_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v7", "=v": () -> i32
+              gpu.printf "tid=%d, v1=tid+1=%d\0A", %print_val_0_0, %print_val_0_1 : i32, i32
+              // === End @PRINT ===
+              // === @PRINT from line 30 (using snapshots) ===
+              // Using snapshot v8 for v2
+              %print_val_1_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v8", "=v": () -> i32
+              // Using snapshot v9 for v1
+              %print_val_1_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v9", "=v": () -> i32
+              // Using snapshot v10 for v5
+              %print_val_1_2 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v10", "=v": () -> i32
+              gpu.printf "After ops: v2=%d, v1=%d, v5=%d\0A", %print_val_1_0, %print_val_1_1, %print_val_1_2 : i32, i32, i32
+              // === End @PRINT ===
+              // === @PRINT from line 35 (using snapshots) ===
+              // Using snapshot v11 for v2
+              %print_val_2_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v11", "=v": () -> i32
+              gpu.printf "Final result: v2=%d\0A", %print_val_2_0 : i32
+              // === End @PRINT ===
+              // === Register Clobbering End ===
+              llvm.inline_asm has_side_effects asm_dialect = att "", "{v[0:15]}" %reserved_vgpr_0 : (vector<16xi32>)-> ()
+              llvm.inline_asm has_side_effects asm_dialect = att "", "{s[4:19]}" %reserved_sgpr_0 : (vector<16xi32>)-> ()
+              // === End Clobbering End ===
+
+      llvm.inline_asm has_side_effects ".LBB0_2:", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_endpgm", ""  : () -> ()
+      gpu.return
+    }
+  }
+}
+
