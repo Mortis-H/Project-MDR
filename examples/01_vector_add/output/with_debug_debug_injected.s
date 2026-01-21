@@ -1651,7 +1651,7 @@ _Z9vectorAddPKfS0_Pfi:
 	v_mov_b32 v11, v67
 	;;#ASMEND
 	s_nop 0
-	v_cmp_lt_f32_e32 vcc, 2.0, v10
+	v_cmp_ge_f32_e32 vcc, 2.0, v10
 	s_and_saveexec_b64 s[4:5], vcc
 	s_cbranch_execz .LBB0_226
 	v_readfirstlane_b32 s0, v16
@@ -1986,22 +1986,22 @@ _Z9vectorAddPKfS0_Pfi:
 	v_lshl_add_u64 v[6:7], v[6:7], 0, s[8:9]
 	v_and_b32_e32 v0, 0xffffff1f, v0
 	v_or_b32_e32 v0, 0xa0, v0
-	v_mov_b32_e32 v3, 0x41206572
-	v_mov_b32_e32 v2, 0x6f666542
+	v_mov_b32_e32 v3, 0x2065726f
+	v_mov_b32_e32 v2, 0x66654220
 	v_readfirstlane_b32 s8, v6
 	v_readfirstlane_b32 s9, v7
 	s_nop 4
 	global_store_dwordx4 v18, v[0:3], s[8:9]
 	s_nop 1
-	v_mov_b32_e32 v0, 0x28204444
-	v_mov_b32_e32 v1, 0x29323e41
-	v_mov_b32_e32 v2, 0x3d41203a
-	v_mov_b32_e32 v3, 0x66332e25
+	v_mov_b32_e32 v0, 0x20444441
+	v_mov_b32_e32 v1, 0x323c4128
+	v_mov_b32_e32 v2, 0x41203a29
+	v_mov_b32_e32 v3, 0x332e253d
 	global_store_dwordx4 v18, v[0:3], s[8:9] offset:16
 	s_nop 1
-	v_mov_b32_e32 v0, 0x3d42202c
-	v_mov_b32_e32 v1, 0x66322e25
-	v_mov_b32_e32 v2, 10
+	v_mov_b32_e32 v0, 0x42202c66
+	v_mov_b32_e32 v1, 0x322e253d
+	v_mov_b32_e32 v2, 0xa66
 	v_mov_b32_e32 v3, v19
 	global_store_dwordx4 v18, v[0:3], s[8:9] offset:32
 	s_nop 1
@@ -2742,22 +2742,22 @@ _Z9vectorAddPKfS0_Pfi:
 	v_lshl_add_u64 v[6:7], v[6:7], 0, s[8:9]
 	v_and_b32_e32 v0, 0xffffff1f, v0
 	v_or_b32_e32 v0, 0xa0, v0
-	v_mov_b32_e32 v3, 0x36762072
-	v_mov_b32_e32 v2, 0x65746641
+	v_mov_b32_e32 v3, 0x76207265
+	v_mov_b32_e32 v2, 0x74664120
 	v_readfirstlane_b32 s8, v6
 	v_readfirstlane_b32 s9, v7
 	s_nop 4
 	global_store_dwordx4 v18, v[0:3], s[8:9]
 	s_nop 1
-	v_mov_b32_e32 v0, 0x25203d20
-	v_mov_b32_e32 v1, 0x2c66322e
-	v_mov_b32_e32 v2, 0x20377620
-	v_mov_b32_e32 v3, 0x2e25203d
+	v_mov_b32_e32 v0, 0x203d2036
+	v_mov_b32_e32 v1, 0x66322e25
+	v_mov_b32_e32 v2, 0x3776202c
+	v_mov_b32_e32 v3, 0x25203d20
 	global_store_dwordx4 v18, v[0:3], s[8:9] offset:16
 	s_nop 1
-	v_mov_b32_e32 v0, 0x202c6632
-	v_mov_b32_e32 v1, 0x2e253d43
-	v_mov_b32_e32 v2, 0xa6633
+	v_mov_b32_e32 v0, 0x2c66322e
+	v_mov_b32_e32 v1, 0x253d4320
+	v_mov_b32_e32 v2, 0xa66332e
 	v_mov_b32_e32 v3, v19
 	global_store_dwordx4 v18, v[0:3], s[8:9] offset:32
 	s_nop 1

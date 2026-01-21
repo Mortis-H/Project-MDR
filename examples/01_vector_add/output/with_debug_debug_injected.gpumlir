@@ -32,7 +32,7 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "\09global_load_dword v7, v[2:3], off      ; \E8\BC\89\E5\85\A5 B[tid]", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09s_waitcnt vmcnt(0)", ""  : () -> ()
-              // === Snapshot for @PRINT at line 35 ===
+              // === Snapshot for @PRINT at line 34 ===
               llvm.inline_asm has_side_effects "v_mov_b32 v64, v6", ""  : () -> ()
               llvm.inline_asm has_side_effects "v_mov_b32 v65, v7", ""  : () -> ()
               // Expression register snapshot: v6 -> v64
@@ -40,12 +40,12 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
               // Expression register snapshot: v7 -> v65
               llvm.inline_asm has_side_effects "v_mov_b32 v65, v7", ""  : () -> ()
               // === End Snapshot ===
-              // === Snapshot for @PRINT at line 38 ===
+              // === Snapshot for @PRINT at line 35 ===
               llvm.inline_asm has_side_effects "v_mov_b32 v66, v6", ""  : () -> ()
               llvm.inline_asm has_side_effects "v_mov_b32 v67, v7", ""  : () -> ()
               // === End Snapshot ===
       llvm.inline_asm has_side_effects "\09v_add_f32_e32 v2, v6, v7               ; C = A + B", ""  : () -> ()
-              // === Snapshot for @PRINT at line 41 ===
+              // === Snapshot for @PRINT at line 37 ===
               llvm.inline_asm has_side_effects "v_mov_b32 v68, v6", ""  : () -> ()
               llvm.inline_asm has_side_effects "v_mov_b32 v69, v7", ""  : () -> ()
               llvm.inline_asm has_side_effects "v_mov_b32 v70, v2", ""  : () -> ()
@@ -60,7 +60,7 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
               %print_val_0_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, s21", "=v": () -> i32
               gpu.printf "[SGPR Test] n=%d, base_idx=%d\0A", %print_val_0_0, %print_val_0_1 : i32, i32
               // === End @PRINT ===
-              // === @PRINT from line 35 (using snapshots) ===
+              // === @PRINT from line 34 (using snapshots) ===
               // Expression: (v6+v7)*2/7 (using snapshots)
               // Using snapshot v64 for v6
               %expr_1_0_reg_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v64", "=v": () -> f32
@@ -85,19 +85,19 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
               %expr_1_2_tmp_2 = arith.mulf %expr_1_2_reg_0, %expr_1_2_reg_1 : f32
               gpu.printf "[Expr] (A+B)x2/7=%.2f, A-B=%.2f, A*B=%.2f\0A", %expr_1_0_tmp_6, %expr_1_1_tmp_2, %expr_1_2_tmp_2 : f32, f32, f32
               // === End @PRINT ===
-              // === @PRINT from line 38 (using snapshots) ===
+              // === @PRINT from line 35 (using snapshots) ===
               // Using snapshot v66 for v6
               %print_val_2_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v66", "=v": () -> f32
               // Using snapshot v67 for v7
               %print_val_2_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v67", "=v": () -> f32
-              // Conditional printf: v6 gt 2.0
+              // Conditional printf: v6 le 2.0
               %cmp_val_2 = arith.constant 2.0 : f32
-              %cond_2 = arith.cmpf ogt, %print_val_2_0, %cmp_val_2 : f32
+              %cond_2 = arith.cmpf ole, %print_val_2_0, %cmp_val_2 : f32
               scf.if %cond_2 {
-                gpu.printf "Before ADD (A>2): A=%.3f, B=%.2f\0A", %print_val_2_0, %print_val_2_1 : f32, f32
+                gpu.printf " Before ADD (A<2): A=%.3f, B=%.2f\0A", %print_val_2_0, %print_val_2_1 : f32, f32
               }
               // === End @PRINT ===
-              // === @PRINT from line 41 (using snapshots) ===
+              // === @PRINT from line 37 (using snapshots) ===
               // Using snapshot v68 for v6
               %print_val_3_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v68", "=v": () -> f32
               // Using snapshot v69 for v7
@@ -108,7 +108,7 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
               %cmp_val_3 = arith.constant 2.0 : f32
               %cond_3 = arith.cmpf ogt, %print_val_3_0, %cmp_val_3 : f32
               scf.if %cond_3 {
-                gpu.printf "After v6 = %.2f, v7 = %.2f, C=%.3f\0A", %print_val_3_0, %print_val_3_1, %print_val_3_2 : f32, f32, f32
+                gpu.printf " After v6 = %.2f, v7 = %.2f, C=%.3f\0A", %print_val_3_0, %print_val_3_1, %print_val_3_2 : f32, f32, f32
               }
               // === End @PRINT ===
               // === Printf Section End ===

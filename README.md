@@ -49,8 +49,6 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 
 ## @PRINT 指令語法
 
-### ⭐ 新語法（Python f-string 風格，推薦）
-
 ```asm
 ; @PRINT f"訊息 {暫存器:格式}"
 ; @PRINT if 條件: f"訊息 {暫存器:格式}"
@@ -95,25 +93,6 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 
 ---
 
-### 舊語法（向後相容）
-
-```asm
-; @PRINT [cond=條件] fmt="格式字串" reg=暫存器 type=類型
-; @PRINT [cond=條件] fmt="格式字串" expr="表達式" type=類型
-```
-
-| 參數 | 必須 | 說明 | 範例 |
-|------|:----:|------|------|
-| `fmt` | ✅ | printf 格式字串 | `"value=%f"` |
-| `reg` | ⭕ | 暫存器（可多個，逗號分隔） | `v6` 或 `v6,v7` 或 `s4,s2` |
-| `expr` | ⭕ | 表達式（可多個，分號分隔） | `"v6*v7"` 或 `"v6+v7; v6-v7"` |
-| `type` | ✅ | 資料類型（需與 reg+expr 數量匹配） | `f32` 或 `f32,i32` |
-| `cond` | ❌ | 條件（基於暫存器值） | `v6_eq(0.0)` 或 `s4_gt(0)` |
-
-⭕ = `reg` 和 `expr` 至少需要一個
-
----
-
 ## 功能支援
 
 ### ✅ 支援的功能
@@ -124,10 +103,8 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 | **VGPR 印出** | 印出向量暫存器值 | `{v6}`, `{v7:.2f}` |
 | **SGPR 印出** | 印出純量暫存器值 | `{s4}`, `{s2:d}` |
 | **快照機制** | 在 `@PRINT` 位置捕捉暫存器值 | Before/After 觀察 |
-| **條件印出** | 基於暫存器值過濾輸出 | `cond=v6_eq(0.0)` |
-| **表達式計算** | 四則運算 | `expr="v6*v7"` |
-| **混合模式** | 暫存器 + 表達式 | `reg=v6 expr="v6*2" type=f32,f32` |
-| **多表達式** | 分號分隔 | `expr="v6+v7; v6-v7"` |
+| **條件印出** | 基於暫存器值過濾輸出 | `if v6 > 2.0:` |
+| **表達式計算** | 四則運算 + 括號 | `{v6*v7:.2f}`, `{(v6+v7)*2:.2f}` |
 | **自動測試** | `--test` 選項 | `--test --test-size 64` |
 
 ### 支援的暫存器類型
@@ -173,22 +150,17 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 
 ### ✅ 條件式 printf 支援
 
-支援基於**暫存器值**的條件過濾：
+支援基於**暫存器值**的條件過濾，使用 Python 風格語法：
 
-| 條件格式 | 說明 | 範例 |
-|----------|------|------|
-| `REG_eq(N)` | 暫存器 == N | `v6_eq(0.0)`, `s4_eq(64)` |
-| `REG_ne(N)` | 暫存器 != N | `v0_ne(0)` |
-| `REG_lt(N)` | 暫存器 < N | `v6_lt(10.0)` |
-| `REG_le(N)` | 暫存器 <= N | `v0_le(7)` |
-| `REG_gt(N)` | 暫存器 > N | `s4_gt(0)` |
-| `REG_ge(N)` | 暫存器 >= N | `v6_ge(1.0)` |
+```asm
+; @PRINT if 暫存器 運算子 值: f"..."
+```
 
 **自動化行為**：
-- 條件暫存器和類型從 `cond=` 自動提取（有小數點 → f32，沒有 → i32）
-- 如果條件暫存器不在 `reg=` 中，會自動創建獨立快照
+- 條件暫存器和類型自動提取（有小數點 → f32，沒有 → i32）
+- 如果條件暫存器不在 `{}` 中，會自動創建獨立快照
 
-**使用範例（新語法）**：
+**使用範例**：
 ```asm
 ; 只印出 A > 2.0 的 thread
 ; @PRINT if v6 > 2.0: f"A={v6:.3f}, B={v7:.2f}"
@@ -203,11 +175,19 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 |------|------|
 | AGPR 直接印出 | 需要額外指令轉換 |
 
+### 🔜 待討論功能
+
+| 功能 | 說明 | 挑戰 |
+|------|------|------|
+| `{$tid}` 內建變數 | 在 f-string 中印出 thread ID | `gpu.thread_id` 會污染 SGPR |
+
+**可能的解決方案**：在 kernel 開頭快照 `v0`（AMDGPU ABI 規定 `v0` = workitem_id_x），避開 `gpu.thread_id`。需與使用者討論後決定實現方式。
+
 ---
 
 ## 範例
 
-### 範例 1：VGPR Before/After 觀察（新語法）
+### 範例 1：VGPR Before/After 觀察
 
 ```asm
 	global_load_dword v6, v[4:5], off      ; 載入 A[tid]
@@ -246,7 +226,7 @@ After ADD (A>2): C=12.000
 After ADD (A>2): C=15.000
 ```
 
-### 範例 2：SGPR 印出（新語法）
+### 範例 2：SGPR 印出
 
 ```asm
 	s_load_dword s4, s[0:1], 0x18          ; 載入 n
@@ -268,7 +248,7 @@ After ADD (A>2): C=15.000
 ; @PRINT f"n={s4}, A={v6:.2f}, B={v7:.2f}"
 ```
 
-### 範例 4：表達式計算（新語法）
+### 範例 4：表達式計算
 
 ```asm
 ; 基本四則運算
@@ -421,18 +401,21 @@ Project-MDR/
 
 ## 更新日誌
 
+### v1.6 (2026-01-21)
+- 📝 **文件更新**：移除舊語法說明，統一使用 f-string 語法
+- 🔜 新增「待討論功能」章節：`{$tid}` 內建變數
+
 ### v1.5 (2026-01-21)
 - ✅ **支援複合表達式運算**
   - 括號與多運算子組合：`{(v6+v7)*2/7:.2f}`
   - 常數自動類型轉換：整數常數在 f32 表達式中自動轉為浮點數
 
 ### v1.4 (2026-01-21)
-- ✅ **新增 Python f-string 風格語法**（推薦使用）
+- ✅ **新增 Python f-string 風格語法**
   - `f"A={v6:.3f}"` 取代 `fmt="A=%f" reg=v6 type=f32`
   - `if v6 > 2.0:` 取代 `cond=v6_gt(2.0)`
 - ✅ 自動推導類型：VGPR 預設 f32，SGPR 預設 i32
 - ✅ 支援格式說明符：`{v6:.3f}`, `{v6:d}` 等
-- ✅ 向後相容舊語法
 
 ### v1.3 (2026-01-21)
 - ✅ 簡化條件式 printf 語法：移除 `cond_reg=` 和 `cond_type=` 參數
