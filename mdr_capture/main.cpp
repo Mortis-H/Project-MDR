@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <vector>
 #include <cmath>
+#include <cstdlib>
 
 #define HIP_CHECK(cmd)                                            \
     do {                                                          \
@@ -16,7 +17,7 @@
         }                                                         \
     } while (0)
 
-int main() {
+int main(int argc, char** argv) {
     const int N = 4;
     const size_t bytes = N * sizeof(float);
 
@@ -40,19 +41,26 @@ int main() {
     HIP_CHECK(hipMemcpy(dA, hA.data(), bytes, hipMemcpyHostToDevice));
     HIP_CHECK(hipMemcpy(dB, hB.data(), bytes, hipMemcpyHostToDevice));
 
-    // 載入 code object 模組
+    // 載入 code object 模組（可用 argv[1] 或 MDR_HSACO 覆寫）
+    const char* hsaco_path_env = std::getenv("MDR_HSACO");
+    const char* hsaco_path = (argc > 1 && argv[1] && argv[1][0] != '\0')
+        ? argv[1]
+        : (hsaco_path_env && hsaco_path_env[0] != '\0')
+            ? hsaco_path_env
+            : "/home/andycha/workspaces/Project-MDR/mdr_capture/new_cap/with_capture_clobber.hsaco";
+
     hipModule_t module;
-    HIP_CHECK(hipModuleLoad(&module, "cap_output/with_capture_capture_injected.hsaco"));
+    HIP_CHECK(hipModuleLoad(&module, hsaco_path));
 
     // 取得 kernel function handle
     hipFunction_t func;
-    HIP_CHECK(hipModuleGetFunction(&func, module, "_Z9vectorAddPfS_S_i"));
+    HIP_CHECK(hipModuleGetFunction(&func, module, "_Z9vectorAddPKfS0_Pfi"));
 
     // 設定 launch 參數
     int blockSize = 256;
     int gridSize  = (N + blockSize - 1) / blockSize;
 
-    void* args[] = {
+    void* kernelArgs[] = {
         (void*)&dA,
         (void*)&dB,
         (void*)&dC,
@@ -65,7 +73,7 @@ int main() {
         blockSize, 1, 1,    // blockDim
         0,                  // sharedMemBytes
         nullptr,            // stream
-        args,               // kernelParams
+        kernelArgs,         // kernelParams
         nullptr             // extra
     ));
 
@@ -96,7 +104,6 @@ int main() {
     HIP_CHECK(hipFree(dA));
     HIP_CHECK(hipFree(dB));
     HIP_CHECK(hipFree(dC));
-
     HIP_CHECK(hipModuleUnload(module));
 
     return ok ? 0 : 1;

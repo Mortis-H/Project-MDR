@@ -2,34 +2,22 @@
 CAPTURE Register Mapping
 ======================================================================
 
-Generated from: with_capture_capture_injected.s
+Generated from: with_capture_clobber_final.s
 Total captures: 2
 Total values: 4
 
 ----------------------------------------------------------------------
-CAPTURE #0 (Line 23)
+CAPTURE #0 (Line 31)
   Condition: tid_eq(0)
 
-  Register     : v2                   → v4     (f32)
-  Register     : v3                   → v5     (f32)
+  Register     : v2                   → v10    (f32)
+  Register     : v3                   → v11    (f32)
 
 ----------------------------------------------------------------------
-CAPTURE #1 (Line 25)
+CAPTURE #1 (Line 33)
   Condition: tid_eq(0)
 
-  Register     : v2                   → v6     (f32)
-  Expression   : v2*2.0               → v7     (f32)
+  Register     : v2                   → v12    (f32)
+  Expression   : v2*2.0               → v13    (f32)
 
 ======================================================================
-
-使用說明：
-  1. 這些 register 保存了捕獲時刻的快照
-  2. 您可以在後續的 assembly 代碼中繼續使用這些 register
-  3. 注意不要在後續代碼中覆蓋這些 register 的值
-
-範例：
-  ; 假設 v2 被捕獲到 v10
-  ; 原始代碼修改了 v2：
-  v_add_f32 v2, v2, v3
-  ; 但 v10 仍保留原始的 v2 值，可以繼續使用：
-  v_mul_f32 v11, v10, 2.0  ; 使用捕獲的原始值
