@@ -8,9 +8,10 @@ MDR（Memory Debug and Register）是專為 AMD GPU 開發者設計的 ISA 層�
 
 ### 核心功能
 
-- ✅ **Printf 注入**：在任意位置印出 VGPR 和 SGPR 暫存器值
+- ✅ **Python f-string 語法**：直覺的格式字串，如 `f"A={v6:.3f}"`
+- ✅ **條件式 printf**：如 `if v6 > 2.0:` 過濾輸出
 - ✅ **快照機制**：在 `@PRINT` 標記位置捕捉暫存器值，真正觀測該時間點的狀態
-- ✅ **表達式計算**：支援 `+`, `-`, `*`, `/` 四則運算
+- ✅ **表達式計算**：支援 `+`, `-`, `*`, `/` 四則運算，如 `{v6*v7:.2f}`
 - ✅ **VGPR/SGPR 支援**：同時支援向量暫存器和純量暫存器
 - ✅ **生成 HSACO**：產生可執行的 HSA Code Object
 - ✅ **自動測試**：內建 `--test` 選項快速驗證
@@ -48,14 +49,58 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 
 ## @PRINT 指令語法
 
-### 基本格式
+### ⭐ 新語法（Python f-string 風格，推薦）
+
+```asm
+; @PRINT f"訊息 {暫存器:格式}"
+; @PRINT if 條件: f"訊息 {暫存器:格式}"
+```
+
+**範例：**
+```asm
+; 基本用法 - SGPR 自動用 %d，VGPR 自動用 %f
+; @PRINT f"n={s4}, idx={s2}"
+
+; 指定小數位數
+; @PRINT f"A={v6:.3f}, B={v7:.2f}"
+
+; 條件式輸出
+; @PRINT if v6 > 2.0: f"A={v6:.3f}, B={v7:.2f}"
+; @PRINT if s4 == 64: f"n={s4}"
+```
+
+### 格式說明符
+
+| 格式 | 類型 | 說明 | 範例輸出 |
+|------|------|------|----------|
+| `{v6}` | f32 | VGPR 預設浮點數 | `3.141593` |
+| `{s4}` | i32 | SGPR 預設整數 | `64` |
+| `{v6:.3f}` | f32 | 3 位小數 | `3.142` |
+| `{v6:.2f}` | f32 | 2 位小數 | `3.14` |
+| `{v6:f}` | f32 | 浮點數 | `3.141593` |
+| `{v6:d}` | i32 | 整數 | `42` |
+| `{v6*v7:.2f}` | f32 | 表達式 | `6.28` |
+| `{(v6+v7)*2:.2f}` | f32 | 複合表達式 | `12.00` |
+
+### 條件運算子
+
+| 運算子 | 說明 | 範例 |
+|--------|------|------|
+| `==` | 等於 | `if v6 == 0.0:` |
+| `!=` | 不等於 | `if v0 != 0:` |
+| `<` | 小於 | `if v6 < 10.0:` |
+| `<=` | 小於等於 | `if s4 <= 64:` |
+| `>` | 大於 | `if v6 > 2.0:` |
+| `>=` | 大於等於 | `if v6 >= 1.0:` |
+
+---
+
+### 舊語法（向後相容）
 
 ```asm
 ; @PRINT [cond=條件] fmt="格式字串" reg=暫存器 type=類型
 ; @PRINT [cond=條件] fmt="格式字串" expr="表達式" type=類型
 ```
-
-### 參數說明
 
 | 參數 | 必須 | 說明 | 範例 |
 |------|:----:|------|------|
@@ -75,8 +120,9 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 
 | 功能 | 說明 | 範例 |
 |------|------|------|
-| **VGPR 印出** | 印出向量暫存器值 | `reg=v6,v7 type=f32,f32` |
-| **SGPR 印出** | 印出純量暫存器值 | `reg=s4,s2 type=i32,i32` |
+| **f-string 語法** | Python 風格格式字串 | `f"A={v6:.3f}"` |
+| **VGPR 印出** | 印出向量暫存器值 | `{v6}`, `{v7:.2f}` |
+| **SGPR 印出** | 印出純量暫存器值 | `{s4}`, `{s2:d}` |
 | **快照機制** | 在 `@PRINT` 位置捕捉暫存器值 | Before/After 觀察 |
 | **條件印出** | 基於暫存器值過濾輸出 | `cond=v6_eq(0.0)` |
 | **表達式計算** | 四則運算 | `expr="v6*v7"` |
@@ -110,8 +156,11 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 | 減法 `-` | ✅ | ✅ | `v6-v7` |
 | 乘法 `*` | ✅ | ✅ | `v6*v7` |
 | 除法 `/` | ✅ | ✅ | `v6/v7` |
-| 括號 `()` | ✅ | ✅ | `(v6+v7)*2.0` |
-| 常數 | ✅ | ✅ | `4.0`, `55` |
+| 括號 `()` | ✅ | ✅ | `(v6+v7)*2` |
+| 巢狀運算 | ✅ | ✅ | `(v6+v7)*2/7` |
+| 常數 | ✅ | ✅ | `4.0`, `55`, `2` |
+
+> 💡 常數會根據表達式類型自動轉換：在 f32 表達式中，整數 `2` 會自動變成 `2.0`
 
 ---
 
@@ -139,14 +188,13 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 - 條件暫存器和類型從 `cond=` 自動提取（有小數點 → f32，沒有 → i32）
 - 如果條件暫存器不在 `reg=` 中，會自動創建獨立快照
 
-**使用範例**：
+**使用範例（新語法）**：
 ```asm
 ; 只印出 A > 2.0 的 thread
-; v6 在 reg= 中，直接使用它的快照值作為條件
-; @PRINT cond=v6_gt(2.0) fmt="A=%f, B=%f" reg=v6,v7 type=f32,f32
+; @PRINT if v6 > 2.0: f"A={v6:.3f}, B={v7:.2f}"
 
-; v6 不在 reg= 中，自動為它創建獨立快照用於條件判斷
-; @PRINT cond=v6_gt(2.0) fmt="C=%f" reg=v2 type=f32
+; v6 不在 {} 中，自動為它創建獨立快照用於條件判斷
+; @PRINT if v6 > 2.0: f"C={v2:.3f}"
 ```
 
 ### ❌ 不支援的功能
@@ -159,79 +207,84 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 
 ## 範例
 
-### 範例 1：VGPR Before/After 觀察
+### 範例 1：VGPR Before/After 觀察（新語法）
 
 ```asm
 	global_load_dword v6, v[4:5], off      ; 載入 A[tid]
 	global_load_dword v7, v[2:3], off      ; 載入 B[tid]
 	s_waitcnt vmcnt(0)
-; @PRINT fmt="Before ADD: A(v6)=%f, B(v7)=%f, C(v2)=%f" reg=v6,v7,v2 type=f32,f32,f32
+; @PRINT f"Before ADD: A={v6}, B={v7}, C={v2}"
 	v_add_f32_e32 v2, v6, v7               ; C = A + B
-; @PRINT fmt="After ADD:  A(v6)=%f, B(v7)=%f, C(v2)=%f" reg=v6,v7,v2 type=f32,f32,f32
+; @PRINT f"After ADD:  A={v6}, B={v7}, C={v2}"
 ```
 
 **輸出（快照機制讓我們能觀察同一暫存器在不同時間點的值）：**
 ```
-Before ADD: A(v6)=0.000000, B(v7)=0.000000, C(v2)=0.000611  ← C 是垃圾值
-Before ADD: A(v6)=1.000000, B(v7)=2.000000, C(v2)=0.000611
-After ADD:  A(v6)=0.000000, B(v7)=0.000000, C(v2)=0.000000  ← C = A + B 正確
-After ADD:  A(v6)=1.000000, B(v7)=2.000000, C(v2)=3.000000
+Before ADD: A=0.000000, B=0.000000, C=0.000611  ← C 是垃圾值
+Before ADD: A=1.000000, B=2.000000, C=0.000611
+After ADD:  A=0.000000, B=0.000000, C=0.000000  ← C = A + B 正確
+After ADD:  A=1.000000, B=2.000000, C=3.000000
 ```
 
 ### 範例 1b：條件式 printf（只印 A > 2.0 的 thread）
 
 ```asm
 	s_waitcnt vmcnt(0)
-; v6 在 reg= 中，直接使用它的快照值作為條件
-; @PRINT cond=v6_gt(2.0) fmt="Before ADD (A>2): A(v6)=%f, B(v7)=%f" reg=v6,v7 type=f32,f32
+; @PRINT if v6 > 2.0: f"Before ADD (A>2): A={v6:.3f}, B={v7:.2f}"
 	v_add_f32_e32 v2, v6, v7               ; C = A + B
-; v6 不在 reg= 中，自動為它創建獨立快照用於條件判斷
-; @PRINT cond=v6_gt(2.0) fmt="After ADD (A>2): C(v2)=%f" reg=v2 type=f32
+; v6 不在 {} 中，自動為它創建獨立快照用於條件判斷
+; @PRINT if v6 > 2.0: f"After ADD (A>2): C={v2:.3f}"
 ```
 
 **輸出（只印出 A > 2.0 的 thread）：**
 ```
-Before ADD (A>2): A(v6)=3.000000, B(v7)=6.000000
-Before ADD (A>2): A(v6)=4.000000, B(v7)=8.000000
-Before ADD (A>2): A(v6)=5.000000, B(v7)=10.000000
-After ADD (A>2): C(v2)=9.000000
-After ADD (A>2): C(v2)=12.000000
-After ADD (A>2): C(v2)=15.000000
+Before ADD (A>2): A=3.000, B=6.00
+Before ADD (A>2): A=4.000, B=8.00
+Before ADD (A>2): A=5.000, B=10.00
+After ADD (A>2): C=9.000
+After ADD (A>2): C=12.000
+After ADD (A>2): C=15.000
 ```
 
-### 範例 2：SGPR 印出
+### 範例 2：SGPR 印出（新語法）
 
 ```asm
 	s_load_dword s4, s[0:1], 0x18          ; 載入 n
 	s_mul_i32 s2, s2, s3                   ; 計算 base_idx
-; @PRINT fmt="[SGPR] n(s4)=%d, base_idx(s2)=%d" reg=s4,s2 type=i32,i32
+; @PRINT f"[SGPR] n={s4}, base_idx={s2}"
 	v_add_u32_e32 v0, s2, v0
 ```
 
 **輸出：**
 ```
-[SGPR] n(s4)=64, base_idx(s2)=0
-[SGPR] n(s4)=64, base_idx(s2)=0
+[SGPR] n=64, base_idx=0
+[SGPR] n=64, base_idx=0
 ...（所有 thread 輸出相同值，因為 SGPR 是 wavefront 共享的）
 ```
 
 ### 範例 3：混合 VGPR + SGPR
 
 ```asm
-; @PRINT fmt="n=%d, A=%f, B=%f" reg=s4,v6,v7 type=i32,f32,f32
+; @PRINT f"n={s4}, A={v6:.2f}, B={v7:.2f}"
 ```
 
-### 範例 4：表達式計算
+### 範例 4：表達式計算（新語法）
 
 ```asm
-	v_mov_b32_e32 v2, 45
-; @PRINT fmt="v2=%d, v2*2=%d, v2^2=%d" reg=v2 expr="v2*2; v2*v2" type=i32,i32,i32
+; 基本四則運算
+; @PRINT f"A+B={v6+v7:.2f}, A-B={v6-v7:.2f}, A*B={v6*v7:.2f}"
+
+; 複合運算（括號 + 多運算子）
+; @PRINT f"(A+B)x2/7={(v6+v7)*2/7:.2f}"
 ```
 
-**輸出：**
+**輸出（以 A=3, B=6 為例）：**
 ```
-v2=45, v2*2=90, v2^2=2025
+A+B=9.00, A-B=-3.00, A*B=18.00
+(A+B)x2/7=2.57
 ```
+
+> 📝 計算驗證：(3+6)×2/7 = 9×2/7 = 18/7 ≈ 2.57 ✓
 
 ---
 
@@ -367,6 +420,19 @@ Project-MDR/
 ---
 
 ## 更新日誌
+
+### v1.5 (2026-01-21)
+- ✅ **支援複合表達式運算**
+  - 括號與多運算子組合：`{(v6+v7)*2/7:.2f}`
+  - 常數自動類型轉換：整數常數在 f32 表達式中自動轉為浮點數
+
+### v1.4 (2026-01-21)
+- ✅ **新增 Python f-string 風格語法**（推薦使用）
+  - `f"A={v6:.3f}"` 取代 `fmt="A=%f" reg=v6 type=f32`
+  - `if v6 > 2.0:` 取代 `cond=v6_gt(2.0)`
+- ✅ 自動推導類型：VGPR 預設 f32，SGPR 預設 i32
+- ✅ 支援格式說明符：`{v6:.3f}`, `{v6:d}` 等
+- ✅ 向後相容舊語法
 
 ### v1.3 (2026-01-21)
 - ✅ 簡化條件式 printf 語法：移除 `cond_reg=` 和 `cond_type=` 參數

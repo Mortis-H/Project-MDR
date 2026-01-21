@@ -82,28 +82,159 @@ class PrintDirective:
         return f"@PRINT at line {self.line_number}: {self.format_string} ({self.registers}){cond_str}"
 
 
+def parse_fstring_format(fstring: str) -> Tuple[str, List[str], List[str]]:
+    """
+    解析 Python f-string 風格的格式字串
+    
+    輸入: f"Before: A={v6:.3f}, B={v7:.2f}, idx={s4:d}"
+    輸出: ("Before: A=%0.3f, B=%0.2f, idx=%d", ["v6", "v7", "s4"], ["f32", "f32", "i32"])
+    
+    支援的格式說明符：
+    - {v6} - 預設格式（VGPR 預設 f32，SGPR 預設 i32）
+    - {v6:f} 或 {v6:.f} - 浮點數 f32
+    - {v6:.3f} - 浮點數，3 位小數
+    - {v6:d} - 整數 i32
+    - {v6:ld} - 長整數 i64
+    - {expr} - 表達式（如 {v6*v7:.2f}）
+    """
+    registers = []
+    types = []
+    
+    # 尋找所有 {xxx} 或 {xxx:格式} 的 placeholder
+    # 支援暫存器名稱或表達式
+    pattern = r'\{([^}]+)\}'
+    
+    def replace_placeholder(match):
+        content = match.group(1)
+        
+        # 分離暫存器/表達式和格式說明符
+        if ':' in content:
+            reg_or_expr, fmt_spec = content.rsplit(':', 1)
+        else:
+            reg_or_expr = content
+            fmt_spec = ''
+        
+        reg_or_expr = reg_or_expr.strip()
+        fmt_spec = fmt_spec.strip()
+        
+        # 判斷是暫存器還是表達式
+        is_simple_reg = re.match(r'^[vs]\d+$', reg_or_expr)
+        
+        registers.append(reg_or_expr)
+        
+        # 根據格式說明符推導類型和 printf 格式
+        if fmt_spec:
+            if fmt_spec == 'd':
+                types.append('i32')
+                return '%d'
+            elif fmt_spec == 'ld':
+                types.append('i64')
+                return '%ld'
+            elif fmt_spec == 'f' or fmt_spec == '.f':
+                types.append('f32')
+                return '%f'
+            elif fmt_spec == 'lf':
+                types.append('f64')
+                return '%f'
+            elif re.match(r'\.?\d*f$', fmt_spec):
+                # 如 .3f, 3f, .f
+                types.append('f32')
+                # 轉換為 printf 格式
+                if fmt_spec.startswith('.'):
+                    return f'%{fmt_spec[:-1]}f'  # .3f -> %0.3f
+                else:
+                    return f'%.{fmt_spec[:-1]}f'  # 3f -> %.3f
+            else:
+                # 未知格式，預設
+                if is_simple_reg and reg_or_expr.startswith('s'):
+                    types.append('i32')
+                    return '%d'
+                else:
+                    types.append('f32')
+                    return '%f'
+        else:
+            # 無格式說明符，根據暫存器類型推導
+            if is_simple_reg and reg_or_expr.startswith('s'):
+                types.append('i32')
+                return '%d'
+            else:
+                types.append('f32')
+                return '%f'
+    
+    printf_format = re.sub(pattern, replace_placeholder, fstring)
+    
+    return printf_format, registers, types
+
+
+def parse_condition_pythonic(cond_str: str) -> Optional[str]:
+    """
+    解析 Python 風格的條件式
+    
+    輸入: "if v6 > 2.0:" 或 "if s4 == 64:"
+    輸出: "v6_gt(2.0)" 或 "s4_eq(64)"
+    
+    支援的運算子：
+    - == -> eq
+    - != -> ne
+    - < -> lt
+    - <= -> le
+    - > -> gt
+    - >= -> ge
+    """
+    # 移除 "if " 前綴和 ":" 後綴
+    cond_str = cond_str.strip()
+    if cond_str.startswith('if '):
+        cond_str = cond_str[3:]
+    if cond_str.endswith(':'):
+        cond_str = cond_str[:-1]
+    cond_str = cond_str.strip()
+    
+    # 解析條件式
+    # 支援: v6 > 2.0, v6 >= 2.0, v6 == 0, v6 != 0, v6 < 10, v6 <= 10
+    op_map = {
+        '==': 'eq',
+        '!=': 'ne',
+        '<=': 'le',
+        '>=': 'ge',
+        '<': 'lt',
+        '>': 'gt'
+    }
+    
+    for op_symbol, op_name in sorted(op_map.items(), key=lambda x: -len(x[0])):
+        if op_symbol in cond_str:
+            parts = cond_str.split(op_symbol, 1)
+            if len(parts) == 2:
+                reg = parts[0].strip()
+                value = parts[1].strip()
+                return f"{reg}_{op_name}({value})"
+    
+    return None
+
+
 def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirective]:
     """
     解析 @PRINT 指令
     
-    支援格式：
-    1. 直接印出暫存器：
-       ; @PRINT fmt="value: %f" reg=v6 type=f32
-       
-    2. 條件式印出（條件暫存器自動從 cond= 提取）：
-       ; @PRINT cond=v6_gt(2.0) fmt="A=%f" reg=v6 type=f32
-       ; @PRINT cond=v6_gt(2.0) fmt="C=%f" reg=v2 type=f32  (v6 不在 reg= 中，會自動快照)
-       
-    3. 計算表達式後印出：
-       ; @PRINT fmt="product=%f" expr="v6 * v7" type=f32
-       
-    4. 混合模式：
-       ; @PRINT fmt="a=%f, b=%f, a*b=%f" reg=v6,v7 expr="v6*v7" type=f32,f32,f32
+    支援兩種語法：
     
-    條件式格式：REG_OP(VALUE)
-    - REG: v0, v6, s4 等
-    - OP: eq, ne, lt, le, gt, ge
-    - VALUE: 整數或浮點數（有小數點視為浮點數）
+    === 新語法（Python f-string 風格，推薦）===
+    ; @PRINT f"Before: A={v6:.3f}, B={v7:.2f}"
+    ; @PRINT if v6 > 2.0: f"A={v6:.3f}, B={v7:.2f}"
+    
+    格式說明符：
+    - {v6} - 預設格式（VGPR 預設 f32，SGPR 預設 i32）
+    - {v6:.3f} - 浮點數，3 位小數
+    - {v6:d} - 整數
+    - {v6*v7:.2f} - 表達式
+    
+    條件式：
+    - if v6 > 2.0:
+    - if s4 == 64:
+    - 支援 ==, !=, <, <=, >, >=
+    
+    === 舊語法（向後相容）===
+    ; @PRINT fmt="value: %f" reg=v6 type=f32
+    ; @PRINT cond=v6_gt(2.0) fmt="A=%f" reg=v6 type=f32
     """
     # 匹配 @PRINT 指令（支援 ; 或 # 作為註解前綴）
     match = re.search(r'[;#]\s*@PRINT\s+(.+)', line)
@@ -112,12 +243,78 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     
     directive_content = match.group(1).strip()
     
-    # 解析各個屬性
+    # ========== 嘗試新語法（Python f-string 風格）==========
+    # 格式: [if CONDITION:] f"..."
+    fstring_match = re.search(r'f"([^"]*)"', directive_content)
+    
+    if fstring_match:
+        fstring_content = fstring_match.group(1)
+        
+        # 檢查是否有條件式 (if ... :)
+        condition = None
+        condition_register = None
+        condition_type = None
+        
+        # 尋找 "if ... :" 部分
+        cond_match = re.match(r'(if\s+[^:]+:)\s*f"', directive_content)
+        if cond_match:
+            cond_str = cond_match.group(1)
+            # 轉換為內部格式
+            internal_cond = parse_condition_pythonic(cond_str)
+            if internal_cond:
+                condition = internal_cond
+                print(f"[Info] Parsed condition: '{cond_str}' -> {condition}")
+        
+        # 解析 f-string
+        printf_format, parsed_regs, parsed_types = parse_fstring_format(fstring_content)
+        
+        # 分離暫存器和表達式
+        registers = []
+        expressions = []
+        types = []
+        
+        for reg_or_expr, typ in zip(parsed_regs, parsed_types):
+            # 判斷是暫存器還是表達式
+            if re.match(r'^[vs]\d+$', reg_or_expr):
+                registers.append(reg_or_expr)
+                types.append(typ)
+            else:
+                expressions.append(reg_or_expr)
+                types.append(typ)
+        
+        # 處理條件暫存器
+        if condition:
+            cond_parse = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', condition)
+            if cond_parse:
+                cond_reg, cond_op, cond_value = cond_parse.groups()
+                if '.' in cond_value:
+                    condition_type = 'f32'
+                else:
+                    condition_type = 'i32'
+                if cond_reg not in registers:
+                    condition_register = cond_reg
+                    print(f"[Info] Condition register {cond_reg} (type={condition_type}) needs separate snapshot")
+        
+        if not registers and not expressions:
+            print(f"[Warning] @PRINT f-string has no placeholders at line {line_number + 1}")
+            return None
+        
+        return PrintDirective(
+            line_number=line_number,
+            format_string=printf_format,
+            registers=registers,
+            types=types,
+            condition=condition,
+            condition_register=condition_register,
+            condition_type=condition_type,
+            expressions=expressions if expressions else None
+        )
+    
+    # ========== 舊語法（向後相容）==========
     fmt_match = re.search(r'fmt\s*=\s*"([^"]*)"', directive_content)
     reg_match = re.search(r'(?<![_\w])reg\s*=\s*([\w,\[\]:\s]+?)(?:\s+(?:type|cond|expr|$))', directive_content)
     type_match = re.search(r'(?<![_\w])type\s*=\s*([\w,\s]+?)(?:\s+(?:reg|cond|fmt|expr|$)|$)', directive_content)
     cond_match = re.search(r'(?<![_\w])cond\s*=\s*(\w+\([^)]+\))', directive_content)
-    # 表達式匹配：支援 expr="..." 或 expr='...'
     expr_match = re.search(r'expr\s*=\s*"([^"]+)"', directive_content)
     
     if not fmt_match or not type_match:
@@ -140,7 +337,6 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     expressions = []
     if expr_match:
         expr_str = expr_match.group(1).strip()
-        # 支持多個表達式用 ; 分隔
         expressions = [e.strip() for e in expr_str.split(';')]
     
     # 條件（可選）
@@ -151,18 +347,13 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     condition_type = None
     
     if condition:
-        # 解析 cond=v6_gt(2.0) 格式
         cond_parse = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', condition)
         if cond_parse:
             cond_reg, cond_op, cond_value = cond_parse.groups()
-            
-            # 自動推導類型：有小數點就是 f32，否則是 i32
             if '.' in cond_value:
                 condition_type = 'f32'
             else:
                 condition_type = 'i32'
-            
-            # 如果條件暫存器不在 reg= 中，需要為它創建獨立快照
             if cond_reg not in registers:
                 condition_register = cond_reg
                 print(f"[Info] Condition register {cond_reg} (type={condition_type}) needs separate snapshot")
@@ -377,7 +568,8 @@ def parse_expression(expr: str) -> List[Tuple[str, str]]:
     return tokens
 
 
-def compile_expression_to_mlir(expr: str, result_type: str, unique_id: int, expr_idx: int) -> Tuple[str, str]:
+def compile_expression_to_mlir(expr: str, result_type: str, unique_id: int, expr_idx: int,
+                                snapshot_map: Dict[str, str] = None) -> Tuple[str, str]:
     """
     將表達式編譯為 MLIR 代碼
     
@@ -388,6 +580,7 @@ def compile_expression_to_mlir(expr: str, result_type: str, unique_id: int, expr
         result_type: 結果類型（f32, i32 等）
         unique_id: 唯一識別符
         expr_idx: 表達式索引
+        snapshot_map: 暫存器快照映射 {原始暫存器: 快照暫存器}，如 {"v6": "v60", "v7": "v61"}
     
     Returns:
         (mlir_code, result_var_name): MLIR 代碼和結果變數名
@@ -406,23 +599,33 @@ def compile_expression_to_mlir(expr: str, result_type: str, unique_id: int, expr
             if token_value not in bound_regs:
                 var_name = f'expr_{unique_id}_{expr_idx}_reg_{var_counter[0]}'
                 var_counter[0] += 1
+                
+                # 檢查是否有快照映射
+                actual_reg = token_value
+                if snapshot_map and token_value in snapshot_map:
+                    actual_reg = snapshot_map[token_value]
+                    lines.append(f'              // Using snapshot {actual_reg} for {token_value}')
+                
                 # 使用 value binding 讀取暫存器值
-                reg_num = token_value[1:]
-                reg_type = token_value[0]  # v, s, or a
+                reg_type = actual_reg[0]  # v, s, or a
                 
                 if reg_type == 'v':
-                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {token_value}", "=v": () -> {mlir_type}')
+                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {actual_reg}", "=v": () -> {mlir_type}')
                 elif reg_type == 's':
-                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "s_mov_b32 $0, {token_value}", "=s": () -> {mlir_type}')
+                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {actual_reg}", "=v": () -> {mlir_type}')
                 else:  # a
-                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_accvgpr_read_b32 $0, {token_value}", "=v": () -> {mlir_type}')
+                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_accvgpr_read_b32 $0, {actual_reg}", "=v": () -> {mlir_type}')
                 
                 bound_regs[token_value] = var_name
             return f'%{bound_regs[token_value]}'
         elif token_type == 'NUM':
             var_name = f'expr_{unique_id}_{expr_idx}_const_{var_counter[0]}'
             var_counter[0] += 1
-            lines.append(f'              %{var_name} = arith.constant {token_value} : {mlir_type}')
+            # 確保浮點類型的常數使用浮點格式
+            const_value = token_value
+            if mlir_type in ('f32', 'f64') and '.' not in str(const_value):
+                const_value = f'{const_value}.0'
+            lines.append(f'              %{var_name} = arith.constant {const_value} : {mlir_type}')
             return f'%{var_name}'
         else:
             raise ValueError(f"Unexpected token type: {token_type}")
@@ -539,7 +742,8 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
                                    vgpr_snapshots: List[Tuple[int, str, int]],
                                    sgpr_snapshots: List[Tuple[int, str, int]] = None,
                                    workitem_id_backup_vgpr: int = None,
-                                   cond_snapshot: Tuple[str, int, bool, str] = None) -> str:
+                                   cond_snapshot: Tuple[str, int, bool, str] = None,
+                                   expr_snapshot: Dict[str, str] = None) -> str:
     """
     生成使用快照暫存器的 gpu.printf MLIR 程式碼
     
@@ -550,6 +754,7 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
         sgpr_snapshots: [(reg_idx, original_reg, snapshot_sgpr), ...] SGPR 快照暫存器映射
         workitem_id_backup_vgpr: workitem_id 備份暫存器（未使用，保留以相容）
         cond_snapshot: 條件暫存器快照 (cond_reg, snapshot_num, is_vgpr, cond_type)
+        expr_snapshot: 表達式暫存器快照映射 {原始暫存器: 快照暫存器}
     
     Returns:
         MLIR 程式碼字串
@@ -567,10 +772,25 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
     # reg_type: 'v' for VGPR, 's' for SGPR
     snapshot_map = {}
     for r_idx, _, snap_vgpr in vgpr_snapshots:
-        snapshot_map[r_idx] = (snap_vgpr, 'v')
+        if r_idx >= 0:  # r_idx == -1 是表達式暫存器
+            snapshot_map[r_idx] = (snap_vgpr, 'v')
     if sgpr_snapshots:
         for r_idx, _, snap_sgpr in sgpr_snapshots:
-            snapshot_map[r_idx] = (snap_sgpr, 's')
+            if r_idx >= 0:
+                snapshot_map[r_idx] = (snap_sgpr, 's')
+    
+    # 建立完整的表達式快照映射（包含 reg= 中的暫存器）
+    full_expr_snapshot = {}
+    if expr_snapshot:
+        full_expr_snapshot.update(expr_snapshot)
+    # 加入 reg= 中的暫存器快照
+    for r_idx, orig_reg, snap_vgpr in vgpr_snapshots:
+        if r_idx >= 0:
+            full_expr_snapshot[orig_reg] = f'v{snap_vgpr}'
+    if sgpr_snapshots:
+        for r_idx, orig_reg, snap_sgpr in sgpr_snapshots:
+            if r_idx >= 0:
+                full_expr_snapshot[orig_reg] = f's{snap_sgpr}'
     
     # 1. 生成 value bindings（使用快照暫存器）
     for i, (reg, typ) in enumerate(zip(directive.registers, reg_types)):
@@ -587,15 +807,14 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
             # 沒有快照的（例如 AGPR），使用原始暫存器
             lines.append(generate_value_binding(reg, typ, var_name))
     
-    # 2. 生成表達式計算（如果有）- 表達式使用快照暫存器
+    # 2. 生成表達式計算（如果有）- 使用快照暫存器
     if directive.expressions:
         for i, (expr, typ) in enumerate(zip(directive.expressions, expr_types)):
             try:
-                # TODO: 表達式中的暫存器也應該替換為快照
-                # 目前暫時使用原始暫存器
-                expr_code, result_var = compile_expression_to_mlir(expr, typ, unique_id, i)
+                # 傳入快照映射，讓表達式使用快照暫存器
+                expr_code, result_var = compile_expression_to_mlir(expr, typ, unique_id, i, full_expr_snapshot)
                 if expr_code:
-                    lines.append(f'              // Expression: {expr}')
+                    lines.append(f'              // Expression: {expr} (using snapshots)')
                     lines.append(expr_code)
                 var_names.append(result_var)
             except Exception as e:
@@ -812,19 +1031,53 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     # directive_cond_snapshots[d_idx] = (cond_reg, snapshot_num, is_vgpr, cond_type)
     directive_cond_snapshots = {}
     
+    # 表達式暫存器快照映射
+    # directive_expr_snapshots[d_idx] = {原始暫存器: 快照暫存器}
+    directive_expr_snapshots = {}
+    
+    # 用於從表達式中提取暫存器的正則表達式
+    reg_pattern = re.compile(r'[vs]\d+')
+    
     for d_idx, directive in enumerate(directives):
+        # 收集這個 directive 已經快照的暫存器
+        snapped_regs = set()
+        
         # 處理要印出的暫存器
         for r_idx, reg in enumerate(directive.registers):
             if reg.startswith('v') and not reg.startswith('vcc'):
                 # VGPR 快照
                 snapshot_vgpr_num = snapshot_vgpr_start + vgpr_snapshot_idx
                 snapshot_vgprs.append((d_idx, r_idx, reg, snapshot_vgpr_num))
+                snapped_regs.add(reg)
                 vgpr_snapshot_idx += 1
             elif reg.startswith('s') and not reg.startswith('scc'):
                 # SGPR 快照
                 snapshot_sgpr_num = snapshot_sgpr_start + sgpr_snapshot_idx
                 snapshot_sgprs.append((d_idx, r_idx, reg, snapshot_sgpr_num))
+                snapped_regs.add(reg)
                 sgpr_snapshot_idx += 1
+        
+        # 處理表達式中的暫存器（如果有表達式且暫存器不在 registers 中）
+        if directive.expressions:
+            expr_snap_map = {}
+            for expr in directive.expressions:
+                for reg in reg_pattern.findall(expr):
+                    if reg not in snapped_regs and reg not in expr_snap_map:
+                        if reg.startswith('v') and not reg.startswith('vcc'):
+                            snapshot_vgpr_num = snapshot_vgpr_start + vgpr_snapshot_idx
+                            # 用特殊的 r_idx (-1) 標記這是表達式暫存器
+                            snapshot_vgprs.append((d_idx, -1, reg, snapshot_vgpr_num))
+                            expr_snap_map[reg] = f'v{snapshot_vgpr_num}'
+                            vgpr_snapshot_idx += 1
+                        elif reg.startswith('s') and not reg.startswith('scc'):
+                            snapshot_sgpr_num = snapshot_sgpr_start + sgpr_snapshot_idx
+                            snapshot_sgprs.append((d_idx, -1, reg, snapshot_sgpr_num))
+                            expr_snap_map[reg] = f's{snapshot_sgpr_num}'
+                            sgpr_snapshot_idx += 1
+            
+            if expr_snap_map:
+                directive_expr_snapshots[d_idx] = expr_snap_map
+                print(f"[Info] Expression register snapshots for @PRINT #{d_idx+1}: {expr_snap_map}")
         
         # 處理條件暫存器（如果有且不在 registers 中）
         if directive.condition_register and directive.condition_register not in directive.registers:
@@ -946,9 +1199,10 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         vgpr_snaps = directive_vgpr_snapshots.get(i, [])
         sgpr_snaps = directive_sgpr_snapshots.get(i, [])
         cond_snap = directive_cond_snapshots.get(i, None)
+        expr_snap = directive_expr_snapshots.get(i, None)
         # 如果有條件式 printf，傳入 workitem_id 備份暫存器
         tid_backup = WORKITEM_ID_BACKUP_VGPR if has_conditional_printf else None
-        printf_blocks.append(generate_printf_with_snapshot(directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap))
+        printf_blocks.append(generate_printf_with_snapshot(directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap, expr_snap))
     
     printf_section = '\n'.join(printf_blocks)
     
@@ -957,14 +1211,15 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     clobber_end = '              // === Printf Section End ===\n'
     
     # === 生成每個 @PRINT 的快照指令 ===
-    # 建立 next_instruction -> snapshot_code 的映射
-    snapshot_insertions = {}  # {clean_instr: snapshot_code}
+    # 建立 next_instruction -> snapshot_code_list 的映射（支援多個 @PRINT 共用同一位置）
+    snapshot_insertions = {}  # {clean_instr: [snapshot_code1, snapshot_code2, ...]}
     for d_idx, directive in enumerate(directives):
         has_vgpr_snap = d_idx in directive_vgpr_snapshots
         has_sgpr_snap = d_idx in directive_sgpr_snapshots
         has_cond_snap = d_idx in directive_cond_snapshots
+        has_expr_snap = d_idx in directive_expr_snapshots
         
-        if directive.next_instruction and (has_vgpr_snap or has_sgpr_snap or has_cond_snap):
+        if directive.next_instruction and (has_vgpr_snap or has_sgpr_snap or has_cond_snap or has_expr_snap):
             # 清理 next_instruction 以便匹配
             clean_instr = directive.next_instruction.strip()
             if ';' in clean_instr:
@@ -984,6 +1239,16 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                 for r_idx, orig_reg, snap_sgpr in directive_sgpr_snapshots[d_idx]:
                     snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 s{snap_sgpr}, {orig_reg}", ""  : () -> ()')
             
+            # 表達式暫存器快照
+            if has_expr_snap:
+                for orig_reg, snap_reg in directive_expr_snapshots[d_idx].items():
+                    if snap_reg.startswith('v'):
+                        snap_lines.append(f'              // Expression register snapshot: {orig_reg} -> {snap_reg}')
+                        snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 {snap_reg}, {orig_reg}", ""  : () -> ()')
+                    else:
+                        snap_lines.append(f'              // Expression register snapshot: {orig_reg} -> {snap_reg}')
+                        snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 {snap_reg}, {orig_reg}", ""  : () -> ()')
+            
             # 條件暫存器快照
             if has_cond_snap:
                 cond_reg, snap_num, is_vgpr, cond_type = directive_cond_snapshots[d_idx]
@@ -996,7 +1261,10 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             
             snap_lines.append(f'              // === End Snapshot ===')
             
-            snapshot_insertions[clean_instr] = '\n'.join(snap_lines)
+            # 合併相同位置的快照（多個 @PRINT 可能共用同一個 next_instruction）
+            if clean_instr not in snapshot_insertions:
+                snapshot_insertions[clean_instr] = []
+            snapshot_insertions[clean_instr].append('\n'.join(snap_lines))
             print(f"[Info] @PRINT #{d_idx+1} snapshot at: {clean_instr[:50]}...")
     
     # === 注入邏輯 ===
@@ -1022,7 +1290,6 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         
         # 檢查是否需要在這一行之前插入快照指令
         if in_func and 'llvm.inline_asm' in line:
-            import re
             mlir_match = re.search(r'"([^"]*)"', line)
             if mlir_match:
                 mlir_instr = mlir_match.group(1)
@@ -1032,10 +1299,12 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                 mlir_instr = ' '.join(mlir_instr.split())
                 
                 # 檢查是否匹配任何 next_instruction
-                for clean_instr, snap_code in snapshot_insertions.items():
+                for clean_instr, snap_code_list in snapshot_insertions.items():
                     if clean_instr not in inserted_snapshots:
                         if clean_instr == mlir_instr or clean_instr.startswith(mlir_instr) or mlir_instr.startswith(clean_instr):
-                            modified_lines.append(snap_code)
+                            # 插入所有共用這個位置的快照（可能有多個 @PRINT 共用）
+                            for snap_code in snap_code_list:
+                                modified_lines.append(snap_code)
                             inserted_snapshots.add(clean_instr)
         
         # 優先在 .LBB0_2: 標籤之前插入 printf

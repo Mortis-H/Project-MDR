@@ -9,7 +9,7 @@ _Z9vectorAddPKfS0_Pfi:
 	s_mov_b64 s[18:19], s[0:1]
 	;;#ASMEND
 	;;#ASMSTART
-	v_mov_b32 v48, v0
+	v_mov_b32 v71, v0
 	;;#ASMEND
 	;;#ASMSTART
 		s_load_dword s3, s[0:1], 0x2c
@@ -78,19 +78,34 @@ _Z9vectorAddPKfS0_Pfi:
 		s_waitcnt vmcnt(0)
 	;;#ASMEND
 	;;#ASMSTART
-	v_mov_b32 v44, v6
+	v_mov_b32 v64, v6
 	;;#ASMEND
 	;;#ASMSTART
-	v_mov_b32 v45, v7
+	v_mov_b32 v65, v7
+	;;#ASMEND
+	;;#ASMSTART
+	v_mov_b32 v64, v6
+	;;#ASMEND
+	;;#ASMSTART
+	v_mov_b32 v65, v7
+	;;#ASMEND
+	;;#ASMSTART
+	v_mov_b32 v66, v6
+	;;#ASMEND
+	;;#ASMSTART
+	v_mov_b32 v67, v7
 	;;#ASMEND
 	;;#ASMSTART
 		v_add_f32_e32 v2, v6, v7               ; C = A + B
 	;;#ASMEND
 	;;#ASMSTART
-	v_mov_b32 v46, v2
+	v_mov_b32 v68, v6
 	;;#ASMEND
 	;;#ASMSTART
-	v_mov_b32 v47, v6
+	v_mov_b32 v69, v7
+	;;#ASMEND
+	;;#ASMSTART
+	v_mov_b32 v70, v2
 	;;#ASMEND
 	;;#ASMSTART
 		global_store_dword v[0:1], v2, off
@@ -440,7 +455,7 @@ _Z9vectorAddPKfS0_Pfi:
 	s_lshl_b64 s[6:7], s[8:9], 12
 	v_lshl_add_u64 v[12:13], v[12:13], 0, s[6:7]
 	v_and_b32_e32 v1, 0xffffff1f, v6
-	v_or_b32_e32 v6, 0xa0, v1
+	v_or_b32_e32 v6, 0x80, v1
 	v_lshlrev_b32_e32 v18, 6, v16
 	v_mov_b32_e32 v9, 0x65542052
 	v_mov_b32_e32 v8, 0x5047535b
@@ -450,21 +465,19 @@ _Z9vectorAddPKfS0_Pfi:
 	global_store_dwordx4 v18, v[6:9], s[6:7]
 	s_nop 1
 	v_mov_b32_e32 v6, 0x205d7473
-	v_mov_b32_e32 v7, 0x3473286e
-	v_mov_b32_e32 v8, 0x64253d29
-	v_mov_b32_e32 v9, 0x6162202c
+	v_mov_b32_e32 v7, 0x64253d6e
+	v_mov_b32_e32 v8, 0x6162202c
+	v_mov_b32_e32 v9, 0x695f6573
 	global_store_dwordx4 v18, v[6:9], s[6:7] offset:16
 	s_nop 1
-	v_mov_b32_e32 v6, 0x695f6573
-	v_mov_b32_e32 v7, 0x73287864
-	v_mov_b32_e32 v8, 0x253d2932
-	v_mov_b32_e32 v9, 0xa64
+	v_mov_b32_e32 v6, 0x253d7864
+	v_mov_b32_e32 v7, 0xa64
+	v_mov_b32_e32 v8, v19
+	v_mov_b32_e32 v9, v19
 	global_store_dwordx4 v18, v[6:9], s[6:7] offset:32
 	s_nop 1
 	v_mov_b32_e32 v6, v19
 	v_mov_b32_e32 v7, v19
-	v_mov_b32_e32 v8, v19
-	v_mov_b32_e32 v9, v19
 	global_store_dwordx4 v18, v[6:9], s[6:7] offset:48
 	s_and_saveexec_b64 s[6:7], s[0:1]
 	s_cbranch_execz .LBB0_41
@@ -855,22 +868,798 @@ _Z9vectorAddPKfS0_Pfi:
 	s_cbranch_execnz .LBB0_74
 .LBB0_75:
 	s_or_b64 exec, exec, s[6:7]
+	v_readfirstlane_b32 s0, v16
+	v_mov_b64_e32 v[4:5], 0
 	;;#ASMSTART
-	v_mov_b32 v10, v44
+	v_mov_b32 v14, v64
 	;;#ASMEND
 	;;#ASMSTART
-	v_mov_b32 v11, v45
+	v_mov_b32 v15, v65
+	;;#ASMEND
+	;;#ASMSTART
+	v_mov_b32 v10, v64
+	;;#ASMEND
+	;;#ASMSTART
+	v_mov_b32 v11, v65
+	;;#ASMEND
+	s_nop 0
+	v_cmp_eq_u32_e64 s[0:1], s0, v16
+	;;#ASMSTART
+	v_mov_b32 v12, v64
+	;;#ASMEND
+	;;#ASMSTART
+	v_mov_b32 v13, v65
+	;;#ASMEND
+	s_and_saveexec_b64 s[4:5], s[0:1]
+	s_cbranch_execz .LBB0_81
+	v_mov_b32_e32 v6, 0
+	global_load_dwordx2 v[2:3], v6, s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	global_load_dwordx2 v[0:1], v6, s[2:3] offset:40
+	global_load_dwordx2 v[4:5], v6, s[2:3]
+	s_waitcnt vmcnt(1)
+	v_and_b32_e32 v0, v0, v2
+	v_and_b32_e32 v1, v1, v3
+	v_mul_lo_u32 v1, v1, 24
+	v_mul_hi_u32 v7, v0, 24
+	v_add_u32_e32 v1, v7, v1
+	v_mul_lo_u32 v0, v0, 24
+	s_waitcnt vmcnt(0)
+	v_lshl_add_u64 v[0:1], v[4:5], 0, v[0:1]
+	global_load_dwordx2 v[0:1], v[0:1], off sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[4:5], v6, v[0:3], s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	v_cmp_ne_u64_e32 vcc, v[4:5], v[2:3]
+	s_and_saveexec_b64 s[6:7], vcc
+	s_cbranch_execz .LBB0_80
+	s_mov_b64 s[8:9], 0
+.LBB0_78:
+	s_sleep 1
+	global_load_dwordx2 v[0:1], v6, s[2:3] offset:40
+	global_load_dwordx2 v[2:3], v6, s[2:3]
+	s_waitcnt vmcnt(1)
+	v_and_b32_e32 v0, v0, v4
+	v_and_b32_e32 v7, v1, v5
+	s_waitcnt vmcnt(0)
+	v_mad_u64_u32 v[0:1], s[10:11], v0, 24, v[2:3]
+	v_mov_b32_e32 v2, v1
+	v_mad_u64_u32 v[2:3], s[10:11], v7, 24, v[2:3]
+	v_mov_b32_e32 v1, v2
+	global_load_dwordx2 v[2:3], v[0:1], off sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[0:1], v6, v[2:5], s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	v_cmp_eq_u64_e32 vcc, v[0:1], v[4:5]
+	s_or_b64 s[8:9], vcc, s[8:9]
+	v_mov_b64_e32 v[4:5], v[0:1]
+	s_andn2_b64 exec, exec, s[8:9]
+	s_cbranch_execnz .LBB0_78
+	s_or_b64 exec, exec, s[8:9]
+	v_mov_b64_e32 v[4:5], v[0:1]
+.LBB0_80:
+	s_or_b64 exec, exec, s[6:7]
+.LBB0_81:
+	s_or_b64 exec, exec, s[4:5]
+	v_mov_b32_e32 v19, 0
+	global_load_dwordx2 v[6:7], v19, s[2:3] offset:40
+	global_load_dwordx4 v[0:3], v19, s[2:3]
+	v_readfirstlane_b32 s5, v5
+	v_readfirstlane_b32 s4, v4
+	s_mov_b64 s[6:7], exec
+	s_waitcnt vmcnt(1)
+	v_readfirstlane_b32 s8, v6
+	v_readfirstlane_b32 s9, v7
+	s_and_b64 s[8:9], s[8:9], s[4:5]
+	s_mul_i32 s10, s9, 24
+	s_mul_hi_u32 s11, s8, 24
+	s_add_i32 s11, s11, s10
+	s_mul_i32 s10, s8, 24
+	s_waitcnt vmcnt(0)
+	v_lshl_add_u64 v[4:5], v[0:1], 0, s[10:11]
+	s_and_saveexec_b64 s[10:11], s[0:1]
+	s_cbranch_execz .LBB0_83
+	v_mov_b64_e32 v[6:7], s[6:7]
+	v_mov_b32_e32 v8, 2
+	v_mov_b32_e32 v9, 1
+	global_store_dwordx4 v[4:5], v[6:9], off offset:8
+.LBB0_83:
+	s_or_b64 exec, exec, s[10:11]
+	s_lshl_b64 s[6:7], s[8:9], 12
+	v_lshl_add_u64 v[6:7], v[2:3], 0, s[6:7]
+	s_mov_b32 s8, 0
+	v_mov_b32_e32 v20, 33
+	v_mov_b32_e32 v21, v19
+	v_mov_b32_e32 v22, v19
+	v_mov_b32_e32 v23, v19
+	v_readfirstlane_b32 s6, v6
+	v_readfirstlane_b32 s7, v7
+	s_mov_b32 s10, s8
+	s_mov_b32 s11, s8
+	s_mov_b32 s9, s8
+	s_nop 1
+	global_store_dwordx4 v18, v[20:23], s[6:7]
+	s_nop 1
+	v_mov_b64_e32 v[22:23], s[10:11]
+	v_mov_b64_e32 v[20:21], s[8:9]
+	global_store_dwordx4 v18, v[20:23], s[6:7] offset:16
+	global_store_dwordx4 v18, v[20:23], s[6:7] offset:32
+	global_store_dwordx4 v18, v[20:23], s[6:7] offset:48
+	s_and_saveexec_b64 s[6:7], s[0:1]
+	s_cbranch_execz .LBB0_91
+	v_mov_b32_e32 v17, 0
+	global_load_dwordx2 v[22:23], v17, s[2:3] offset:32 sc0 sc1
+	global_load_dwordx2 v[2:3], v17, s[2:3] offset:40
+	v_mov_b32_e32 v20, s4
+	v_mov_b32_e32 v21, s5
+	s_waitcnt vmcnt(0)
+	v_readfirstlane_b32 s8, v2
+	v_readfirstlane_b32 s9, v3
+	s_and_b64 s[8:9], s[8:9], s[4:5]
+	s_mul_i32 s9, s9, 24
+	s_mul_hi_u32 s10, s8, 24
+	s_mul_i32 s8, s8, 24
+	s_add_i32 s9, s10, s9
+	v_lshl_add_u64 v[8:9], v[0:1], 0, s[8:9]
+	global_store_dwordx2 v[8:9], v[22:23], off
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[2:3], v17, v[20:23], s[2:3] offset:32 sc0 sc1
+	s_waitcnt vmcnt(0)
+	v_cmp_ne_u64_e32 vcc, v[2:3], v[22:23]
+	s_and_saveexec_b64 s[8:9], vcc
+	s_cbranch_execz .LBB0_87
+	s_mov_b64 s[10:11], 0
+.LBB0_86:
+	s_sleep 1
+	global_store_dwordx2 v[8:9], v[2:3], off
+	v_mov_b32_e32 v0, s4
+	v_mov_b32_e32 v1, s5
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[0:1], v17, v[0:3], s[2:3] offset:32 sc0 sc1
+	s_waitcnt vmcnt(0)
+	v_cmp_eq_u64_e32 vcc, v[0:1], v[2:3]
+	s_or_b64 s[10:11], vcc, s[10:11]
+	v_mov_b64_e32 v[2:3], v[0:1]
+	s_andn2_b64 exec, exec, s[10:11]
+	s_cbranch_execnz .LBB0_86
+.LBB0_87:
+	s_or_b64 exec, exec, s[8:9]
+	v_mov_b32_e32 v3, 0
+	global_load_dwordx2 v[0:1], v3, s[2:3] offset:16
+	s_mov_b64 s[8:9], exec
+	v_mbcnt_lo_u32_b32 v2, s8, 0
+	v_mbcnt_hi_u32_b32 v2, s9, v2
+	v_cmp_eq_u32_e32 vcc, 0, v2
+	s_and_saveexec_b64 s[10:11], vcc
+	s_cbranch_execz .LBB0_89
+	s_bcnt1_i32_b64 s8, s[8:9]
+	v_mov_b32_e32 v2, s8
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_add_x2 v[0:1], v[2:3], off offset:8 sc1
+.LBB0_89:
+	s_or_b64 exec, exec, s[10:11]
+	s_waitcnt vmcnt(0)
+	global_load_dwordx2 v[2:3], v[0:1], off offset:16
+	s_waitcnt vmcnt(0)
+	v_cmp_eq_u64_e32 vcc, 0, v[2:3]
+	s_cbranch_vccnz .LBB0_91
+	global_load_dword v0, v[0:1], off offset:24
+	v_mov_b32_e32 v1, 0
+	s_waitcnt vmcnt(0)
+	v_readfirstlane_b32 s8, v0
+	s_and_b32 m0, s8, 0xffffff
+	buffer_wbl2 sc0 sc1
+	global_store_dwordx2 v[2:3], v[0:1], off sc0 sc1
+	s_sendmsg sendmsg(MSG_INTERRUPT)
+.LBB0_91:
+	s_or_b64 exec, exec, s[6:7]
+	v_lshl_add_u64 v[0:1], v[6:7], 0, v[18:19]
+	s_branch .LBB0_95
+.LBB0_92:
+	s_or_b64 exec, exec, s[6:7]
+	v_readfirstlane_b32 s6, v2
+	s_cmp_eq_u32 s6, 0
+	s_cbranch_scc1 .LBB0_94
+	s_sleep 1
+	s_cbranch_execnz .LBB0_95
+	s_branch .LBB0_97
+.LBB0_94:
+	s_branch .LBB0_97
+.LBB0_95:
+	v_mov_b32_e32 v2, 1
+	s_and_saveexec_b64 s[6:7], s[0:1]
+	s_cbranch_execz .LBB0_92
+	global_load_dword v2, v[4:5], off offset:20 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	v_and_b32_e32 v2, 1, v2
+	s_branch .LBB0_92
+.LBB0_97:
+	global_load_dwordx2 v[0:1], v[0:1], off
+	s_and_saveexec_b64 s[6:7], s[0:1]
+	s_cbranch_execz .LBB0_100
+	v_mov_b32_e32 v8, 0
+	global_load_dwordx2 v[2:3], v8, s[2:3] offset:40
+	global_load_dwordx2 v[22:23], v8, s[2:3] offset:24 sc0 sc1
+	global_load_dwordx2 v[4:5], v8, s[2:3]
+	s_waitcnt vmcnt(2)
+	v_readfirstlane_b32 s8, v2
+	v_readfirstlane_b32 s9, v3
+	s_add_u32 s10, s8, 1
+	s_addc_u32 s11, s9, 0
+	s_add_u32 s0, s10, s4
+	s_addc_u32 s1, s11, s5
+	s_cmp_eq_u64 s[0:1], 0
+	s_cselect_b32 s1, s11, s1
+	s_cselect_b32 s0, s10, s0
+	s_and_b64 s[4:5], s[0:1], s[8:9]
+	s_mul_i32 s5, s5, 24
+	s_mul_hi_u32 s8, s4, 24
+	s_mul_i32 s4, s4, 24
+	s_add_i32 s5, s8, s5
+	s_waitcnt vmcnt(0)
+	v_lshl_add_u64 v[6:7], v[4:5], 0, s[4:5]
+	v_mov_b32_e32 v20, s0
+	global_store_dwordx2 v[6:7], v[22:23], off
+	v_mov_b32_e32 v21, s1
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[4:5], v8, v[20:23], s[2:3] offset:24 sc0 sc1
+	s_mov_b64 s[4:5], 0
+	s_waitcnt vmcnt(0)
+	v_cmp_ne_u64_e32 vcc, v[4:5], v[22:23]
+	s_and_b64 exec, exec, vcc
+	s_cbranch_execz .LBB0_100
+.LBB0_99:
+	s_sleep 1
+	global_store_dwordx2 v[6:7], v[4:5], off
+	v_mov_b32_e32 v2, s0
+	v_mov_b32_e32 v3, s1
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[2:3], v8, v[2:5], s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	v_cmp_eq_u64_e32 vcc, v[2:3], v[4:5]
+	s_or_b64 s[4:5], vcc, s[4:5]
+	v_mov_b64_e32 v[4:5], v[2:3]
+	s_andn2_b64 exec, exec, s[4:5]
+	s_cbranch_execnz .LBB0_99
+.LBB0_100:
+	s_or_b64 exec, exec, s[6:7]
+	v_readfirstlane_b32 s0, v16
+	v_mov_b64_e32 v[8:9], 0
+	s_nop 0
+	v_cmp_eq_u32_e64 s[0:1], s0, v16
+	s_and_saveexec_b64 s[4:5], s[0:1]
+	s_cbranch_execz .LBB0_106
+	v_mov_b32_e32 v4, 0
+	global_load_dwordx2 v[22:23], v4, s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	global_load_dwordx2 v[2:3], v4, s[2:3] offset:40
+	global_load_dwordx2 v[6:7], v4, s[2:3]
+	s_waitcnt vmcnt(1)
+	v_and_b32_e32 v2, v2, v22
+	v_and_b32_e32 v3, v3, v23
+	v_mul_lo_u32 v3, v3, 24
+	v_mul_hi_u32 v5, v2, 24
+	v_add_u32_e32 v3, v5, v3
+	v_mul_lo_u32 v2, v2, 24
+	s_waitcnt vmcnt(0)
+	v_lshl_add_u64 v[2:3], v[6:7], 0, v[2:3]
+	global_load_dwordx2 v[20:21], v[2:3], off sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[8:9], v4, v[20:23], s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	v_cmp_ne_u64_e32 vcc, v[8:9], v[22:23]
+	s_and_saveexec_b64 s[6:7], vcc
+	s_cbranch_execz .LBB0_105
+	s_mov_b64 s[8:9], 0
+.LBB0_103:
+	s_sleep 1
+	global_load_dwordx2 v[2:3], v4, s[2:3] offset:40
+	global_load_dwordx2 v[6:7], v4, s[2:3]
+	s_waitcnt vmcnt(1)
+	v_and_b32_e32 v2, v2, v8
+	v_and_b32_e32 v5, v3, v9
+	s_waitcnt vmcnt(0)
+	v_mad_u64_u32 v[2:3], s[10:11], v2, 24, v[6:7]
+	v_mov_b32_e32 v6, v3
+	v_mad_u64_u32 v[6:7], s[10:11], v5, 24, v[6:7]
+	v_mov_b32_e32 v3, v6
+	global_load_dwordx2 v[6:7], v[2:3], off sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[2:3], v4, v[6:9], s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	v_cmp_eq_u64_e32 vcc, v[2:3], v[8:9]
+	s_or_b64 s[8:9], vcc, s[8:9]
+	v_mov_b64_e32 v[8:9], v[2:3]
+	s_andn2_b64 exec, exec, s[8:9]
+	s_cbranch_execnz .LBB0_103
+	s_or_b64 exec, exec, s[8:9]
+	v_mov_b64_e32 v[8:9], v[2:3]
+.LBB0_105:
+	s_or_b64 exec, exec, s[6:7]
+.LBB0_106:
+	s_or_b64 exec, exec, s[4:5]
+	v_mov_b32_e32 v19, 0
+	global_load_dwordx2 v[2:3], v19, s[2:3] offset:40
+	global_load_dwordx4 v[4:7], v19, s[2:3]
+	v_readfirstlane_b32 s5, v9
+	v_readfirstlane_b32 s4, v8
+	s_mov_b64 s[6:7], exec
+	s_waitcnt vmcnt(1)
+	v_readfirstlane_b32 s8, v2
+	v_readfirstlane_b32 s9, v3
+	s_and_b64 s[8:9], s[8:9], s[4:5]
+	s_mul_i32 s10, s9, 24
+	s_mul_hi_u32 s11, s8, 24
+	s_add_i32 s11, s11, s10
+	s_mul_i32 s10, s8, 24
+	s_waitcnt vmcnt(0)
+	v_lshl_add_u64 v[8:9], v[4:5], 0, s[10:11]
+	s_and_saveexec_b64 s[10:11], s[0:1]
+	s_cbranch_execz .LBB0_108
+	v_mov_b64_e32 v[20:21], s[6:7]
+	v_mov_b32_e32 v22, 2
+	v_mov_b32_e32 v23, 1
+	global_store_dwordx4 v[8:9], v[20:23], off offset:8
+.LBB0_108:
+	s_or_b64 exec, exec, s[10:11]
+	s_lshl_b64 s[6:7], s[8:9], 12
+	v_lshl_add_u64 v[6:7], v[6:7], 0, s[6:7]
+	v_and_b32_e32 v0, 0xffffff1f, v0
+	v_or_b32_e32 v0, 0xc0, v0
+	v_mov_b32_e32 v3, 0x28205d72
+	v_mov_b32_e32 v2, 0x7078455b
+	v_readfirstlane_b32 s6, v6
+	v_readfirstlane_b32 s7, v7
+	v_mov_b32_e32 v20, 0x253d422d
+	v_mov_b32_e32 v21, 0x2c66322e
+	v_mov_b32_e32 v22, 0x422a4120
+	s_nop 1
+	global_store_dwordx4 v18, v[0:3], s[6:7]
+	s_nop 1
+	v_mov_b32_e32 v0, 0x29422b41
+	v_mov_b32_e32 v1, 0x372f3278
+	v_mov_b32_e32 v2, 0x322e253d
+	v_mov_b32_e32 v3, 0x41202c66
+	global_store_dwordx4 v18, v[0:3], s[6:7] offset:16
+	v_mov_b32_e32 v23, v2
+	global_store_dwordx4 v18, v[20:23], s[6:7] offset:32
+	v_mov_b32_e32 v0, 0xa66
+	v_mov_b32_e32 v1, v19
+	v_mov_b32_e32 v2, v19
+	v_mov_b32_e32 v3, v19
+	global_store_dwordx4 v18, v[0:3], s[6:7] offset:48
+	s_and_saveexec_b64 s[6:7], s[0:1]
+	s_cbranch_execz .LBB0_116
+	v_mov_b32_e32 v17, 0
+	global_load_dwordx2 v[22:23], v17, s[2:3] offset:32 sc0 sc1
+	global_load_dwordx2 v[0:1], v17, s[2:3] offset:40
+	v_mov_b32_e32 v20, s4
+	v_mov_b32_e32 v21, s5
+	s_waitcnt vmcnt(0)
+	v_readfirstlane_b32 s8, v0
+	v_readfirstlane_b32 s9, v1
+	s_and_b64 s[8:9], s[8:9], s[4:5]
+	s_mul_i32 s9, s9, 24
+	s_mul_hi_u32 s10, s8, 24
+	s_mul_i32 s8, s8, 24
+	s_add_i32 s9, s10, s9
+	v_lshl_add_u64 v[4:5], v[4:5], 0, s[8:9]
+	global_store_dwordx2 v[4:5], v[22:23], off
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[2:3], v17, v[20:23], s[2:3] offset:32 sc0 sc1
+	s_waitcnt vmcnt(0)
+	v_cmp_ne_u64_e32 vcc, v[2:3], v[22:23]
+	s_and_saveexec_b64 s[8:9], vcc
+	s_cbranch_execz .LBB0_112
+	s_mov_b64 s[10:11], 0
+.LBB0_111:
+	s_sleep 1
+	global_store_dwordx2 v[4:5], v[2:3], off
+	v_mov_b32_e32 v0, s4
+	v_mov_b32_e32 v1, s5
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[0:1], v17, v[0:3], s[2:3] offset:32 sc0 sc1
+	s_waitcnt vmcnt(0)
+	v_cmp_eq_u64_e32 vcc, v[0:1], v[2:3]
+	s_or_b64 s[10:11], vcc, s[10:11]
+	v_mov_b64_e32 v[2:3], v[0:1]
+	s_andn2_b64 exec, exec, s[10:11]
+	s_cbranch_execnz .LBB0_111
+.LBB0_112:
+	s_or_b64 exec, exec, s[8:9]
+	v_mov_b32_e32 v3, 0
+	global_load_dwordx2 v[0:1], v3, s[2:3] offset:16
+	s_mov_b64 s[8:9], exec
+	v_mbcnt_lo_u32_b32 v2, s8, 0
+	v_mbcnt_hi_u32_b32 v2, s9, v2
+	v_cmp_eq_u32_e32 vcc, 0, v2
+	s_and_saveexec_b64 s[10:11], vcc
+	s_cbranch_execz .LBB0_114
+	s_bcnt1_i32_b64 s8, s[8:9]
+	v_mov_b32_e32 v2, s8
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_add_x2 v[0:1], v[2:3], off offset:8 sc1
+.LBB0_114:
+	s_or_b64 exec, exec, s[10:11]
+	s_waitcnt vmcnt(0)
+	global_load_dwordx2 v[2:3], v[0:1], off offset:16
+	s_waitcnt vmcnt(0)
+	v_cmp_eq_u64_e32 vcc, 0, v[2:3]
+	s_cbranch_vccnz .LBB0_116
+	global_load_dword v0, v[0:1], off offset:24
+	v_mov_b32_e32 v1, 0
+	s_waitcnt vmcnt(0)
+	v_readfirstlane_b32 s8, v0
+	s_and_b32 m0, s8, 0xffffff
+	buffer_wbl2 sc0 sc1
+	global_store_dwordx2 v[2:3], v[0:1], off sc0 sc1
+	s_sendmsg sendmsg(MSG_INTERRUPT)
+.LBB0_116:
+	s_or_b64 exec, exec, s[6:7]
+	v_lshl_add_u64 v[0:1], v[6:7], 0, v[18:19]
+	s_branch .LBB0_120
+.LBB0_117:
+	s_or_b64 exec, exec, s[6:7]
+	v_readfirstlane_b32 s6, v2
+	s_cmp_eq_u32 s6, 0
+	s_cbranch_scc1 .LBB0_119
+	s_sleep 1
+	s_cbranch_execnz .LBB0_120
+	s_branch .LBB0_122
+.LBB0_119:
+	s_branch .LBB0_122
+.LBB0_120:
+	v_mov_b32_e32 v2, 1
+	s_and_saveexec_b64 s[6:7], s[0:1]
+	s_cbranch_execz .LBB0_117
+	global_load_dword v2, v[8:9], off offset:20 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	v_and_b32_e32 v2, 1, v2
+	s_branch .LBB0_117
+.LBB0_122:
+	global_load_dwordx2 v[0:1], v[0:1], off
+	s_and_saveexec_b64 s[6:7], s[0:1]
+	s_cbranch_execz .LBB0_125
+	v_mov_b32_e32 v8, 0
+	global_load_dwordx2 v[2:3], v8, s[2:3] offset:40
+	global_load_dwordx2 v[22:23], v8, s[2:3] offset:24 sc0 sc1
+	global_load_dwordx2 v[4:5], v8, s[2:3]
+	s_waitcnt vmcnt(2)
+	v_readfirstlane_b32 s8, v2
+	v_readfirstlane_b32 s9, v3
+	s_add_u32 s10, s8, 1
+	s_addc_u32 s11, s9, 0
+	s_add_u32 s0, s10, s4
+	s_addc_u32 s1, s11, s5
+	s_cmp_eq_u64 s[0:1], 0
+	s_cselect_b32 s1, s11, s1
+	s_cselect_b32 s0, s10, s0
+	s_and_b64 s[4:5], s[0:1], s[8:9]
+	s_mul_i32 s5, s5, 24
+	s_mul_hi_u32 s8, s4, 24
+	s_mul_i32 s4, s4, 24
+	s_add_i32 s5, s8, s5
+	s_waitcnt vmcnt(0)
+	v_lshl_add_u64 v[6:7], v[4:5], 0, s[4:5]
+	v_mov_b32_e32 v20, s0
+	global_store_dwordx2 v[6:7], v[22:23], off
+	v_mov_b32_e32 v21, s1
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[4:5], v8, v[20:23], s[2:3] offset:24 sc0 sc1
+	s_mov_b64 s[4:5], 0
+	s_waitcnt vmcnt(0)
+	v_cmp_ne_u64_e32 vcc, v[4:5], v[22:23]
+	s_and_b64 exec, exec, vcc
+	s_cbranch_execz .LBB0_125
+.LBB0_124:
+	s_sleep 1
+	global_store_dwordx2 v[6:7], v[4:5], off
+	v_mov_b32_e32 v2, s0
+	v_mov_b32_e32 v3, s1
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[2:3], v8, v[2:5], s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	v_cmp_eq_u64_e32 vcc, v[2:3], v[4:5]
+	s_or_b64 s[4:5], vcc, s[4:5]
+	v_mov_b64_e32 v[4:5], v[2:3]
+	s_andn2_b64 exec, exec, s[4:5]
+	s_cbranch_execnz .LBB0_124
+.LBB0_125:
+	s_or_b64 exec, exec, s[6:7]
+	v_readfirstlane_b32 s0, v16
+	v_mov_b64_e32 v[8:9], 0
+	s_nop 0
+	v_cmp_eq_u32_e64 s[0:1], s0, v16
+	s_and_saveexec_b64 s[4:5], s[0:1]
+	s_cbranch_execz .LBB0_131
+	v_mov_b32_e32 v4, 0
+	global_load_dwordx2 v[22:23], v4, s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	global_load_dwordx2 v[2:3], v4, s[2:3] offset:40
+	global_load_dwordx2 v[6:7], v4, s[2:3]
+	s_waitcnt vmcnt(1)
+	v_and_b32_e32 v2, v2, v22
+	v_and_b32_e32 v3, v3, v23
+	v_mul_lo_u32 v3, v3, 24
+	v_mul_hi_u32 v5, v2, 24
+	v_add_u32_e32 v3, v5, v3
+	v_mul_lo_u32 v2, v2, 24
+	s_waitcnt vmcnt(0)
+	v_lshl_add_u64 v[2:3], v[6:7], 0, v[2:3]
+	global_load_dwordx2 v[20:21], v[2:3], off sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[8:9], v4, v[20:23], s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	v_cmp_ne_u64_e32 vcc, v[8:9], v[22:23]
+	s_and_saveexec_b64 s[6:7], vcc
+	s_cbranch_execz .LBB0_130
+	s_mov_b64 s[8:9], 0
+.LBB0_128:
+	s_sleep 1
+	global_load_dwordx2 v[2:3], v4, s[2:3] offset:40
+	global_load_dwordx2 v[6:7], v4, s[2:3]
+	s_waitcnt vmcnt(1)
+	v_and_b32_e32 v2, v2, v8
+	v_and_b32_e32 v5, v3, v9
+	s_waitcnt vmcnt(0)
+	v_mad_u64_u32 v[2:3], s[10:11], v2, 24, v[6:7]
+	v_mov_b32_e32 v6, v3
+	v_mad_u64_u32 v[6:7], s[10:11], v5, 24, v[6:7]
+	v_mov_b32_e32 v3, v6
+	global_load_dwordx2 v[6:7], v[2:3], off sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[2:3], v4, v[6:9], s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	v_cmp_eq_u64_e32 vcc, v[2:3], v[8:9]
+	s_or_b64 s[8:9], vcc, s[8:9]
+	v_mov_b64_e32 v[8:9], v[2:3]
+	s_andn2_b64 exec, exec, s[8:9]
+	s_cbranch_execnz .LBB0_128
+	s_or_b64 exec, exec, s[8:9]
+	v_mov_b64_e32 v[8:9], v[2:3]
+.LBB0_130:
+	s_or_b64 exec, exec, s[6:7]
+.LBB0_131:
+	s_or_b64 exec, exec, s[4:5]
+	v_mov_b32_e32 v17, 0
+	global_load_dwordx2 v[2:3], v17, s[2:3] offset:40
+	global_load_dwordx4 v[4:7], v17, s[2:3]
+	v_readfirstlane_b32 s5, v9
+	v_readfirstlane_b32 s4, v8
+	s_mov_b64 s[8:9], exec
+	s_waitcnt vmcnt(1)
+	v_readfirstlane_b32 s6, v2
+	v_readfirstlane_b32 s7, v3
+	s_and_b64 s[6:7], s[6:7], s[4:5]
+	s_mul_i32 s10, s7, 24
+	s_mul_hi_u32 s11, s6, 24
+	s_add_i32 s11, s11, s10
+	s_mul_i32 s10, s6, 24
+	s_waitcnt vmcnt(0)
+	v_lshl_add_u64 v[8:9], v[4:5], 0, s[10:11]
+	s_and_saveexec_b64 s[10:11], s[0:1]
+	s_cbranch_execz .LBB0_133
+	v_mov_b64_e32 v[20:21], s[8:9]
+	v_mov_b32_e32 v22, 2
+	v_mov_b32_e32 v23, 1
+	global_store_dwordx4 v[8:9], v[20:23], off offset:8
+.LBB0_133:
+	s_or_b64 exec, exec, s[10:11]
+	v_add_f32_e32 v2, v14, v15
+	v_add_f32_e32 v2, v2, v2
+	s_mov_b32 s10, 0x40e00000
+	v_div_scale_f32 v3, s[8:9], s10, s10, v2
+	v_rcp_f32_e32 v14, v3
+	s_lshl_b64 s[6:7], s[6:7], 12
+	v_lshl_add_u64 v[6:7], v[6:7], 0, s[6:7]
+	v_and_b32_e32 v0, 0xffffff1d, v0
+	v_fma_f32 v15, -v3, v14, 1.0
+	v_fmac_f32_e32 v14, v15, v14
+	v_div_scale_f32 v15, vcc, v2, s10, v2
+	v_mul_f32_e32 v17, v15, v14
+	v_fma_f32 v19, -v3, v17, v15
+	v_fmac_f32_e32 v17, v19, v14
+	v_fma_f32 v3, -v3, v17, v15
+	v_div_fmas_f32 v3, v3, v14, v17
+	v_div_fixup_f32 v2, v3, s10, v2
+	s_mov_b32 s8, 0
+	v_sub_f32_e32 v10, v10, v11
+	v_mul_f32_e32 v12, v12, v13
+	v_cvt_f64_f32_e32 v[2:3], v2
+	v_or_b32_e32 v0, 0x62, v0
+	v_readfirstlane_b32 s6, v6
+	v_readfirstlane_b32 s7, v7
+	s_mov_b32 s9, s8
+	v_cvt_f64_f32_e32 v[10:11], v10
+	v_cvt_f64_f32_e32 v[12:13], v12
+	s_nop 1
+	global_store_dwordx4 v18, v[0:3], s[6:7]
+	global_store_dwordx4 v18, v[10:13], s[6:7] offset:16
+	s_mov_b32 s10, s8
+	s_mov_b32 s11, s8
+	v_mov_b64_e32 v[0:1], s[8:9]
+	v_mov_b64_e32 v[2:3], s[10:11]
+	global_store_dwordx4 v18, v[0:3], s[6:7] offset:32
+	global_store_dwordx4 v18, v[0:3], s[6:7] offset:48
+	s_and_saveexec_b64 s[6:7], s[0:1]
+	s_cbranch_execz .LBB0_141
+	v_mov_b32_e32 v6, 0
+	global_load_dwordx2 v[12:13], v6, s[2:3] offset:32 sc0 sc1
+	global_load_dwordx2 v[0:1], v6, s[2:3] offset:40
+	v_mov_b32_e32 v10, s4
+	v_mov_b32_e32 v11, s5
+	s_waitcnt vmcnt(0)
+	v_readfirstlane_b32 s8, v0
+	v_readfirstlane_b32 s9, v1
+	s_and_b64 s[8:9], s[8:9], s[4:5]
+	s_mul_i32 s9, s9, 24
+	s_mul_hi_u32 s10, s8, 24
+	s_mul_i32 s8, s8, 24
+	s_add_i32 s9, s10, s9
+	v_lshl_add_u64 v[4:5], v[4:5], 0, s[8:9]
+	global_store_dwordx2 v[4:5], v[12:13], off
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[2:3], v6, v[10:13], s[2:3] offset:32 sc0 sc1
+	s_waitcnt vmcnt(0)
+	v_cmp_ne_u64_e32 vcc, v[2:3], v[12:13]
+	s_and_saveexec_b64 s[8:9], vcc
+	s_cbranch_execz .LBB0_137
+	s_mov_b64 s[10:11], 0
+.LBB0_136:
+	s_sleep 1
+	global_store_dwordx2 v[4:5], v[2:3], off
+	v_mov_b32_e32 v0, s4
+	v_mov_b32_e32 v1, s5
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[0:1], v6, v[0:3], s[2:3] offset:32 sc0 sc1
+	s_waitcnt vmcnt(0)
+	v_cmp_eq_u64_e32 vcc, v[0:1], v[2:3]
+	s_or_b64 s[10:11], vcc, s[10:11]
+	v_mov_b64_e32 v[2:3], v[0:1]
+	s_andn2_b64 exec, exec, s[10:11]
+	s_cbranch_execnz .LBB0_136
+.LBB0_137:
+	s_or_b64 exec, exec, s[8:9]
+	v_mov_b32_e32 v3, 0
+	global_load_dwordx2 v[0:1], v3, s[2:3] offset:16
+	s_mov_b64 s[8:9], exec
+	v_mbcnt_lo_u32_b32 v2, s8, 0
+	v_mbcnt_hi_u32_b32 v2, s9, v2
+	v_cmp_eq_u32_e32 vcc, 0, v2
+	s_and_saveexec_b64 s[10:11], vcc
+	s_cbranch_execz .LBB0_139
+	s_bcnt1_i32_b64 s8, s[8:9]
+	v_mov_b32_e32 v2, s8
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_add_x2 v[0:1], v[2:3], off offset:8 sc1
+.LBB0_139:
+	s_or_b64 exec, exec, s[10:11]
+	s_waitcnt vmcnt(0)
+	global_load_dwordx2 v[2:3], v[0:1], off offset:16
+	s_waitcnt vmcnt(0)
+	v_cmp_eq_u64_e32 vcc, 0, v[2:3]
+	s_cbranch_vccnz .LBB0_141
+	global_load_dword v0, v[0:1], off offset:24
+	v_mov_b32_e32 v1, 0
+	s_waitcnt vmcnt(0)
+	v_readfirstlane_b32 s8, v0
+	s_and_b32 m0, s8, 0xffffff
+	buffer_wbl2 sc0 sc1
+	global_store_dwordx2 v[2:3], v[0:1], off sc0 sc1
+	s_sendmsg sendmsg(MSG_INTERRUPT)
+.LBB0_141:
+	s_or_b64 exec, exec, s[6:7]
+	s_branch .LBB0_145
+.LBB0_142:
+	s_or_b64 exec, exec, s[6:7]
+	v_readfirstlane_b32 s6, v0
+	s_cmp_eq_u32 s6, 0
+	s_cbranch_scc1 .LBB0_144
+	s_sleep 1
+	s_cbranch_execnz .LBB0_145
+	s_branch .LBB0_147
+.LBB0_144:
+	s_branch .LBB0_147
+.LBB0_145:
+	v_mov_b32_e32 v0, 1
+	s_and_saveexec_b64 s[6:7], s[0:1]
+	s_cbranch_execz .LBB0_142
+	global_load_dword v0, v[8:9], off offset:20 sc0 sc1
+	s_waitcnt vmcnt(0)
+	buffer_inv sc0 sc1
+	v_and_b32_e32 v0, 1, v0
+	s_branch .LBB0_142
+.LBB0_147:
+	s_and_saveexec_b64 s[6:7], s[0:1]
+	s_cbranch_execz .LBB0_150
+	v_mov_b32_e32 v6, 0
+	global_load_dwordx2 v[0:1], v6, s[2:3] offset:40
+	global_load_dwordx2 v[10:11], v6, s[2:3] offset:24 sc0 sc1
+	global_load_dwordx2 v[2:3], v6, s[2:3]
+	s_waitcnt vmcnt(2)
+	v_readfirstlane_b32 s8, v0
+	v_readfirstlane_b32 s9, v1
+	s_add_u32 s10, s8, 1
+	s_addc_u32 s11, s9, 0
+	s_add_u32 s0, s10, s4
+	s_addc_u32 s1, s11, s5
+	s_cmp_eq_u64 s[0:1], 0
+	s_cselect_b32 s1, s11, s1
+	s_cselect_b32 s0, s10, s0
+	s_and_b64 s[4:5], s[0:1], s[8:9]
+	s_mul_i32 s5, s5, 24
+	s_mul_hi_u32 s8, s4, 24
+	s_mul_i32 s4, s4, 24
+	s_add_i32 s5, s8, s5
+	s_waitcnt vmcnt(0)
+	v_lshl_add_u64 v[4:5], v[2:3], 0, s[4:5]
+	v_mov_b32_e32 v8, s0
+	global_store_dwordx2 v[4:5], v[10:11], off
+	v_mov_b32_e32 v9, s1
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[2:3], v6, v[8:11], s[2:3] offset:24 sc0 sc1
+	s_mov_b64 s[4:5], 0
+	s_waitcnt vmcnt(0)
+	v_cmp_ne_u64_e32 vcc, v[2:3], v[10:11]
+	s_and_b64 exec, exec, vcc
+	s_cbranch_execz .LBB0_150
+.LBB0_149:
+	s_sleep 1
+	global_store_dwordx2 v[4:5], v[2:3], off
+	v_mov_b32_e32 v0, s0
+	v_mov_b32_e32 v1, s1
+	buffer_wbl2 sc0 sc1
+	s_waitcnt vmcnt(0)
+	global_atomic_cmpswap_x2 v[0:1], v6, v[0:3], s[2:3] offset:24 sc0 sc1
+	s_waitcnt vmcnt(0)
+	v_cmp_eq_u64_e32 vcc, v[0:1], v[2:3]
+	s_or_b64 s[4:5], vcc, s[4:5]
+	v_mov_b64_e32 v[2:3], v[0:1]
+	s_andn2_b64 exec, exec, s[4:5]
+	s_cbranch_execnz .LBB0_149
+.LBB0_150:
+	s_or_b64 exec, exec, s[6:7]
+	;;#ASMSTART
+	v_mov_b32 v10, v66
+	;;#ASMEND
+	;;#ASMSTART
+	v_mov_b32 v11, v67
 	;;#ASMEND
 	s_nop 0
 	v_cmp_lt_f32_e32 vcc, 2.0, v10
 	s_and_saveexec_b64 s[4:5], vcc
-	s_cbranch_execz .LBB0_151
+	s_cbranch_execz .LBB0_226
 	v_readfirstlane_b32 s0, v16
 	v_mov_b64_e32 v[4:5], 0
 	s_nop 0
 	v_cmp_eq_u32_e64 s[0:1], s0, v16
 	s_and_saveexec_b64 s[6:7], s[0:1]
-	s_cbranch_execz .LBB0_82
+	s_cbranch_execz .LBB0_157
 	v_mov_b32_e32 v6, 0
 	global_load_dwordx2 v[2:3], v6, s[2:3] offset:24 sc0 sc1
 	s_waitcnt vmcnt(0)
@@ -893,9 +1682,9 @@ _Z9vectorAddPKfS0_Pfi:
 	buffer_inv sc0 sc1
 	v_cmp_ne_u64_e32 vcc, v[4:5], v[2:3]
 	s_and_saveexec_b64 s[8:9], vcc
-	s_cbranch_execz .LBB0_81
+	s_cbranch_execz .LBB0_156
 	s_mov_b64 s[10:11], 0
-.LBB0_79:
+.LBB0_154:
 	s_sleep 1
 	global_load_dwordx2 v[0:1], v6, s[2:3] offset:40
 	global_load_dwordx2 v[2:3], v6, s[2:3]
@@ -916,12 +1705,12 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[10:11], vcc, s[10:11]
 	v_mov_b64_e32 v[4:5], v[0:1]
 	s_andn2_b64 exec, exec, s[10:11]
-	s_cbranch_execnz .LBB0_79
+	s_cbranch_execnz .LBB0_154
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b64_e32 v[4:5], v[0:1]
-.LBB0_81:
+.LBB0_156:
 	s_or_b64 exec, exec, s[8:9]
-.LBB0_82:
+.LBB0_157:
 	s_or_b64 exec, exec, s[6:7]
 	v_mov_b32_e32 v19, 0
 	global_load_dwordx2 v[6:7], v19, s[2:3] offset:40
@@ -940,12 +1729,12 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_lshl_add_u64 v[4:5], v[0:1], 0, s[12:13]
 	s_and_saveexec_b64 s[12:13], s[0:1]
-	s_cbranch_execz .LBB0_84
+	s_cbranch_execz .LBB0_159
 	v_mov_b64_e32 v[6:7], s[8:9]
 	v_mov_b32_e32 v8, 2
 	v_mov_b32_e32 v9, 1
 	global_store_dwordx4 v[4:5], v[6:9], off offset:8
-.LBB0_84:
+.LBB0_159:
 	s_or_b64 exec, exec, s[12:13]
 	s_lshl_b64 s[8:9], s[10:11], 12
 	v_lshl_add_u64 v[6:7], v[2:3], 0, s[8:9]
@@ -968,7 +1757,7 @@ _Z9vectorAddPKfS0_Pfi:
 	global_store_dwordx4 v18, v[12:15], s[12:13] offset:32
 	global_store_dwordx4 v18, v[12:15], s[12:13] offset:48
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_92
+	s_cbranch_execz .LBB0_167
 	v_mov_b32_e32 v12, 0
 	global_load_dwordx2 v[22:23], v12, s[2:3] offset:32 sc0 sc1
 	global_load_dwordx2 v[2:3], v12, s[2:3] offset:40
@@ -990,9 +1779,9 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_cmp_ne_u64_e32 vcc, v[2:3], v[22:23]
 	s_and_saveexec_b64 s[10:11], vcc
-	s_cbranch_execz .LBB0_88
+	s_cbranch_execz .LBB0_163
 	s_mov_b64 s[12:13], 0
-.LBB0_87:
+.LBB0_162:
 	s_sleep 1
 	global_store_dwordx2 v[8:9], v[2:3], off
 	v_mov_b32_e32 v0, s6
@@ -1005,8 +1794,8 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[12:13], vcc, s[12:13]
 	v_mov_b64_e32 v[2:3], v[0:1]
 	s_andn2_b64 exec, exec, s[12:13]
-	s_cbranch_execnz .LBB0_87
-.LBB0_88:
+	s_cbranch_execnz .LBB0_162
+.LBB0_163:
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b32_e32 v3, 0
 	global_load_dwordx2 v[0:1], v3, s[2:3] offset:16
@@ -1015,19 +1804,19 @@ _Z9vectorAddPKfS0_Pfi:
 	v_mbcnt_hi_u32_b32 v2, s11, v2
 	v_cmp_eq_u32_e32 vcc, 0, v2
 	s_and_saveexec_b64 s[12:13], vcc
-	s_cbranch_execz .LBB0_90
+	s_cbranch_execz .LBB0_165
 	s_bcnt1_i32_b64 s10, s[10:11]
 	v_mov_b32_e32 v2, s10
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
 	global_atomic_add_x2 v[0:1], v[2:3], off offset:8 sc1
-.LBB0_90:
+.LBB0_165:
 	s_or_b64 exec, exec, s[12:13]
 	s_waitcnt vmcnt(0)
 	global_load_dwordx2 v[2:3], v[0:1], off offset:16
 	s_waitcnt vmcnt(0)
 	v_cmp_eq_u64_e32 vcc, 0, v[2:3]
-	s_cbranch_vccnz .LBB0_92
+	s_cbranch_vccnz .LBB0_167
 	global_load_dword v0, v[0:1], off offset:24
 	v_mov_b32_e32 v1, 0
 	s_waitcnt vmcnt(0)
@@ -1036,33 +1825,33 @@ _Z9vectorAddPKfS0_Pfi:
 	buffer_wbl2 sc0 sc1
 	global_store_dwordx2 v[2:3], v[0:1], off sc0 sc1
 	s_sendmsg sendmsg(MSG_INTERRUPT)
-.LBB0_92:
+.LBB0_167:
 	s_or_b64 exec, exec, s[8:9]
 	v_lshl_add_u64 v[0:1], v[6:7], 0, v[18:19]
-	s_branch .LBB0_96
-.LBB0_93:
+	s_branch .LBB0_171
+.LBB0_168:
 	s_or_b64 exec, exec, s[8:9]
 	v_readfirstlane_b32 s8, v2
 	s_cmp_eq_u32 s8, 0
-	s_cbranch_scc1 .LBB0_95
+	s_cbranch_scc1 .LBB0_170
 	s_sleep 1
-	s_cbranch_execnz .LBB0_96
-	s_branch .LBB0_98
-.LBB0_95:
-	s_branch .LBB0_98
-.LBB0_96:
+	s_cbranch_execnz .LBB0_171
+	s_branch .LBB0_173
+.LBB0_170:
+	s_branch .LBB0_173
+.LBB0_171:
 	v_mov_b32_e32 v2, 1
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_93
+	s_cbranch_execz .LBB0_168
 	global_load_dword v2, v[4:5], off offset:20 sc0 sc1
 	s_waitcnt vmcnt(0)
 	buffer_inv sc0 sc1
 	v_and_b32_e32 v2, 1, v2
-	s_branch .LBB0_93
-.LBB0_98:
+	s_branch .LBB0_168
+.LBB0_173:
 	global_load_dwordx2 v[0:1], v[0:1], off
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_101
+	s_cbranch_execz .LBB0_176
 	v_mov_b32_e32 v8, 0
 	global_load_dwordx2 v[2:3], v8, s[2:3] offset:40
 	global_load_dwordx2 v[14:15], v8, s[2:3] offset:24 sc0 sc1
@@ -1094,8 +1883,8 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_cmp_ne_u64_e32 vcc, v[4:5], v[14:15]
 	s_and_b64 exec, exec, vcc
-	s_cbranch_execz .LBB0_101
-.LBB0_100:
+	s_cbranch_execz .LBB0_176
+.LBB0_175:
 	s_sleep 1
 	global_store_dwordx2 v[6:7], v[4:5], off
 	v_mov_b32_e32 v2, s0
@@ -1108,15 +1897,15 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[6:7], vcc, s[6:7]
 	v_mov_b64_e32 v[4:5], v[2:3]
 	s_andn2_b64 exec, exec, s[6:7]
-	s_cbranch_execnz .LBB0_100
-.LBB0_101:
+	s_cbranch_execnz .LBB0_175
+.LBB0_176:
 	s_or_b64 exec, exec, s[8:9]
 	v_readfirstlane_b32 s0, v16
 	v_mov_b64_e32 v[8:9], 0
 	s_nop 0
 	v_cmp_eq_u32_e64 s[0:1], s0, v16
 	s_and_saveexec_b64 s[6:7], s[0:1]
-	s_cbranch_execz .LBB0_107
+	s_cbranch_execz .LBB0_182
 	v_mov_b32_e32 v4, 0
 	global_load_dwordx2 v[14:15], v4, s[2:3] offset:24 sc0 sc1
 	s_waitcnt vmcnt(0)
@@ -1139,9 +1928,9 @@ _Z9vectorAddPKfS0_Pfi:
 	buffer_inv sc0 sc1
 	v_cmp_ne_u64_e32 vcc, v[8:9], v[14:15]
 	s_and_saveexec_b64 s[8:9], vcc
-	s_cbranch_execz .LBB0_106
+	s_cbranch_execz .LBB0_181
 	s_mov_b64 s[10:11], 0
-.LBB0_104:
+.LBB0_179:
 	s_sleep 1
 	global_load_dwordx2 v[2:3], v4, s[2:3] offset:40
 	global_load_dwordx2 v[6:7], v4, s[2:3]
@@ -1162,12 +1951,12 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[10:11], vcc, s[10:11]
 	v_mov_b64_e32 v[8:9], v[2:3]
 	s_andn2_b64 exec, exec, s[10:11]
-	s_cbranch_execnz .LBB0_104
+	s_cbranch_execnz .LBB0_179
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b64_e32 v[8:9], v[2:3]
-.LBB0_106:
+.LBB0_181:
 	s_or_b64 exec, exec, s[8:9]
-.LBB0_107:
+.LBB0_182:
 	s_or_b64 exec, exec, s[6:7]
 	v_mov_b32_e32 v19, 0
 	global_load_dwordx2 v[2:3], v19, s[2:3] offset:40
@@ -1186,12 +1975,12 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_lshl_add_u64 v[8:9], v[4:5], 0, s[12:13]
 	s_and_saveexec_b64 s[12:13], s[0:1]
-	s_cbranch_execz .LBB0_109
+	s_cbranch_execz .LBB0_184
 	v_mov_b64_e32 v[12:13], s[8:9]
 	v_mov_b32_e32 v14, 2
 	v_mov_b32_e32 v15, 1
 	global_store_dwordx4 v[8:9], v[12:15], off offset:8
-.LBB0_109:
+.LBB0_184:
 	s_or_b64 exec, exec, s[12:13]
 	s_lshl_b64 s[8:9], s[10:11], 12
 	v_lshl_add_u64 v[6:7], v[6:7], 0, s[8:9]
@@ -1206,23 +1995,22 @@ _Z9vectorAddPKfS0_Pfi:
 	s_nop 1
 	v_mov_b32_e32 v0, 0x28204444
 	v_mov_b32_e32 v1, 0x29323e41
-	v_mov_b32_e32 v2, 0x2841203a
-	v_mov_b32_e32 v3, 0x3d293676
+	v_mov_b32_e32 v2, 0x3d41203a
+	v_mov_b32_e32 v3, 0x66332e25
 	global_store_dwordx4 v18, v[0:3], s[8:9] offset:16
 	s_nop 1
-	v_mov_b32_e32 v0, 0x202c6625
-	v_mov_b32_e32 v1, 0x37762842
-	v_mov_b32_e32 v2, 0x66253d29
-	v_mov_b32_e32 v3, 10
+	v_mov_b32_e32 v0, 0x3d42202c
+	v_mov_b32_e32 v1, 0x66322e25
+	v_mov_b32_e32 v2, 10
+	v_mov_b32_e32 v3, v19
 	global_store_dwordx4 v18, v[0:3], s[8:9] offset:32
 	s_nop 1
 	v_mov_b32_e32 v0, v19
 	v_mov_b32_e32 v1, v19
 	v_mov_b32_e32 v2, v19
-	v_mov_b32_e32 v3, v19
 	global_store_dwordx4 v18, v[0:3], s[8:9] offset:48
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_117
+	s_cbranch_execz .LBB0_192
 	v_mov_b32_e32 v12, 0
 	global_load_dwordx2 v[22:23], v12, s[2:3] offset:32 sc0 sc1
 	global_load_dwordx2 v[0:1], v12, s[2:3] offset:40
@@ -1244,9 +2032,9 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_cmp_ne_u64_e32 vcc, v[2:3], v[22:23]
 	s_and_saveexec_b64 s[10:11], vcc
-	s_cbranch_execz .LBB0_113
+	s_cbranch_execz .LBB0_188
 	s_mov_b64 s[12:13], 0
-.LBB0_112:
+.LBB0_187:
 	s_sleep 1
 	global_store_dwordx2 v[4:5], v[2:3], off
 	v_mov_b32_e32 v0, s6
@@ -1259,8 +2047,8 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[12:13], vcc, s[12:13]
 	v_mov_b64_e32 v[2:3], v[0:1]
 	s_andn2_b64 exec, exec, s[12:13]
-	s_cbranch_execnz .LBB0_112
-.LBB0_113:
+	s_cbranch_execnz .LBB0_187
+.LBB0_188:
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b32_e32 v3, 0
 	global_load_dwordx2 v[0:1], v3, s[2:3] offset:16
@@ -1269,19 +2057,19 @@ _Z9vectorAddPKfS0_Pfi:
 	v_mbcnt_hi_u32_b32 v2, s11, v2
 	v_cmp_eq_u32_e32 vcc, 0, v2
 	s_and_saveexec_b64 s[12:13], vcc
-	s_cbranch_execz .LBB0_115
+	s_cbranch_execz .LBB0_190
 	s_bcnt1_i32_b64 s10, s[10:11]
 	v_mov_b32_e32 v2, s10
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
 	global_atomic_add_x2 v[0:1], v[2:3], off offset:8 sc1
-.LBB0_115:
+.LBB0_190:
 	s_or_b64 exec, exec, s[12:13]
 	s_waitcnt vmcnt(0)
 	global_load_dwordx2 v[2:3], v[0:1], off offset:16
 	s_waitcnt vmcnt(0)
 	v_cmp_eq_u64_e32 vcc, 0, v[2:3]
-	s_cbranch_vccnz .LBB0_117
+	s_cbranch_vccnz .LBB0_192
 	global_load_dword v0, v[0:1], off offset:24
 	v_mov_b32_e32 v1, 0
 	s_waitcnt vmcnt(0)
@@ -1290,33 +2078,33 @@ _Z9vectorAddPKfS0_Pfi:
 	buffer_wbl2 sc0 sc1
 	global_store_dwordx2 v[2:3], v[0:1], off sc0 sc1
 	s_sendmsg sendmsg(MSG_INTERRUPT)
-.LBB0_117:
+.LBB0_192:
 	s_or_b64 exec, exec, s[8:9]
 	v_lshl_add_u64 v[0:1], v[6:7], 0, v[18:19]
-	s_branch .LBB0_121
-.LBB0_118:
+	s_branch .LBB0_196
+.LBB0_193:
 	s_or_b64 exec, exec, s[8:9]
 	v_readfirstlane_b32 s8, v2
 	s_cmp_eq_u32 s8, 0
-	s_cbranch_scc1 .LBB0_120
+	s_cbranch_scc1 .LBB0_195
 	s_sleep 1
-	s_cbranch_execnz .LBB0_121
-	s_branch .LBB0_123
-.LBB0_120:
-	s_branch .LBB0_123
-.LBB0_121:
+	s_cbranch_execnz .LBB0_196
+	s_branch .LBB0_198
+.LBB0_195:
+	s_branch .LBB0_198
+.LBB0_196:
 	v_mov_b32_e32 v2, 1
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_118
+	s_cbranch_execz .LBB0_193
 	global_load_dword v2, v[8:9], off offset:20 sc0 sc1
 	s_waitcnt vmcnt(0)
 	buffer_inv sc0 sc1
 	v_and_b32_e32 v2, 1, v2
-	s_branch .LBB0_118
-.LBB0_123:
+	s_branch .LBB0_193
+.LBB0_198:
 	global_load_dwordx2 v[0:1], v[0:1], off
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_126
+	s_cbranch_execz .LBB0_201
 	v_mov_b32_e32 v8, 0
 	global_load_dwordx2 v[2:3], v8, s[2:3] offset:40
 	global_load_dwordx2 v[14:15], v8, s[2:3] offset:24 sc0 sc1
@@ -1348,8 +2136,8 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_cmp_ne_u64_e32 vcc, v[4:5], v[14:15]
 	s_and_b64 exec, exec, vcc
-	s_cbranch_execz .LBB0_126
-.LBB0_125:
+	s_cbranch_execz .LBB0_201
+.LBB0_200:
 	s_sleep 1
 	global_store_dwordx2 v[6:7], v[4:5], off
 	v_mov_b32_e32 v2, s0
@@ -1362,15 +2150,15 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[6:7], vcc, s[6:7]
 	v_mov_b64_e32 v[4:5], v[2:3]
 	s_andn2_b64 exec, exec, s[6:7]
-	s_cbranch_execnz .LBB0_125
-.LBB0_126:
+	s_cbranch_execnz .LBB0_200
+.LBB0_201:
 	s_or_b64 exec, exec, s[8:9]
 	v_readfirstlane_b32 s0, v16
 	v_mov_b64_e32 v[8:9], 0
 	s_nop 0
 	v_cmp_eq_u32_e64 s[0:1], s0, v16
 	s_and_saveexec_b64 s[6:7], s[0:1]
-	s_cbranch_execz .LBB0_132
+	s_cbranch_execz .LBB0_207
 	v_mov_b32_e32 v4, 0
 	global_load_dwordx2 v[14:15], v4, s[2:3] offset:24 sc0 sc1
 	s_waitcnt vmcnt(0)
@@ -1393,9 +2181,9 @@ _Z9vectorAddPKfS0_Pfi:
 	buffer_inv sc0 sc1
 	v_cmp_ne_u64_e32 vcc, v[8:9], v[14:15]
 	s_and_saveexec_b64 s[8:9], vcc
-	s_cbranch_execz .LBB0_131
+	s_cbranch_execz .LBB0_206
 	s_mov_b64 s[10:11], 0
-.LBB0_129:
+.LBB0_204:
 	s_sleep 1
 	global_load_dwordx2 v[2:3], v4, s[2:3] offset:40
 	global_load_dwordx2 v[6:7], v4, s[2:3]
@@ -1416,12 +2204,12 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[10:11], vcc, s[10:11]
 	v_mov_b64_e32 v[8:9], v[2:3]
 	s_andn2_b64 exec, exec, s[10:11]
-	s_cbranch_execnz .LBB0_129
+	s_cbranch_execnz .LBB0_204
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b64_e32 v[8:9], v[2:3]
-.LBB0_131:
+.LBB0_206:
 	s_or_b64 exec, exec, s[8:9]
-.LBB0_132:
+.LBB0_207:
 	s_or_b64 exec, exec, s[6:7]
 	v_mov_b32_e32 v12, 0
 	global_load_dwordx2 v[2:3], v12, s[2:3] offset:40
@@ -1440,12 +2228,12 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_lshl_add_u64 v[8:9], v[4:5], 0, s[12:13]
 	s_and_saveexec_b64 s[12:13], s[0:1]
-	s_cbranch_execz .LBB0_134
+	s_cbranch_execz .LBB0_209
 	v_mov_b64_e32 v[12:13], s[8:9]
 	v_mov_b32_e32 v14, 2
 	v_mov_b32_e32 v15, 1
 	global_store_dwordx4 v[8:9], v[12:15], off offset:8
-.LBB0_134:
+.LBB0_209:
 	s_or_b64 exec, exec, s[12:13]
 	s_lshl_b64 s[8:9], s[10:11], 12
 	v_lshl_add_u64 v[6:7], v[6:7], 0, s[8:9]
@@ -1468,7 +2256,7 @@ _Z9vectorAddPKfS0_Pfi:
 	global_store_dwordx4 v18, v[0:3], s[12:13] offset:32
 	global_store_dwordx4 v18, v[0:3], s[12:13] offset:48
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_142
+	s_cbranch_execz .LBB0_217
 	v_mov_b32_e32 v6, 0
 	global_load_dwordx2 v[12:13], v6, s[2:3] offset:32 sc0 sc1
 	global_load_dwordx2 v[0:1], v6, s[2:3] offset:40
@@ -1490,9 +2278,9 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_cmp_ne_u64_e32 vcc, v[2:3], v[12:13]
 	s_and_saveexec_b64 s[10:11], vcc
-	s_cbranch_execz .LBB0_138
+	s_cbranch_execz .LBB0_213
 	s_mov_b64 s[12:13], 0
-.LBB0_137:
+.LBB0_212:
 	s_sleep 1
 	global_store_dwordx2 v[4:5], v[2:3], off
 	v_mov_b32_e32 v0, s6
@@ -1505,8 +2293,8 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[12:13], vcc, s[12:13]
 	v_mov_b64_e32 v[2:3], v[0:1]
 	s_andn2_b64 exec, exec, s[12:13]
-	s_cbranch_execnz .LBB0_137
-.LBB0_138:
+	s_cbranch_execnz .LBB0_212
+.LBB0_213:
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b32_e32 v3, 0
 	global_load_dwordx2 v[0:1], v3, s[2:3] offset:16
@@ -1515,19 +2303,19 @@ _Z9vectorAddPKfS0_Pfi:
 	v_mbcnt_hi_u32_b32 v2, s11, v2
 	v_cmp_eq_u32_e32 vcc, 0, v2
 	s_and_saveexec_b64 s[12:13], vcc
-	s_cbranch_execz .LBB0_140
+	s_cbranch_execz .LBB0_215
 	s_bcnt1_i32_b64 s10, s[10:11]
 	v_mov_b32_e32 v2, s10
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
 	global_atomic_add_x2 v[0:1], v[2:3], off offset:8 sc1
-.LBB0_140:
+.LBB0_215:
 	s_or_b64 exec, exec, s[12:13]
 	s_waitcnt vmcnt(0)
 	global_load_dwordx2 v[2:3], v[0:1], off offset:16
 	s_waitcnt vmcnt(0)
 	v_cmp_eq_u64_e32 vcc, 0, v[2:3]
-	s_cbranch_vccnz .LBB0_142
+	s_cbranch_vccnz .LBB0_217
 	global_load_dword v0, v[0:1], off offset:24
 	v_mov_b32_e32 v1, 0
 	s_waitcnt vmcnt(0)
@@ -1536,31 +2324,31 @@ _Z9vectorAddPKfS0_Pfi:
 	buffer_wbl2 sc0 sc1
 	global_store_dwordx2 v[2:3], v[0:1], off sc0 sc1
 	s_sendmsg sendmsg(MSG_INTERRUPT)
-.LBB0_142:
+.LBB0_217:
 	s_or_b64 exec, exec, s[8:9]
-	s_branch .LBB0_146
-.LBB0_143:
+	s_branch .LBB0_221
+.LBB0_218:
 	s_or_b64 exec, exec, s[8:9]
 	v_readfirstlane_b32 s8, v0
 	s_cmp_eq_u32 s8, 0
-	s_cbranch_scc1 .LBB0_145
+	s_cbranch_scc1 .LBB0_220
 	s_sleep 1
-	s_cbranch_execnz .LBB0_146
-	s_branch .LBB0_148
-.LBB0_145:
-	s_branch .LBB0_148
-.LBB0_146:
+	s_cbranch_execnz .LBB0_221
+	s_branch .LBB0_223
+.LBB0_220:
+	s_branch .LBB0_223
+.LBB0_221:
 	v_mov_b32_e32 v0, 1
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_143
+	s_cbranch_execz .LBB0_218
 	global_load_dword v0, v[8:9], off offset:20 sc0 sc1
 	s_waitcnt vmcnt(0)
 	buffer_inv sc0 sc1
 	v_and_b32_e32 v0, 1, v0
-	s_branch .LBB0_143
-.LBB0_148:
+	s_branch .LBB0_218
+.LBB0_223:
 	s_and_b64 exec, exec, s[0:1]
-	s_cbranch_execz .LBB0_151
+	s_cbranch_execz .LBB0_226
 	v_mov_b32_e32 v6, 0
 	global_load_dwordx2 v[0:1], v6, s[2:3] offset:40
 	global_load_dwordx2 v[10:11], v6, s[2:3] offset:24 sc0 sc1
@@ -1592,8 +2380,8 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_cmp_ne_u64_e32 vcc, v[2:3], v[10:11]
 	s_and_b64 exec, exec, vcc
-	s_cbranch_execz .LBB0_151
-.LBB0_150:
+	s_cbranch_execz .LBB0_226
+.LBB0_225:
 	s_sleep 1
 	global_store_dwordx2 v[4:5], v[2:3], off
 	v_mov_b32_e32 v0, s0
@@ -1606,25 +2394,28 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[6:7], vcc, s[6:7]
 	v_mov_b64_e32 v[2:3], v[0:1]
 	s_andn2_b64 exec, exec, s[6:7]
-	s_cbranch_execnz .LBB0_150
-.LBB0_151:
+	s_cbranch_execnz .LBB0_225
+.LBB0_226:
 	s_or_b64 exec, exec, s[4:5]
 	;;#ASMSTART
-	v_mov_b32 v10, v46
+	v_mov_b32 v10, v68
 	;;#ASMEND
 	;;#ASMSTART
-	v_mov_b32 v0, v47
+	v_mov_b32 v11, v69
+	;;#ASMEND
+	;;#ASMSTART
+	v_mov_b32 v12, v70
 	;;#ASMEND
 	s_nop 0
-	v_cmp_lt_f32_e32 vcc, 2.0, v0
+	v_cmp_lt_f32_e32 vcc, 2.0, v10
 	s_and_saveexec_b64 s[4:5], vcc
-	s_cbranch_execz .LBB0_227
+	s_cbranch_execz .LBB0_302
 	v_readfirstlane_b32 s0, v16
 	v_mov_b64_e32 v[4:5], 0
 	s_nop 0
 	v_cmp_eq_u32_e64 s[0:1], s0, v16
 	s_and_saveexec_b64 s[6:7], s[0:1]
-	s_cbranch_execz .LBB0_158
+	s_cbranch_execz .LBB0_233
 	v_mov_b32_e32 v6, 0
 	global_load_dwordx2 v[2:3], v6, s[2:3] offset:24 sc0 sc1
 	s_waitcnt vmcnt(0)
@@ -1647,9 +2438,9 @@ _Z9vectorAddPKfS0_Pfi:
 	buffer_inv sc0 sc1
 	v_cmp_ne_u64_e32 vcc, v[4:5], v[2:3]
 	s_and_saveexec_b64 s[8:9], vcc
-	s_cbranch_execz .LBB0_157
+	s_cbranch_execz .LBB0_232
 	s_mov_b64 s[10:11], 0
-.LBB0_155:
+.LBB0_230:
 	s_sleep 1
 	global_load_dwordx2 v[0:1], v6, s[2:3] offset:40
 	global_load_dwordx2 v[2:3], v6, s[2:3]
@@ -1670,12 +2461,12 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[10:11], vcc, s[10:11]
 	v_mov_b64_e32 v[4:5], v[0:1]
 	s_andn2_b64 exec, exec, s[10:11]
-	s_cbranch_execnz .LBB0_155
+	s_cbranch_execnz .LBB0_230
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b64_e32 v[4:5], v[0:1]
-.LBB0_157:
+.LBB0_232:
 	s_or_b64 exec, exec, s[8:9]
-.LBB0_158:
+.LBB0_233:
 	s_or_b64 exec, exec, s[6:7]
 	v_mov_b32_e32 v19, 0
 	global_load_dwordx2 v[6:7], v19, s[2:3] offset:40
@@ -1694,40 +2485,40 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_lshl_add_u64 v[4:5], v[0:1], 0, s[12:13]
 	s_and_saveexec_b64 s[12:13], s[0:1]
-	s_cbranch_execz .LBB0_160
+	s_cbranch_execz .LBB0_235
 	v_mov_b64_e32 v[6:7], s[8:9]
 	v_mov_b32_e32 v8, 2
 	v_mov_b32_e32 v9, 1
 	global_store_dwordx4 v[4:5], v[6:9], off offset:8
-.LBB0_160:
+.LBB0_235:
 	s_or_b64 exec, exec, s[12:13]
 	s_lshl_b64 s[8:9], s[10:11], 12
 	v_lshl_add_u64 v[6:7], v[2:3], 0, s[8:9]
 	s_mov_b32 s8, 0
-	v_mov_b32_e32 v12, 33
-	v_mov_b32_e32 v13, v19
-	v_mov_b32_e32 v14, v19
-	v_mov_b32_e32 v15, v19
+	v_mov_b32_e32 v20, 33
+	v_mov_b32_e32 v21, v19
+	v_mov_b32_e32 v22, v19
+	v_mov_b32_e32 v23, v19
 	v_readfirstlane_b32 s12, v6
 	v_readfirstlane_b32 s13, v7
 	s_mov_b32 s10, s8
 	s_mov_b32 s11, s8
 	s_mov_b32 s9, s8
 	s_nop 1
-	global_store_dwordx4 v18, v[12:15], s[12:13]
+	global_store_dwordx4 v18, v[20:23], s[12:13]
 	s_nop 1
-	v_mov_b64_e32 v[14:15], s[10:11]
-	v_mov_b64_e32 v[12:13], s[8:9]
-	global_store_dwordx4 v18, v[12:15], s[12:13] offset:16
-	global_store_dwordx4 v18, v[12:15], s[12:13] offset:32
-	global_store_dwordx4 v18, v[12:15], s[12:13] offset:48
+	v_mov_b64_e32 v[22:23], s[10:11]
+	v_mov_b64_e32 v[20:21], s[8:9]
+	global_store_dwordx4 v18, v[20:23], s[12:13] offset:16
+	global_store_dwordx4 v18, v[20:23], s[12:13] offset:32
+	global_store_dwordx4 v18, v[20:23], s[12:13] offset:48
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_168
-	v_mov_b32_e32 v11, 0
-	global_load_dwordx2 v[14:15], v11, s[2:3] offset:32 sc0 sc1
-	global_load_dwordx2 v[2:3], v11, s[2:3] offset:40
-	v_mov_b32_e32 v12, s6
-	v_mov_b32_e32 v13, s7
+	s_cbranch_execz .LBB0_243
+	v_mov_b32_e32 v13, 0
+	global_load_dwordx2 v[22:23], v13, s[2:3] offset:32 sc0 sc1
+	global_load_dwordx2 v[2:3], v13, s[2:3] offset:40
+	v_mov_b32_e32 v20, s6
+	v_mov_b32_e32 v21, s7
 	s_waitcnt vmcnt(0)
 	v_readfirstlane_b32 s10, v2
 	v_readfirstlane_b32 s11, v3
@@ -1737,30 +2528,30 @@ _Z9vectorAddPKfS0_Pfi:
 	s_mul_i32 s10, s10, 24
 	s_add_i32 s11, s12, s11
 	v_lshl_add_u64 v[8:9], v[0:1], 0, s[10:11]
-	global_store_dwordx2 v[8:9], v[14:15], off
+	global_store_dwordx2 v[8:9], v[22:23], off
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
-	global_atomic_cmpswap_x2 v[2:3], v11, v[12:15], s[2:3] offset:32 sc0 sc1
+	global_atomic_cmpswap_x2 v[2:3], v13, v[20:23], s[2:3] offset:32 sc0 sc1
 	s_waitcnt vmcnt(0)
-	v_cmp_ne_u64_e32 vcc, v[2:3], v[14:15]
+	v_cmp_ne_u64_e32 vcc, v[2:3], v[22:23]
 	s_and_saveexec_b64 s[10:11], vcc
-	s_cbranch_execz .LBB0_164
+	s_cbranch_execz .LBB0_239
 	s_mov_b64 s[12:13], 0
-.LBB0_163:
+.LBB0_238:
 	s_sleep 1
 	global_store_dwordx2 v[8:9], v[2:3], off
 	v_mov_b32_e32 v0, s6
 	v_mov_b32_e32 v1, s7
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
-	global_atomic_cmpswap_x2 v[0:1], v11, v[0:3], s[2:3] offset:32 sc0 sc1
+	global_atomic_cmpswap_x2 v[0:1], v13, v[0:3], s[2:3] offset:32 sc0 sc1
 	s_waitcnt vmcnt(0)
 	v_cmp_eq_u64_e32 vcc, v[0:1], v[2:3]
 	s_or_b64 s[12:13], vcc, s[12:13]
 	v_mov_b64_e32 v[2:3], v[0:1]
 	s_andn2_b64 exec, exec, s[12:13]
-	s_cbranch_execnz .LBB0_163
-.LBB0_164:
+	s_cbranch_execnz .LBB0_238
+.LBB0_239:
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b32_e32 v3, 0
 	global_load_dwordx2 v[0:1], v3, s[2:3] offset:16
@@ -1769,19 +2560,19 @@ _Z9vectorAddPKfS0_Pfi:
 	v_mbcnt_hi_u32_b32 v2, s11, v2
 	v_cmp_eq_u32_e32 vcc, 0, v2
 	s_and_saveexec_b64 s[12:13], vcc
-	s_cbranch_execz .LBB0_166
+	s_cbranch_execz .LBB0_241
 	s_bcnt1_i32_b64 s10, s[10:11]
 	v_mov_b32_e32 v2, s10
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
 	global_atomic_add_x2 v[0:1], v[2:3], off offset:8 sc1
-.LBB0_166:
+.LBB0_241:
 	s_or_b64 exec, exec, s[12:13]
 	s_waitcnt vmcnt(0)
 	global_load_dwordx2 v[2:3], v[0:1], off offset:16
 	s_waitcnt vmcnt(0)
 	v_cmp_eq_u64_e32 vcc, 0, v[2:3]
-	s_cbranch_vccnz .LBB0_168
+	s_cbranch_vccnz .LBB0_243
 	global_load_dword v0, v[0:1], off offset:24
 	v_mov_b32_e32 v1, 0
 	s_waitcnt vmcnt(0)
@@ -1790,36 +2581,36 @@ _Z9vectorAddPKfS0_Pfi:
 	buffer_wbl2 sc0 sc1
 	global_store_dwordx2 v[2:3], v[0:1], off sc0 sc1
 	s_sendmsg sendmsg(MSG_INTERRUPT)
-.LBB0_168:
+.LBB0_243:
 	s_or_b64 exec, exec, s[8:9]
 	v_lshl_add_u64 v[0:1], v[6:7], 0, v[18:19]
-	s_branch .LBB0_172
-.LBB0_169:
+	s_branch .LBB0_247
+.LBB0_244:
 	s_or_b64 exec, exec, s[8:9]
 	v_readfirstlane_b32 s8, v2
 	s_cmp_eq_u32 s8, 0
-	s_cbranch_scc1 .LBB0_171
+	s_cbranch_scc1 .LBB0_246
 	s_sleep 1
-	s_cbranch_execnz .LBB0_172
-	s_branch .LBB0_174
-.LBB0_171:
-	s_branch .LBB0_174
-.LBB0_172:
+	s_cbranch_execnz .LBB0_247
+	s_branch .LBB0_249
+.LBB0_246:
+	s_branch .LBB0_249
+.LBB0_247:
 	v_mov_b32_e32 v2, 1
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_169
+	s_cbranch_execz .LBB0_244
 	global_load_dword v2, v[4:5], off offset:20 sc0 sc1
 	s_waitcnt vmcnt(0)
 	buffer_inv sc0 sc1
 	v_and_b32_e32 v2, 1, v2
-	s_branch .LBB0_169
-.LBB0_174:
+	s_branch .LBB0_244
+.LBB0_249:
 	global_load_dwordx2 v[0:1], v[0:1], off
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_177
+	s_cbranch_execz .LBB0_252
 	v_mov_b32_e32 v8, 0
 	global_load_dwordx2 v[2:3], v8, s[2:3] offset:40
-	global_load_dwordx2 v[14:15], v8, s[2:3] offset:24 sc0 sc1
+	global_load_dwordx2 v[22:23], v8, s[2:3] offset:24 sc0 sc1
 	global_load_dwordx2 v[4:5], v8, s[2:3]
 	s_waitcnt vmcnt(2)
 	v_readfirstlane_b32 s10, v2
@@ -1838,18 +2629,18 @@ _Z9vectorAddPKfS0_Pfi:
 	s_add_i32 s7, s10, s7
 	s_waitcnt vmcnt(0)
 	v_lshl_add_u64 v[6:7], v[4:5], 0, s[6:7]
-	v_mov_b32_e32 v12, s0
-	global_store_dwordx2 v[6:7], v[14:15], off
-	v_mov_b32_e32 v13, s1
+	v_mov_b32_e32 v20, s0
+	global_store_dwordx2 v[6:7], v[22:23], off
+	v_mov_b32_e32 v21, s1
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
-	global_atomic_cmpswap_x2 v[4:5], v8, v[12:15], s[2:3] offset:24 sc0 sc1
+	global_atomic_cmpswap_x2 v[4:5], v8, v[20:23], s[2:3] offset:24 sc0 sc1
 	s_mov_b64 s[6:7], 0
 	s_waitcnt vmcnt(0)
-	v_cmp_ne_u64_e32 vcc, v[4:5], v[14:15]
+	v_cmp_ne_u64_e32 vcc, v[4:5], v[22:23]
 	s_and_b64 exec, exec, vcc
-	s_cbranch_execz .LBB0_177
-.LBB0_176:
+	s_cbranch_execz .LBB0_252
+.LBB0_251:
 	s_sleep 1
 	global_store_dwordx2 v[6:7], v[4:5], off
 	v_mov_b32_e32 v2, s0
@@ -1862,40 +2653,40 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[6:7], vcc, s[6:7]
 	v_mov_b64_e32 v[4:5], v[2:3]
 	s_andn2_b64 exec, exec, s[6:7]
-	s_cbranch_execnz .LBB0_176
-.LBB0_177:
+	s_cbranch_execnz .LBB0_251
+.LBB0_252:
 	s_or_b64 exec, exec, s[8:9]
 	v_readfirstlane_b32 s0, v16
 	v_mov_b64_e32 v[8:9], 0
 	s_nop 0
 	v_cmp_eq_u32_e64 s[0:1], s0, v16
 	s_and_saveexec_b64 s[6:7], s[0:1]
-	s_cbranch_execz .LBB0_183
+	s_cbranch_execz .LBB0_258
 	v_mov_b32_e32 v4, 0
-	global_load_dwordx2 v[14:15], v4, s[2:3] offset:24 sc0 sc1
+	global_load_dwordx2 v[22:23], v4, s[2:3] offset:24 sc0 sc1
 	s_waitcnt vmcnt(0)
 	buffer_inv sc0 sc1
 	global_load_dwordx2 v[2:3], v4, s[2:3] offset:40
 	global_load_dwordx2 v[6:7], v4, s[2:3]
 	s_waitcnt vmcnt(1)
-	v_and_b32_e32 v2, v2, v14
-	v_and_b32_e32 v3, v3, v15
+	v_and_b32_e32 v2, v2, v22
+	v_and_b32_e32 v3, v3, v23
 	v_mul_lo_u32 v3, v3, 24
 	v_mul_hi_u32 v5, v2, 24
 	v_add_u32_e32 v3, v5, v3
 	v_mul_lo_u32 v2, v2, 24
 	s_waitcnt vmcnt(0)
 	v_lshl_add_u64 v[2:3], v[6:7], 0, v[2:3]
-	global_load_dwordx2 v[12:13], v[2:3], off sc0 sc1
+	global_load_dwordx2 v[20:21], v[2:3], off sc0 sc1
 	s_waitcnt vmcnt(0)
-	global_atomic_cmpswap_x2 v[8:9], v4, v[12:15], s[2:3] offset:24 sc0 sc1
+	global_atomic_cmpswap_x2 v[8:9], v4, v[20:23], s[2:3] offset:24 sc0 sc1
 	s_waitcnt vmcnt(0)
 	buffer_inv sc0 sc1
-	v_cmp_ne_u64_e32 vcc, v[8:9], v[14:15]
+	v_cmp_ne_u64_e32 vcc, v[8:9], v[22:23]
 	s_and_saveexec_b64 s[8:9], vcc
-	s_cbranch_execz .LBB0_182
+	s_cbranch_execz .LBB0_257
 	s_mov_b64 s[10:11], 0
-.LBB0_180:
+.LBB0_255:
 	s_sleep 1
 	global_load_dwordx2 v[2:3], v4, s[2:3] offset:40
 	global_load_dwordx2 v[6:7], v4, s[2:3]
@@ -1916,12 +2707,12 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[10:11], vcc, s[10:11]
 	v_mov_b64_e32 v[8:9], v[2:3]
 	s_andn2_b64 exec, exec, s[10:11]
-	s_cbranch_execnz .LBB0_180
+	s_cbranch_execnz .LBB0_255
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b64_e32 v[8:9], v[2:3]
-.LBB0_182:
+.LBB0_257:
 	s_or_b64 exec, exec, s[8:9]
-.LBB0_183:
+.LBB0_258:
 	s_or_b64 exec, exec, s[6:7]
 	v_mov_b32_e32 v19, 0
 	global_load_dwordx2 v[2:3], v19, s[2:3] offset:40
@@ -1940,45 +2731,47 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_lshl_add_u64 v[8:9], v[4:5], 0, s[12:13]
 	s_and_saveexec_b64 s[12:13], s[0:1]
-	s_cbranch_execz .LBB0_185
-	v_mov_b64_e32 v[12:13], s[8:9]
-	v_mov_b32_e32 v14, 2
-	v_mov_b32_e32 v15, 1
-	global_store_dwordx4 v[8:9], v[12:15], off offset:8
-.LBB0_185:
+	s_cbranch_execz .LBB0_260
+	v_mov_b64_e32 v[20:21], s[8:9]
+	v_mov_b32_e32 v22, 2
+	v_mov_b32_e32 v23, 1
+	global_store_dwordx4 v[8:9], v[20:23], off offset:8
+.LBB0_260:
 	s_or_b64 exec, exec, s[12:13]
 	s_lshl_b64 s[8:9], s[10:11], 12
 	v_lshl_add_u64 v[6:7], v[6:7], 0, s[8:9]
 	v_and_b32_e32 v0, 0xffffff1f, v0
-	v_or_b32_e32 v0, 0x80, v0
-	v_mov_b32_e32 v3, 0x44412072
+	v_or_b32_e32 v0, 0xa0, v0
+	v_mov_b32_e32 v3, 0x36762072
 	v_mov_b32_e32 v2, 0x65746641
 	v_readfirstlane_b32 s8, v6
 	v_readfirstlane_b32 s9, v7
 	s_nop 4
 	global_store_dwordx4 v18, v[0:3], s[8:9]
 	s_nop 1
-	v_mov_b32_e32 v0, 0x41282044
-	v_mov_b32_e32 v1, 0x3a29323e
-	v_mov_b32_e32 v2, 0x76284320
-	v_mov_b32_e32 v3, 0x253d2932
+	v_mov_b32_e32 v0, 0x25203d20
+	v_mov_b32_e32 v1, 0x2c66322e
+	v_mov_b32_e32 v2, 0x20377620
+	v_mov_b32_e32 v3, 0x2e25203d
 	global_store_dwordx4 v18, v[0:3], s[8:9] offset:16
 	s_nop 1
-	v_mov_b32_e32 v0, 0xa66
-	v_mov_b32_e32 v1, v19
-	v_mov_b32_e32 v2, v19
+	v_mov_b32_e32 v0, 0x202c6632
+	v_mov_b32_e32 v1, 0x2e253d43
+	v_mov_b32_e32 v2, 0xa6633
 	v_mov_b32_e32 v3, v19
 	global_store_dwordx4 v18, v[0:3], s[8:9] offset:32
 	s_nop 1
 	v_mov_b32_e32 v0, v19
+	v_mov_b32_e32 v1, v19
+	v_mov_b32_e32 v2, v19
 	global_store_dwordx4 v18, v[0:3], s[8:9] offset:48
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_193
-	v_mov_b32_e32 v11, 0
-	global_load_dwordx2 v[14:15], v11, s[2:3] offset:32 sc0 sc1
-	global_load_dwordx2 v[0:1], v11, s[2:3] offset:40
-	v_mov_b32_e32 v12, s6
-	v_mov_b32_e32 v13, s7
+	s_cbranch_execz .LBB0_268
+	v_mov_b32_e32 v13, 0
+	global_load_dwordx2 v[22:23], v13, s[2:3] offset:32 sc0 sc1
+	global_load_dwordx2 v[0:1], v13, s[2:3] offset:40
+	v_mov_b32_e32 v20, s6
+	v_mov_b32_e32 v21, s7
 	s_waitcnt vmcnt(0)
 	v_readfirstlane_b32 s10, v0
 	v_readfirstlane_b32 s11, v1
@@ -1988,30 +2781,30 @@ _Z9vectorAddPKfS0_Pfi:
 	s_mul_i32 s10, s10, 24
 	s_add_i32 s11, s12, s11
 	v_lshl_add_u64 v[4:5], v[4:5], 0, s[10:11]
-	global_store_dwordx2 v[4:5], v[14:15], off
+	global_store_dwordx2 v[4:5], v[22:23], off
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
-	global_atomic_cmpswap_x2 v[2:3], v11, v[12:15], s[2:3] offset:32 sc0 sc1
+	global_atomic_cmpswap_x2 v[2:3], v13, v[20:23], s[2:3] offset:32 sc0 sc1
 	s_waitcnt vmcnt(0)
-	v_cmp_ne_u64_e32 vcc, v[2:3], v[14:15]
+	v_cmp_ne_u64_e32 vcc, v[2:3], v[22:23]
 	s_and_saveexec_b64 s[10:11], vcc
-	s_cbranch_execz .LBB0_189
+	s_cbranch_execz .LBB0_264
 	s_mov_b64 s[12:13], 0
-.LBB0_188:
+.LBB0_263:
 	s_sleep 1
 	global_store_dwordx2 v[4:5], v[2:3], off
 	v_mov_b32_e32 v0, s6
 	v_mov_b32_e32 v1, s7
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
-	global_atomic_cmpswap_x2 v[0:1], v11, v[0:3], s[2:3] offset:32 sc0 sc1
+	global_atomic_cmpswap_x2 v[0:1], v13, v[0:3], s[2:3] offset:32 sc0 sc1
 	s_waitcnt vmcnt(0)
 	v_cmp_eq_u64_e32 vcc, v[0:1], v[2:3]
 	s_or_b64 s[12:13], vcc, s[12:13]
 	v_mov_b64_e32 v[2:3], v[0:1]
 	s_andn2_b64 exec, exec, s[12:13]
-	s_cbranch_execnz .LBB0_188
-.LBB0_189:
+	s_cbranch_execnz .LBB0_263
+.LBB0_264:
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b32_e32 v3, 0
 	global_load_dwordx2 v[0:1], v3, s[2:3] offset:16
@@ -2020,19 +2813,19 @@ _Z9vectorAddPKfS0_Pfi:
 	v_mbcnt_hi_u32_b32 v2, s11, v2
 	v_cmp_eq_u32_e32 vcc, 0, v2
 	s_and_saveexec_b64 s[12:13], vcc
-	s_cbranch_execz .LBB0_191
+	s_cbranch_execz .LBB0_266
 	s_bcnt1_i32_b64 s10, s[10:11]
 	v_mov_b32_e32 v2, s10
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
 	global_atomic_add_x2 v[0:1], v[2:3], off offset:8 sc1
-.LBB0_191:
+.LBB0_266:
 	s_or_b64 exec, exec, s[12:13]
 	s_waitcnt vmcnt(0)
 	global_load_dwordx2 v[2:3], v[0:1], off offset:16
 	s_waitcnt vmcnt(0)
 	v_cmp_eq_u64_e32 vcc, 0, v[2:3]
-	s_cbranch_vccnz .LBB0_193
+	s_cbranch_vccnz .LBB0_268
 	global_load_dword v0, v[0:1], off offset:24
 	v_mov_b32_e32 v1, 0
 	s_waitcnt vmcnt(0)
@@ -2041,36 +2834,36 @@ _Z9vectorAddPKfS0_Pfi:
 	buffer_wbl2 sc0 sc1
 	global_store_dwordx2 v[2:3], v[0:1], off sc0 sc1
 	s_sendmsg sendmsg(MSG_INTERRUPT)
-.LBB0_193:
+.LBB0_268:
 	s_or_b64 exec, exec, s[8:9]
 	v_lshl_add_u64 v[0:1], v[6:7], 0, v[18:19]
-	s_branch .LBB0_197
-.LBB0_194:
+	s_branch .LBB0_272
+.LBB0_269:
 	s_or_b64 exec, exec, s[8:9]
 	v_readfirstlane_b32 s8, v2
 	s_cmp_eq_u32 s8, 0
-	s_cbranch_scc1 .LBB0_196
+	s_cbranch_scc1 .LBB0_271
 	s_sleep 1
-	s_cbranch_execnz .LBB0_197
-	s_branch .LBB0_199
-.LBB0_196:
-	s_branch .LBB0_199
-.LBB0_197:
+	s_cbranch_execnz .LBB0_272
+	s_branch .LBB0_274
+.LBB0_271:
+	s_branch .LBB0_274
+.LBB0_272:
 	v_mov_b32_e32 v2, 1
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_194
+	s_cbranch_execz .LBB0_269
 	global_load_dword v2, v[8:9], off offset:20 sc0 sc1
 	s_waitcnt vmcnt(0)
 	buffer_inv sc0 sc1
 	v_and_b32_e32 v2, 1, v2
-	s_branch .LBB0_194
-.LBB0_199:
+	s_branch .LBB0_269
+.LBB0_274:
 	global_load_dwordx2 v[0:1], v[0:1], off
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_202
+	s_cbranch_execz .LBB0_277
 	v_mov_b32_e32 v8, 0
 	global_load_dwordx2 v[2:3], v8, s[2:3] offset:40
-	global_load_dwordx2 v[14:15], v8, s[2:3] offset:24 sc0 sc1
+	global_load_dwordx2 v[22:23], v8, s[2:3] offset:24 sc0 sc1
 	global_load_dwordx2 v[4:5], v8, s[2:3]
 	s_waitcnt vmcnt(2)
 	v_readfirstlane_b32 s10, v2
@@ -2089,18 +2882,18 @@ _Z9vectorAddPKfS0_Pfi:
 	s_add_i32 s7, s10, s7
 	s_waitcnt vmcnt(0)
 	v_lshl_add_u64 v[6:7], v[4:5], 0, s[6:7]
-	v_mov_b32_e32 v12, s0
-	global_store_dwordx2 v[6:7], v[14:15], off
-	v_mov_b32_e32 v13, s1
+	v_mov_b32_e32 v20, s0
+	global_store_dwordx2 v[6:7], v[22:23], off
+	v_mov_b32_e32 v21, s1
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
-	global_atomic_cmpswap_x2 v[4:5], v8, v[12:15], s[2:3] offset:24 sc0 sc1
+	global_atomic_cmpswap_x2 v[4:5], v8, v[20:23], s[2:3] offset:24 sc0 sc1
 	s_mov_b64 s[6:7], 0
 	s_waitcnt vmcnt(0)
-	v_cmp_ne_u64_e32 vcc, v[4:5], v[14:15]
+	v_cmp_ne_u64_e32 vcc, v[4:5], v[22:23]
 	s_and_b64 exec, exec, vcc
-	s_cbranch_execz .LBB0_202
-.LBB0_201:
+	s_cbranch_execz .LBB0_277
+.LBB0_276:
 	s_sleep 1
 	global_store_dwordx2 v[6:7], v[4:5], off
 	v_mov_b32_e32 v2, s0
@@ -2113,40 +2906,40 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[6:7], vcc, s[6:7]
 	v_mov_b64_e32 v[4:5], v[2:3]
 	s_andn2_b64 exec, exec, s[6:7]
-	s_cbranch_execnz .LBB0_201
-.LBB0_202:
+	s_cbranch_execnz .LBB0_276
+.LBB0_277:
 	s_or_b64 exec, exec, s[8:9]
 	v_readfirstlane_b32 s0, v16
 	v_mov_b64_e32 v[8:9], 0
 	s_nop 0
 	v_cmp_eq_u32_e64 s[0:1], s0, v16
 	s_and_saveexec_b64 s[6:7], s[0:1]
-	s_cbranch_execz .LBB0_208
+	s_cbranch_execz .LBB0_283
 	v_mov_b32_e32 v4, 0
-	global_load_dwordx2 v[14:15], v4, s[2:3] offset:24 sc0 sc1
+	global_load_dwordx2 v[16:17], v4, s[2:3] offset:24 sc0 sc1
 	s_waitcnt vmcnt(0)
 	buffer_inv sc0 sc1
 	global_load_dwordx2 v[2:3], v4, s[2:3] offset:40
 	global_load_dwordx2 v[6:7], v4, s[2:3]
 	s_waitcnt vmcnt(1)
-	v_and_b32_e32 v2, v2, v14
-	v_and_b32_e32 v3, v3, v15
+	v_and_b32_e32 v2, v2, v16
+	v_and_b32_e32 v3, v3, v17
 	v_mul_lo_u32 v3, v3, 24
 	v_mul_hi_u32 v5, v2, 24
 	v_add_u32_e32 v3, v5, v3
 	v_mul_lo_u32 v2, v2, 24
 	s_waitcnt vmcnt(0)
 	v_lshl_add_u64 v[2:3], v[6:7], 0, v[2:3]
-	global_load_dwordx2 v[12:13], v[2:3], off sc0 sc1
+	global_load_dwordx2 v[14:15], v[2:3], off sc0 sc1
 	s_waitcnt vmcnt(0)
-	global_atomic_cmpswap_x2 v[8:9], v4, v[12:15], s[2:3] offset:24 sc0 sc1
+	global_atomic_cmpswap_x2 v[8:9], v4, v[14:17], s[2:3] offset:24 sc0 sc1
 	s_waitcnt vmcnt(0)
 	buffer_inv sc0 sc1
-	v_cmp_ne_u64_e32 vcc, v[8:9], v[14:15]
+	v_cmp_ne_u64_e32 vcc, v[8:9], v[16:17]
 	s_and_saveexec_b64 s[8:9], vcc
-	s_cbranch_execz .LBB0_207
+	s_cbranch_execz .LBB0_282
 	s_mov_b64 s[10:11], 0
-.LBB0_205:
+.LBB0_280:
 	s_sleep 1
 	global_load_dwordx2 v[2:3], v4, s[2:3] offset:40
 	global_load_dwordx2 v[6:7], v4, s[2:3]
@@ -2167,16 +2960,16 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[10:11], vcc, s[10:11]
 	v_mov_b64_e32 v[8:9], v[2:3]
 	s_andn2_b64 exec, exec, s[10:11]
-	s_cbranch_execnz .LBB0_205
+	s_cbranch_execnz .LBB0_280
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b64_e32 v[8:9], v[2:3]
-.LBB0_207:
+.LBB0_282:
 	s_or_b64 exec, exec, s[8:9]
-.LBB0_208:
+.LBB0_283:
 	s_or_b64 exec, exec, s[6:7]
-	v_mov_b32_e32 v11, 0
-	global_load_dwordx2 v[2:3], v11, s[2:3] offset:40
-	global_load_dwordx4 v[4:7], v11, s[2:3]
+	v_mov_b32_e32 v13, 0
+	global_load_dwordx2 v[2:3], v13, s[2:3] offset:40
+	global_load_dwordx4 v[4:7], v13, s[2:3]
 	v_readfirstlane_b32 s7, v9
 	v_readfirstlane_b32 s6, v8
 	s_mov_b64 s[8:9], exec
@@ -2191,34 +2984,35 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_lshl_add_u64 v[8:9], v[4:5], 0, s[12:13]
 	s_and_saveexec_b64 s[12:13], s[0:1]
-	s_cbranch_execz .LBB0_210
-	v_mov_b64_e32 v[12:13], s[8:9]
-	v_mov_b32_e32 v14, 2
-	v_mov_b32_e32 v15, 1
-	global_store_dwordx4 v[8:9], v[12:15], off offset:8
-.LBB0_210:
+	s_cbranch_execz .LBB0_285
+	v_mov_b64_e32 v[14:15], s[8:9]
+	v_mov_b32_e32 v16, 2
+	v_mov_b32_e32 v17, 1
+	global_store_dwordx4 v[8:9], v[14:17], off offset:8
+.LBB0_285:
 	s_or_b64 exec, exec, s[12:13]
 	s_lshl_b64 s[8:9], s[10:11], 12
 	v_lshl_add_u64 v[6:7], v[6:7], 0, s[8:9]
-	s_movk_i32 s8, 0xff1d
-	v_and_or_b32 v0, v0, s8, 34
+	v_and_b32_e32 v0, 0xffffff1d, v0
 	s_mov_b32 s8, 0
 	v_cvt_f64_f32_e32 v[2:3], v10
+	v_or_b32_e32 v0, 0x62, v0
 	v_readfirstlane_b32 s12, v6
 	v_readfirstlane_b32 s13, v7
 	s_mov_b32 s9, s8
-	s_mov_b32 s10, s8
-	s_mov_b32 s11, s8
+	v_cvt_f64_f32_e32 v[10:11], v11
+	v_cvt_f64_f32_e32 v[12:13], v12
 	s_nop 1
 	global_store_dwordx4 v18, v[0:3], s[12:13]
-	s_nop 1
+	global_store_dwordx4 v18, v[10:13], s[12:13] offset:16
+	s_mov_b32 s10, s8
+	s_mov_b32 s11, s8
 	v_mov_b64_e32 v[0:1], s[8:9]
 	v_mov_b64_e32 v[2:3], s[10:11]
-	global_store_dwordx4 v18, v[0:3], s[12:13] offset:16
 	global_store_dwordx4 v18, v[0:3], s[12:13] offset:32
 	global_store_dwordx4 v18, v[0:3], s[12:13] offset:48
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_218
+	s_cbranch_execz .LBB0_293
 	v_mov_b32_e32 v6, 0
 	global_load_dwordx2 v[12:13], v6, s[2:3] offset:32 sc0 sc1
 	global_load_dwordx2 v[0:1], v6, s[2:3] offset:40
@@ -2240,9 +3034,9 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_cmp_ne_u64_e32 vcc, v[2:3], v[12:13]
 	s_and_saveexec_b64 s[10:11], vcc
-	s_cbranch_execz .LBB0_214
+	s_cbranch_execz .LBB0_289
 	s_mov_b64 s[12:13], 0
-.LBB0_213:
+.LBB0_288:
 	s_sleep 1
 	global_store_dwordx2 v[4:5], v[2:3], off
 	v_mov_b32_e32 v0, s6
@@ -2255,8 +3049,8 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[12:13], vcc, s[12:13]
 	v_mov_b64_e32 v[2:3], v[0:1]
 	s_andn2_b64 exec, exec, s[12:13]
-	s_cbranch_execnz .LBB0_213
-.LBB0_214:
+	s_cbranch_execnz .LBB0_288
+.LBB0_289:
 	s_or_b64 exec, exec, s[10:11]
 	v_mov_b32_e32 v3, 0
 	global_load_dwordx2 v[0:1], v3, s[2:3] offset:16
@@ -2265,19 +3059,19 @@ _Z9vectorAddPKfS0_Pfi:
 	v_mbcnt_hi_u32_b32 v2, s11, v2
 	v_cmp_eq_u32_e32 vcc, 0, v2
 	s_and_saveexec_b64 s[12:13], vcc
-	s_cbranch_execz .LBB0_216
+	s_cbranch_execz .LBB0_291
 	s_bcnt1_i32_b64 s10, s[10:11]
 	v_mov_b32_e32 v2, s10
 	buffer_wbl2 sc0 sc1
 	s_waitcnt vmcnt(0)
 	global_atomic_add_x2 v[0:1], v[2:3], off offset:8 sc1
-.LBB0_216:
+.LBB0_291:
 	s_or_b64 exec, exec, s[12:13]
 	s_waitcnt vmcnt(0)
 	global_load_dwordx2 v[2:3], v[0:1], off offset:16
 	s_waitcnt vmcnt(0)
 	v_cmp_eq_u64_e32 vcc, 0, v[2:3]
-	s_cbranch_vccnz .LBB0_218
+	s_cbranch_vccnz .LBB0_293
 	global_load_dword v0, v[0:1], off offset:24
 	v_mov_b32_e32 v1, 0
 	s_waitcnt vmcnt(0)
@@ -2286,31 +3080,31 @@ _Z9vectorAddPKfS0_Pfi:
 	buffer_wbl2 sc0 sc1
 	global_store_dwordx2 v[2:3], v[0:1], off sc0 sc1
 	s_sendmsg sendmsg(MSG_INTERRUPT)
-.LBB0_218:
+.LBB0_293:
 	s_or_b64 exec, exec, s[8:9]
-	s_branch .LBB0_222
-.LBB0_219:
+	s_branch .LBB0_297
+.LBB0_294:
 	s_or_b64 exec, exec, s[8:9]
 	v_readfirstlane_b32 s8, v0
 	s_cmp_eq_u32 s8, 0
-	s_cbranch_scc1 .LBB0_221
+	s_cbranch_scc1 .LBB0_296
 	s_sleep 1
-	s_cbranch_execnz .LBB0_222
-	s_branch .LBB0_224
-.LBB0_221:
-	s_branch .LBB0_224
-.LBB0_222:
+	s_cbranch_execnz .LBB0_297
+	s_branch .LBB0_299
+.LBB0_296:
+	s_branch .LBB0_299
+.LBB0_297:
 	v_mov_b32_e32 v0, 1
 	s_and_saveexec_b64 s[8:9], s[0:1]
-	s_cbranch_execz .LBB0_219
+	s_cbranch_execz .LBB0_294
 	global_load_dword v0, v[8:9], off offset:20 sc0 sc1
 	s_waitcnt vmcnt(0)
 	buffer_inv sc0 sc1
 	v_and_b32_e32 v0, 1, v0
-	s_branch .LBB0_219
-.LBB0_224:
+	s_branch .LBB0_294
+.LBB0_299:
 	s_and_b64 exec, exec, s[0:1]
-	s_cbranch_execz .LBB0_227
+	s_cbranch_execz .LBB0_302
 	v_mov_b32_e32 v6, 0
 	global_load_dwordx2 v[0:1], v6, s[2:3] offset:40
 	global_load_dwordx2 v[10:11], v6, s[2:3] offset:24 sc0 sc1
@@ -2342,8 +3136,8 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt vmcnt(0)
 	v_cmp_ne_u64_e32 vcc, v[2:3], v[10:11]
 	s_and_b64 exec, exec, vcc
-	s_cbranch_execz .LBB0_227
-.LBB0_226:
+	s_cbranch_execz .LBB0_302
+.LBB0_301:
 	s_sleep 1
 	global_store_dwordx2 v[4:5], v[2:3], off
 	v_mov_b32_e32 v0, s0
@@ -2356,8 +3150,8 @@ _Z9vectorAddPKfS0_Pfi:
 	s_or_b64 s[6:7], vcc, s[6:7]
 	v_mov_b64_e32 v[2:3], v[0:1]
 	s_andn2_b64 exec, exec, s[6:7]
-	s_cbranch_execnz .LBB0_226
-.LBB0_227:
+	s_cbranch_execnz .LBB0_301
+.LBB0_302:
 	s_or_b64 exec, exec, s[4:5]
 	;;#ASMSTART
 	.LBB0_2:
@@ -2387,7 +3181,7 @@ _Z9vectorAddPKfS0_Pfi:
 		.amdhsa_system_sgpr_workgroup_id_z 0
 		.amdhsa_system_sgpr_workgroup_info 0
 		.amdhsa_system_vgpr_workitem_id 0
-		.amdhsa_next_free_vgpr 49
+		.amdhsa_next_free_vgpr 72
 		.amdhsa_next_free_sgpr 22
 		.amdhsa_accum_offset 24
 		.amdhsa_reserve_vcc 1

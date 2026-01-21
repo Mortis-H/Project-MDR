@@ -12,7 +12,8 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt lgkmcnt(0)
 	s_and_b32 s3, s3, 0xffff
 	s_mul_i32 s2, s2, s3
-; @PRINT fmt="[SGPR Test] n(s4)=%d, base_idx(s2)=%d" reg=s4,s2 type=i32,i32
+; 新語法：Python f-string 風格
+; @PRINT f"[SGPR Test] n={s4}, base_idx={s2}"
 	v_add_u32_e32 v0, s2, v0
 	v_cmp_gt_i32_e32 vcc, s4, v0
 	s_and_saveexec_b64 s[2:3], vcc
@@ -29,12 +30,15 @@ _Z9vectorAddPKfS0_Pfi:
 	global_load_dword v7, v[2:3], off      ; 載入 B[tid]
 	v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]
 	s_waitcnt vmcnt(0)
-; 條件式 printf：只印出 v6 > 2.0 的 thread
-; v6 在 reg= 中，直接使用它的快照值作為條件
-; @PRINT cond=v6_gt(2.0) fmt="Before ADD (A>2): A(v6)=%f, B(v7)=%f" reg=v6,v7 type=f32,f32
+; === 四則運算範例（使用 f-string 中的表達式）===
+; 注意：表達式在 @PRINT 位置會被快照並計算
+; @PRINT f"[Expr] (A+B)x2/7={(v6+v7)*2/7:.2f}, A-B={v6-v7:.2f}, A*B={v6*v7:.2f}"
+;
+; 新語法：條件式 + f-string
+; @PRINT if v6 > 2.0: f"Before ADD (A>2): A={v6:.3f}, B={v7:.2f}"
 	v_add_f32_e32 v2, v6, v7               ; C = A + B
-; v6 不在 reg= 中，自動為它創建獨立快照用於條件判斷
-; @PRINT cond=v6_gt(2.0) fmt="After ADD (A>2): C(v2)=%f" reg=v2 type=f32
+; v6 不在 {} 中，自動為它創建獨立快照用於條件判斷
+; @PRINT if v6 > 2.0: f"After v6 = {v6:.2f}, v7 = {v7:.2f}, C={v2:.3f}"
 	global_store_dword v[0:1], v2, off
 .LBB0_2:
 	s_endpgm
