@@ -59,12 +59,19 @@ class PrintDirective:
     支援兩種模式：
     1. 直接印出暫存器值：reg=v6,v7 type=f32,f32
     2. 計算表達式後印出：expr="v6 * v7" type=f32
+    
+    條件式 printf：
+    - cond=v6_gt(2.0) - 只印出 v6 > 2.0 的 thread
+    - 條件暫存器和類型自動從 cond= 提取
+    - 如果條件暫存器不在 reg= 中，會自動創建快照
     """
     line_number: int           # 在 .s 檔案中的行號（0-based）
     format_string: str         # printf 格式字串
     registers: List[str]       # 要印出的暫存器列表（如 ["v6", "v7"]）
     types: List[str]           # 對應的類型（如 ["f32", "f32"]）
-    condition: Optional[str] = None  # 條件表達式（如 "tid_eq(3)"）
+    condition: Optional[str] = None  # 條件表達式（如 "v6_eq(0.0)"）
+    condition_register: Optional[str] = None  # 條件暫存器（自動從 cond 提取）
+    condition_type: Optional[str] = None  # 條件暫存器的類型（自動從比較值推導）
     next_instruction: Optional[str] = None  # @PRINT 之後的第一條 ISA 指令
     expressions: Optional[List[str]] = None  # 計算表達式列表（如 ["v6 * v7"]）
     
@@ -82,14 +89,21 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     支援格式：
     1. 直接印出暫存器：
        ; @PRINT fmt="value: %f" reg=v6 type=f32
-       ; @PRINT cond=tid_eq(3) fmt="hello" reg=v0 type=i32
        
-    2. 計算表達式後印出：
+    2. 條件式印出（條件暫存器自動從 cond= 提取）：
+       ; @PRINT cond=v6_gt(2.0) fmt="A=%f" reg=v6 type=f32
+       ; @PRINT cond=v6_gt(2.0) fmt="C=%f" reg=v2 type=f32  (v6 不在 reg= 中，會自動快照)
+       
+    3. 計算表達式後印出：
        ; @PRINT fmt="product=%f" expr="v6 * v7" type=f32
-       ; @PRINT fmt="B^2-4AC=%f" expr="v7*v7 - 4.0*v6*v2" type=f32
        
-    3. 混合模式（先印暫存器，再印表達式）：
+    4. 混合模式：
        ; @PRINT fmt="a=%f, b=%f, a*b=%f" reg=v6,v7 expr="v6*v7" type=f32,f32,f32
+    
+    條件式格式：REG_OP(VALUE)
+    - REG: v0, v6, s4 等
+    - OP: eq, ne, lt, le, gt, ge
+    - VALUE: 整數或浮點數（有小數點視為浮點數）
     """
     # 匹配 @PRINT 指令（支援 ; 或 # 作為註解前綴）
     match = re.search(r'[;#]\s*@PRINT\s+(.+)', line)
@@ -100,9 +114,9 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     
     # 解析各個屬性
     fmt_match = re.search(r'fmt\s*=\s*"([^"]*)"', directive_content)
-    reg_match = re.search(r'reg\s*=\s*([\w,\[\]:\s]+?)(?:\s+(?:type|cond|expr|$))', directive_content)
-    type_match = re.search(r'type\s*=\s*([\w,\s]+?)(?:\s+(?:reg|cond|fmt|expr|$)|$)', directive_content)
-    cond_match = re.search(r'cond\s*=\s*(\w+\([^)]+\))', directive_content)
+    reg_match = re.search(r'(?<![_\w])reg\s*=\s*([\w,\[\]:\s]+?)(?:\s+(?:type|cond|expr|$))', directive_content)
+    type_match = re.search(r'(?<![_\w])type\s*=\s*([\w,\s]+?)(?:\s+(?:reg|cond|fmt|expr|$)|$)', directive_content)
+    cond_match = re.search(r'(?<![_\w])cond\s*=\s*(\w+\([^)]+\))', directive_content)
     # 表達式匹配：支援 expr="..." 或 expr='...'
     expr_match = re.search(r'expr\s*=\s*"([^"]+)"', directive_content)
     
@@ -132,6 +146,27 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     # 條件（可選）
     condition = cond_match.group(1) if cond_match else None
     
+    # 從 condition 自動提取條件暫存器和類型
+    condition_register = None
+    condition_type = None
+    
+    if condition:
+        # 解析 cond=v6_gt(2.0) 格式
+        cond_parse = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', condition)
+        if cond_parse:
+            cond_reg, cond_op, cond_value = cond_parse.groups()
+            
+            # 自動推導類型：有小數點就是 f32，否則是 i32
+            if '.' in cond_value:
+                condition_type = 'f32'
+            else:
+                condition_type = 'i32'
+            
+            # 如果條件暫存器不在 reg= 中，需要為它創建獨立快照
+            if cond_reg not in registers:
+                condition_register = cond_reg
+                print(f"[Info] Condition register {cond_reg} (type={condition_type}) needs separate snapshot")
+    
     # 驗證：必須有 reg 或 expr
     if not registers and not expressions:
         print(f"[Warning] @PRINT must have 'reg' or 'expr' at line {line_number + 1}")
@@ -151,6 +186,8 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
         registers=registers,
         types=types,
         condition=condition,
+        condition_register=condition_register,
+        condition_type=condition_type,
         expressions=expressions if expressions else None
     )
 
@@ -498,152 +535,21 @@ def generate_value_binding(reg: str, type_str: str, var_name: str) -> str:
     return f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "{asm_instr}", "=v": () -> {mlir_type}'
 
 
-def generate_condition_check(condition: str, true_block: str, merge_block: str, unique_id: int) -> Tuple[str, str, str]:
-    """
-    生成條件檢查的 MLIR 程式碼
-    
-    Args:
-        condition: 條件表達式（如 "tid_eq(3)"）
-        true_block: 成立時跳轉的 block 名稱
-        merge_block: 合併 block 名稱
-        unique_id: 唯一識別碼
-    
-    Returns:
-        (cond_check_code, branch_code)
-    """
-    # 解析條件
-    match = re.match(r'tid_(\w+)\((\d+)\)', condition)
-    if not match:
-        return ("", "")
-    
-    cmp_type = match.group(1)  # eq, lt, le, gt, ge
-    value = match.group(2)
-    
-    cmp_map = {
-        'eq': 'eq',
-        'lt': 'slt',
-        'le': 'sle',
-        'gt': 'sgt',
-        'ge': 'sge'
-    }
-    
-    mlir_cmp = cmp_map.get(cmp_type, 'eq')
-    
-    tid_code = f'              %debug_tid_{unique_id} = gpu.thread_id x'
-    flag_code = f'              %debug_flag_{unique_id} = arith.constant {value} : index'
-    cmp_code = f'              %debug_cond_{unique_id} = arith.cmpi {mlir_cmp}, %debug_tid_{unique_id}, %debug_flag_{unique_id} : index'
-    branch_code = f'              cf.cond_br %debug_cond_{unique_id}, ^{true_block}, ^{merge_block}'
-    
-    return (f'{tid_code}\n{flag_code}\n{cmp_code}', branch_code)
-
-
-def generate_printf(directive: PrintDirective, unique_id: int) -> str:
-    """
-    生成 gpu.printf 的完整 MLIR 程式碼區塊
-    
-    包含：
-    - Value bindings（直接讀取暫存器）
-    - 表達式計算（如果有 expr 參數）
-    - 條件檢查（如果有條件，使用 scf.if）
-    - gpu.printf 呼叫
-    
-    對於有 s_barrier 的 kernel，建議使用 cond=tid_eq(0) 來避免同步問題
-    """
-    lines = []
-    
-    # 生成註解標記
-    lines.append(f'              // === @PRINT from line {directive.line_number + 1} ===')
-    
-    var_names = []
-    reg_types = directive.types[:len(directive.registers)]  # 暫存器對應的類型
-    expr_types = directive.types[len(directive.registers):]  # 表達式對應的類型
-    
-    # 1. 生成 value bindings（直接讀取暫存器）
-    for i, (reg, typ) in enumerate(zip(directive.registers, reg_types)):
-        var_name = f'print_val_{unique_id}_{i}'
-        var_names.append(var_name)
-        lines.append(generate_value_binding(reg, typ, var_name))
-    
-    # 2. 生成表達式計算（如果有）
-    if directive.expressions:
-        for i, (expr, typ) in enumerate(zip(directive.expressions, expr_types)):
-            try:
-                expr_code, result_var = compile_expression_to_mlir(expr, typ, unique_id, i)
-                if expr_code:
-                    lines.append(f'              // Expression: {expr}')
-                    lines.append(expr_code)
-                var_names.append(result_var)
-            except Exception as e:
-                print(f"[Warning] Failed to compile expression '{expr}': {e}")
-                # 使用常數 0 作為備用
-                fallback_var = f'expr_fallback_{unique_id}_{i}'
-                mlir_type = map_type_to_mlir(typ)
-                if typ.startswith('f'):
-                    lines.append(f'              %{fallback_var} = arith.constant 0.0 : {mlir_type}')
-                else:
-                    lines.append(f'              %{fallback_var} = arith.constant 0 : {mlir_type}')
-                var_names.append(fallback_var)
-    
-    # 準備 printf 的參數列表
-    args = ', '.join(f'%{name}' for name in var_names)
-    types = ', '.join(map_type_to_mlir(t) for t in directive.types)
-    
-    # MLIR string 中的換行需使用 \0A
-    escaped_format = directive.format_string.replace('\\n', '\\0A')
-    if not escaped_format.endswith('\\0A'):
-        escaped_format += '\\0A'
-    
-    # 條件式 printf 支援
-    if directive.condition:
-        # 解析條件：支援 tid_eq(N), tid_lt(N), tid_le(N), tid_gt(N), tid_ge(N)
-        match = re.match(r'tid_(\w+)\((\d+)\)', directive.condition)
-        if match:
-            cmp_type, value = match.groups()
-            
-            # 獲取 thread_id
-            lines.append(f'              %tid_x_{unique_id} = gpu.thread_id x')
-            lines.append(f'              %cmp_val_{unique_id} = arith.constant {value} : index')
-            
-            # 根據條件類型選擇比較操作
-            cmp_ops = {
-                'eq': 'eq',
-                'ne': 'ne', 
-                'lt': 'slt',
-                'le': 'sle',
-                'gt': 'sgt',
-                'ge': 'sge'
-            }
-            mlir_cmp = cmp_ops.get(cmp_type, 'eq')
-            
-            lines.append(f'              %cond_{unique_id} = arith.cmpi {mlir_cmp}, %tid_x_{unique_id}, %cmp_val_{unique_id} : index')
-            
-            # 使用 scf.if 包裹 printf
-            lines.append(f'              scf.if %cond_{unique_id} {{')
-            lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
-            lines.append(f'              }}')
-            
-            print(f"[Info] Conditional printf: {directive.condition}")
-        else:
-            print(f"[Warning] Unknown condition format: {directive.condition}, printing unconditionally")
-            lines.append(f'              gpu.printf "{escaped_format}", {args} : {types}')
-    else:
-        # 無條件印出
-        lines.append(f'              gpu.printf "{escaped_format}", {args} : {types}')
-    
-    lines.append(f'              // === End @PRINT ===')
-    
-    return '\n'.join(lines)
-
-
 def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int, 
-                                   snapshots: List[Tuple[int, str, int]]) -> str:
+                                   vgpr_snapshots: List[Tuple[int, str, int]],
+                                   sgpr_snapshots: List[Tuple[int, str, int]] = None,
+                                   workitem_id_backup_vgpr: int = None,
+                                   cond_snapshot: Tuple[str, int, bool, str] = None) -> str:
     """
     生成使用快照暫存器的 gpu.printf MLIR 程式碼
     
     Args:
         directive: @PRINT 指令
         unique_id: 唯一識別碼
-        snapshots: [(reg_idx, original_reg, snapshot_vgpr), ...] 快照暫存器映射
+        vgpr_snapshots: [(reg_idx, original_reg, snapshot_vgpr), ...] VGPR 快照暫存器映射
+        sgpr_snapshots: [(reg_idx, original_reg, snapshot_sgpr), ...] SGPR 快照暫存器映射
+        workitem_id_backup_vgpr: workitem_id 備份暫存器（未使用，保留以相容）
+        cond_snapshot: 條件暫存器快照 (cond_reg, snapshot_num, is_vgpr, cond_type)
     
     Returns:
         MLIR 程式碼字串
@@ -657,8 +563,14 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
     reg_types = directive.types[:len(directive.registers)]
     expr_types = directive.types[len(directive.registers):]
     
-    # 建立 reg_idx -> snapshot_vgpr 的映射
-    snapshot_map = {r_idx: snap_vgpr for r_idx, _, snap_vgpr in snapshots}
+    # 建立 reg_idx -> (snapshot_reg, reg_type) 的映射
+    # reg_type: 'v' for VGPR, 's' for SGPR
+    snapshot_map = {}
+    for r_idx, _, snap_vgpr in vgpr_snapshots:
+        snapshot_map[r_idx] = (snap_vgpr, 'v')
+    if sgpr_snapshots:
+        for r_idx, _, snap_sgpr in sgpr_snapshots:
+            snapshot_map[r_idx] = (snap_sgpr, 's')
     
     # 1. 生成 value bindings（使用快照暫存器）
     for i, (reg, typ) in enumerate(zip(directive.registers, reg_types)):
@@ -667,11 +579,12 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
         
         # 如果有快照，使用快照暫存器
         if i in snapshot_map:
-            snapshot_reg = f'v{snapshot_map[i]}'
-            lines.append(f'              // Using snapshot v{snapshot_map[i]} for {reg}')
+            snap_num, snap_type = snapshot_map[i]
+            snapshot_reg = f'{snap_type}{snap_num}'
+            lines.append(f'              // Using snapshot {snapshot_reg} for {reg}')
             lines.append(generate_value_binding(snapshot_reg, typ, var_name))
         else:
-            # 非 VGPR 或沒有快照的，使用原始暫存器
+            # 沒有快照的（例如 AGPR），使用原始暫存器
             lines.append(generate_value_binding(reg, typ, var_name))
     
     # 2. 生成表達式計算（如果有）- 表達式使用快照暫存器
@@ -705,26 +618,118 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
         escaped_format += '\\0A'
     
     # 條件式 printf 支援
+    # 
+    # 支援基於暫存器值的條件：REG_XX(N)
+    # 例如：v0_eq(1), s4_gt(0), v6_lt(10.0)
+    # 
+    # 注意：條件暫存器必須在 reg= 中列出，才能使用快照值
+    
     if directive.condition:
-        match = re.match(r'tid_(\w+)\((\d+)\)', directive.condition)
-        if match:
-            cmp_type, value = match.groups()
-            lines.append(f'              %tid_x_{unique_id} = gpu.thread_id x')
-            lines.append(f'              %cmp_val_{unique_id} = arith.constant {value} : index')
+        # 嘗試匹配暫存器值條件：v0_eq(1), s4_gt(0) 等
+        reg_cond_match = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', directive.condition)
+        
+        if reg_cond_match:
+            cond_reg, cmp_op, cmp_value = reg_cond_match.groups()
             
-            cmp_ops = {
-                'eq': 'eq', 'ne': 'ne', 
-                'lt': 'slt', 'le': 'sle',
-                'gt': 'sgt', 'ge': 'sge'
-            }
-            mlir_cmp = cmp_ops.get(cmp_type, 'eq')
+            # 找出這個暫存器對應的快照
+            # 首先檢查是否在 @PRINT 的暫存器列表中
+            snapshot_var = None
+            snapshot_type = None
             
-            lines.append(f'              %cond_{unique_id} = arith.cmpi {mlir_cmp}, %tid_x_{unique_id}, %cmp_val_{unique_id} : index')
-            lines.append(f'              scf.if %cond_{unique_id} {{')
-            lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
-            lines.append(f'              }}')
+            # 檢查 VGPR 快照
+            if vgpr_snapshots:
+                for r_idx, orig_reg, snap_num in vgpr_snapshots:
+                    if orig_reg == cond_reg:
+                        snapshot_var = f'%print_val_{unique_id}_{r_idx}'
+                        # 從 types 中找出對應的類型
+                        if r_idx < len(directive.types):
+                            snapshot_type = directive.types[r_idx]
+                        break
             
-            print(f"[Info] Conditional printf: {directive.condition}")
+            # 檢查 SGPR 快照
+            if not snapshot_var and sgpr_snapshots:
+                for r_idx, orig_reg, snap_num in sgpr_snapshots:
+                    if orig_reg == cond_reg:
+                        snapshot_var = f'%print_val_{unique_id}_{r_idx}'
+                        if r_idx < len(directive.types):
+                            snapshot_type = directive.types[r_idx]
+                        break
+            
+            # 檢查是否有獨立的條件暫存器快照
+            if not snapshot_var and cond_snapshot:
+                cond_snap_reg, snap_num, is_vgpr, cond_type = cond_snapshot
+                if cond_snap_reg == cond_reg:
+                    # 使用條件暫存器快照
+                    snapshot_type = cond_type
+                    snapshot_reg = f'v{snap_num}' if is_vgpr else f's{snap_num}'
+                    # 讀取快照值
+                    mlir_type = map_type_to_mlir(cond_type)
+                    snapshot_var = f'%cond_snap_val_{unique_id}'
+                    lines.append(f'              // Using condition register snapshot: {cond_reg} -> {snapshot_reg}')
+                    lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {snapshot_reg}", "=v": () -> {mlir_type}')
+            
+            if snapshot_var and snapshot_type:
+                # 使用快照值來做條件判斷（安全，不會破壞 SGPR）
+                cmp_ops = {
+                    'eq': 'eq', 'ne': 'ne',
+                    'lt': 'slt', 'le': 'sle',
+                    'gt': 'sgt', 'ge': 'sge'
+                }
+                mlir_cmp = cmp_ops.get(cmp_op, 'eq')
+                
+                # 根據類型生成比較代碼
+                if snapshot_type in ['f32', 'f64']:
+                    # 浮點數比較
+                    float_cmp_ops = {
+                        'eq': 'oeq', 'ne': 'one',
+                        'lt': 'olt', 'le': 'ole',
+                        'gt': 'ogt', 'ge': 'oge'
+                    }
+                    mlir_cmp = float_cmp_ops.get(cmp_op, 'oeq')
+                    mlir_type = 'f32' if snapshot_type == 'f32' else 'f64'
+                    lines.append(f'              // Conditional printf: {cond_reg} {cmp_op} {cmp_value}')
+                    lines.append(f'              %cmp_val_{unique_id} = arith.constant {cmp_value} : {mlir_type}')
+                    lines.append(f'              %cond_{unique_id} = arith.cmpf {mlir_cmp}, {snapshot_var}, %cmp_val_{unique_id} : {mlir_type}')
+                else:
+                    # 整數比較
+                    mlir_type = 'i32' if snapshot_type == 'i32' else 'i64'
+                    cmp_value_int = int(float(cmp_value))
+                    lines.append(f'              // Conditional printf: {cond_reg} {cmp_op} {cmp_value_int}')
+                    lines.append(f'              %cmp_val_{unique_id} = arith.constant {cmp_value_int} : {mlir_type}')
+                    lines.append(f'              %cond_{unique_id} = arith.cmpi {mlir_cmp}, {snapshot_var}, %cmp_val_{unique_id} : {mlir_type}')
+                
+                lines.append(f'              scf.if %cond_{unique_id} {{')
+                lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
+                lines.append(f'              }}')
+                
+                print(f"[Info] Conditional printf (snapshot): {cond_reg} {cmp_op} {cmp_value}")
+            else:
+                # 找不到快照，需要新增一個臨時讀取
+                print(f"[Warning] Register {cond_reg} not in snapshot, using direct read (value at printf time, not @PRINT time)")
+                
+                # 判斷是 VGPR 還是 SGPR
+                is_vgpr = cond_reg.startswith('v')
+                
+                # 讀取暫存器值
+                if is_vgpr:
+                    lines.append(f'              // Conditional printf: read {cond_reg} for condition (direct read)')
+                    lines.append(f'              %cond_reg_val_{unique_id} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {cond_reg}", "=v": () -> i32')
+                else:
+                    lines.append(f'              // Conditional printf: read {cond_reg} for condition (direct read)')
+                    lines.append(f'              %cond_reg_val_{unique_id} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {cond_reg}", "=v": () -> i32')
+                
+                cmp_ops = {'eq': 'eq', 'ne': 'ne', 'lt': 'slt', 'le': 'sle', 'gt': 'sgt', 'ge': 'sge'}
+                mlir_cmp = cmp_ops.get(cmp_op, 'eq')
+                cmp_value_int = int(float(cmp_value))
+                
+                lines.append(f'              %cmp_val_{unique_id} = arith.constant {cmp_value_int} : i32')
+                lines.append(f'              %cond_{unique_id} = arith.cmpi {mlir_cmp}, %cond_reg_val_{unique_id}, %cmp_val_{unique_id} : i32')
+                lines.append(f'              scf.if %cond_{unique_id} {{')
+                lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
+                lines.append(f'              }}')
+                
+                print(f"[Info] Conditional printf (direct read): {cond_reg} {cmp_op} {cmp_value}")
+        
         else:
             print(f"[Warning] Unknown condition format: {directive.condition}, printing unconditionally")
             lines.append(f'              gpu.printf "{escaped_format}", {args} : {types}')
@@ -760,38 +765,115 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         return gpumlir_text
     
     # === 計算快照暫存器需求 ===
-    # 每個 @PRINT 的每個暫存器都需要一個快照 VGPR
-    snapshot_regs = []  # [(directive_idx, reg_idx, reg_name, snapshot_vgpr_num), ...]
+    # 每個 @PRINT 的每個 VGPR/SGPR 都需要一個快照暫存器
     original_vgpr = reg_info.get('vgpr', 0)
-    snapshot_vgpr_start = original_vgpr  # 快照暫存器從原始 VGPR 之後開始
+    original_sgpr = reg_info.get('sgpr', 0)
     
-    snapshot_idx = 0
+    # VGPR 快照
+    # 注意：printf/hostcall 代碼會使用大量 VGPR
+    # 為了避免被覆蓋，快照暫存器必須從足夠高的編號開始
+    # 
+    # 動態計算 printf/hostcall 使用的 VGPR 開銷：
+    # - 基礎開銷：hostcall 機制約需 16 個 VGPR
+    # - 每個 printf 值：約需 4 個 VGPR（參數處理、格式化等）
+    # - 安全邊界：+8 個 VGPR
+    # - 最小值：24（即使沒有 printf 也預留空間）
+    PRINTF_BASE_OVERHEAD = 16      # hostcall 基礎開銷
+    PRINTF_PER_VALUE_OVERHEAD = 4  # 每個 printf 值的開銷
+    PRINTF_SAFETY_MARGIN = 8       # 安全邊界
+    PRINTF_MIN_OVERHEAD = 24       # 最小開銷
+    
+    # 計算所有 @PRINT 指令中的值數量（暫存器 + 表達式）
+    total_printf_values = 0
+    for d in directives:
+        total_printf_values += len(d.registers)
+        if d.expressions:
+            total_printf_values += len(d.expressions)
+    
+    # 動態計算 VGPR 開銷
+    printf_vgpr_overhead = PRINTF_BASE_OVERHEAD + PRINTF_PER_VALUE_OVERHEAD * total_printf_values + PRINTF_SAFETY_MARGIN
+    printf_vgpr_overhead = max(printf_vgpr_overhead, PRINTF_MIN_OVERHEAD)
+    
+    print(f"[Info] Printf VGPR overhead: {printf_vgpr_overhead} (base={PRINTF_BASE_OVERHEAD} + {total_printf_values} values * {PRINTF_PER_VALUE_OVERHEAD} + margin={PRINTF_SAFETY_MARGIN})")
+    
+    snapshot_vgprs = []  # [(directive_idx, reg_idx, reg_name, snapshot_vgpr_num), ...]
+    snapshot_vgpr_start = max(original_vgpr, printf_vgpr_overhead)  # 確保在 printf 使用範圍之後
+    vgpr_snapshot_idx = 0
+    
+    # SGPR 快照 - 需要避開系統保留的和 kernarg backup 使用的暫存器
+    # s[0:3] 系統保留, s[18:19] 用於 kernarg backup
+    # SGPR 快照從 max(original_sgpr, 20) 開始，確保不與 kernarg backup 衝突
+    SGPR_SNAPSHOT_START_MIN = 20  # 確保在 s[18:19] 之後
+    snapshot_sgprs = []  # [(directive_idx, reg_idx, reg_name, snapshot_sgpr_num), ...]
+    snapshot_sgpr_start = max(original_sgpr, SGPR_SNAPSHOT_START_MIN)
+    sgpr_snapshot_idx = 0
+    
+    # 條件暫存器快照（獨立於要印出的暫存器）
+    # directive_cond_snapshots[d_idx] = (cond_reg, snapshot_num, is_vgpr, cond_type)
+    directive_cond_snapshots = {}
+    
     for d_idx, directive in enumerate(directives):
+        # 處理要印出的暫存器
         for r_idx, reg in enumerate(directive.registers):
-            # 只對 VGPR 進行快照（v0, v1, ...）
             if reg.startswith('v') and not reg.startswith('vcc'):
-                snapshot_vgpr_num = snapshot_vgpr_start + snapshot_idx
-                snapshot_regs.append((d_idx, r_idx, reg, snapshot_vgpr_num))
-                snapshot_idx += 1
+                # VGPR 快照
+                snapshot_vgpr_num = snapshot_vgpr_start + vgpr_snapshot_idx
+                snapshot_vgprs.append((d_idx, r_idx, reg, snapshot_vgpr_num))
+                vgpr_snapshot_idx += 1
+            elif reg.startswith('s') and not reg.startswith('scc'):
+                # SGPR 快照
+                snapshot_sgpr_num = snapshot_sgpr_start + sgpr_snapshot_idx
+                snapshot_sgprs.append((d_idx, r_idx, reg, snapshot_sgpr_num))
+                sgpr_snapshot_idx += 1
+        
+        # 處理條件暫存器（如果有且不在 registers 中）
+        if directive.condition_register and directive.condition_register not in directive.registers:
+            cond_reg = directive.condition_register
+            cond_type = directive.condition_type or 'f32'
+            
+            if cond_reg.startswith('v') and not cond_reg.startswith('vcc'):
+                # VGPR 條件暫存器
+                snapshot_vgpr_num = snapshot_vgpr_start + vgpr_snapshot_idx
+                directive_cond_snapshots[d_idx] = (cond_reg, snapshot_vgpr_num, True, cond_type)
+                vgpr_snapshot_idx += 1
+                print(f"[Info] Condition register snapshot: {cond_reg} -> v{snapshot_vgpr_num} (type={cond_type})")
+            elif cond_reg.startswith('s') and not cond_reg.startswith('scc'):
+                # SGPR 條件暫存器
+                snapshot_sgpr_num = snapshot_sgpr_start + sgpr_snapshot_idx
+                directive_cond_snapshots[d_idx] = (cond_reg, snapshot_sgpr_num, False, cond_type)
+                sgpr_snapshot_idx += 1
+                print(f"[Info] Condition register snapshot: {cond_reg} -> s{snapshot_sgpr_num} (type={cond_type})")
     
-    total_snapshot_vgprs = snapshot_idx
-    print(f"[Info] Snapshot registers: {total_snapshot_vgprs} VGPRs (v{snapshot_vgpr_start} - v{snapshot_vgpr_start + total_snapshot_vgprs - 1})")
+    total_snapshot_vgprs = vgpr_snapshot_idx
+    total_snapshot_sgprs = sgpr_snapshot_idx
+    
+    # 輸出快照資訊
+    if total_snapshot_vgprs > 0:
+        print(f"[Info] VGPR Snapshots: {total_snapshot_vgprs} (v{snapshot_vgpr_start} - v{snapshot_vgpr_start + total_snapshot_vgprs - 1})")
+    if total_snapshot_sgprs > 0:
+        print(f"[Info] SGPR Snapshots: {total_snapshot_sgprs} (s{snapshot_sgpr_start} - s{snapshot_sgpr_start + total_snapshot_sgprs - 1})")
     
     # 建立 directive -> snapshot 映射
-    # directive_snapshots[d_idx] = [(r_idx, original_reg, snapshot_vgpr), ...]
-    directive_snapshots = {}
-    for d_idx, r_idx, reg, snap_vgpr in snapshot_regs:
-        if d_idx not in directive_snapshots:
-            directive_snapshots[d_idx] = []
-        directive_snapshots[d_idx].append((r_idx, reg, snap_vgpr))
+    # directive_vgpr_snapshots[d_idx] = [(r_idx, original_reg, snapshot_vgpr), ...]
+    # directive_sgpr_snapshots[d_idx] = [(r_idx, original_reg, snapshot_sgpr), ...]
+    directive_vgpr_snapshots = {}
+    directive_sgpr_snapshots = {}
+    
+    for d_idx, r_idx, reg, snap_vgpr in snapshot_vgprs:
+        if d_idx not in directive_vgpr_snapshots:
+            directive_vgpr_snapshots[d_idx] = []
+        directive_vgpr_snapshots[d_idx].append((r_idx, reg, snap_vgpr))
+    
+    for d_idx, r_idx, reg, snap_sgpr in snapshot_sgprs:
+        if d_idx not in directive_sgpr_snapshots:
+            directive_sgpr_snapshots[d_idx] = []
+        directive_sgpr_snapshots[d_idx].append((r_idx, reg, snap_sgpr))
     
     # === 動態計算 clobber 範圍 ===
     MAX_VECTOR_SIZE = 32      # LLVM inline_asm vector 類型限制
     SGPR_KERNARG_BACKUP = 18  # 保存 kernarg pointer 到 s[18:19]
     SGPR_RESERVED_START = 4   # s[0:3] 是系統保留的，從 s4 開始保護
-    SGPR_RESERVED_END = 17    # 保護到 s17（不含 s[18:19] 用於 kernarg backup）
     
-    original_sgpr = reg_info.get('sgpr', 0)
     original_agpr = reg_info.get('agpr', 0)
     
     # 向上取整到最近的 2 的冪
@@ -811,11 +893,13 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     total_vgpr = next_power_of_2(vgpr_count_needed)
     total_agpr = max(1, original_agpr) if original_agpr > 0 else 0
     
-    # SGPR: 保護 s[4:17]（14 個 SGPR，但 vector 必須是 2 的冪）
-    # 將範圍調整為 s[4:19]（16 個 SGPR）以符合 vector<16xi32> 的要求
-    # 但同時我們會保存 kernarg pointer 到 s[18:19]，所以需要在保存前後處理
+    # SGPR: 保護 s[4:...] 包含原始 SGPR 和快照 SGPR
+    # s[0:3] 系統保留, s[18:19] 用於 kernarg backup
+    # SGPR 快照從 snapshot_sgpr_start 開始
+    # 需要保護的範圍：s[4] 到 s[snapshot_sgpr_start + total_snapshot_sgprs - 1]
     sgpr_start = SGPR_RESERVED_START
-    sgpr_count_needed = max(original_sgpr, 20) - sgpr_start  # 確保至少到 s19
+    sgpr_end_needed = snapshot_sgpr_start + total_snapshot_sgprs if total_snapshot_sgprs > 0 else max(original_sgpr, 20)
+    sgpr_count_needed = sgpr_end_needed - sgpr_start
     
     total_sgpr = next_power_of_2(sgpr_count_needed) if sgpr_count_needed > 0 else 0
     # 限制最大為 32（因為 MAX_VECTOR_SIZE = 32）
@@ -834,106 +918,53 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     if total_agpr > 0:
         print(f"       AGPR: a[0:{total_agpr - 1}] ({total_agpr} registers, {num_agpr_blocks} block(s))")
     
-    # === 生成 clobber 開始程式碼 ===
-    clobber_start_lines = ['              // === Register Clobbering Start ===']
+    # === 生成 kernarg 保存程式碼 ===
+    # 注意：移除了有問題的 clobber 機制（會導致 LLVM 生成 spill 代碼）
+    # 改為只保存 kernarg pointer，快照機制會在適當位置保存暫存器值
+    clobber_start_lines = ['              // === Kernarg Backup Start ===']
     
     # 保存 kernarg pointer (s[0:1]) 到 s[SGPR_KERNARG_BACKUP:SGPR_KERNARG_BACKUP+1]
-    # 這必須在 SGPR clobbering 開始之前執行
     clobber_start_lines.append('              // Save kernarg pointer for printf (to s[18:19])')
     clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b64 s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], s[0:1]", ""  : () -> ()')
     
-    # VGPR clobber
-    if total_vgpr > 0:
-        clobber_start_lines.append(f'              // Protecting {total_vgpr} VGPRs')
-        for block_idx in range(num_vgpr_blocks):
-            start_reg = block_idx * MAX_VECTOR_SIZE
-            end_reg = min((block_idx + 1) * MAX_VECTOR_SIZE, total_vgpr) - 1
-            block_size = end_reg - start_reg + 1
-            clobber_start_lines.append(
-                f'              %reserved_vgpr_{block_idx} = llvm.inline_asm has_side_effects asm_dialect = att "", '
-                f'"={{v[{start_reg}:{end_reg}]}}": () -> vector<{block_size}xi32>'
-            )
+    # 檢查是否有條件式 printf，如果有則保存 workitem_id (v0)
+    # 使用 v14 作為 workitem_id 的備份（在快照暫存器之後）
+    WORKITEM_ID_BACKUP_VGPR = snapshot_vgpr_start + total_snapshot_vgprs
+    has_conditional_printf = any(d.condition for d in directives)
+    if has_conditional_printf:
+        clobber_start_lines.append(f'              // Save workitem_id (v0) to v{WORKITEM_ID_BACKUP_VGPR} for conditional printf')
+        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{WORKITEM_ID_BACKUP_VGPR}, v0", ""  : () -> ()')
     
-    # SGPR clobber (跳過系統保留的 s[0:3])
-    if total_sgpr > 0:
-        clobber_start_lines.append(f'              // Protecting {total_sgpr} SGPRs (s[{sgpr_start}:{sgpr_start + total_sgpr - 1}])')
-        for block_idx in range(num_sgpr_blocks):
-            start_reg = sgpr_start + block_idx * MAX_VECTOR_SIZE
-            end_reg = min(sgpr_start + (block_idx + 1) * MAX_VECTOR_SIZE, sgpr_start + total_sgpr) - 1
-            block_size = end_reg - start_reg + 1
-            clobber_start_lines.append(
-                f'              %reserved_sgpr_{block_idx} = llvm.inline_asm has_side_effects asm_dialect = att "", '
-                f'"={{s[{start_reg}:{end_reg}]}}": () -> vector<{block_size}xi32>'
-            )
-    
-    # AGPR clobber
-    if total_agpr > 0:
-        clobber_start_lines.append(f'              // Protecting {total_agpr} AGPRs')
-        for block_idx in range(num_agpr_blocks):
-            start_reg = block_idx * MAX_VECTOR_SIZE
-            end_reg = min((block_idx + 1) * MAX_VECTOR_SIZE, total_agpr) - 1
-            block_size = end_reg - start_reg + 1
-            clobber_start_lines.append(
-                f'              %reserved_agpr_{block_idx} = llvm.inline_asm has_side_effects asm_dialect = att "", '
-                f'"={{a[{start_reg}:{end_reg}]}}": () -> vector<{block_size}xi32>'
-            )
-    
-    clobber_start_lines.append('              // === End Clobbering Start ===')
+    clobber_start_lines.append('              // === Kernarg Backup End ===')
     clobber_start = '\n'.join(clobber_start_lines) + '\n'
     
     # 生成 printf 區塊（使用快照暫存器）- 包含 kernarg restore
     printf_blocks = ['              // Restore kernarg pointer for printf (from s[18:19])']
     printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_mov_b64 s[0:1], s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}]", ""  : () -> ()')
     for i, directive in enumerate(directives):
-        # 使用快照暫存器生成 printf
-        printf_blocks.append(generate_printf_with_snapshot(directive, i, directive_snapshots.get(i, [])))
+        # 使用 VGPR 和 SGPR 快照暫存器生成 printf
+        vgpr_snaps = directive_vgpr_snapshots.get(i, [])
+        sgpr_snaps = directive_sgpr_snapshots.get(i, [])
+        cond_snap = directive_cond_snapshots.get(i, None)
+        # 如果有條件式 printf，傳入 workitem_id 備份暫存器
+        tid_backup = WORKITEM_ID_BACKUP_VGPR if has_conditional_printf else None
+        printf_blocks.append(generate_printf_with_snapshot(directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap))
     
     printf_section = '\n'.join(printf_blocks)
     
-    # === 生成 clobber 結束程式碼 ===
-    clobber_end_lines = ['              // === Register Clobbering End ===']
-    
-    # VGPR restore
-    if total_vgpr > 0:
-        for block_idx in range(num_vgpr_blocks):
-            start_reg = block_idx * MAX_VECTOR_SIZE
-            end_reg = min((block_idx + 1) * MAX_VECTOR_SIZE, total_vgpr) - 1
-            block_size = end_reg - start_reg + 1
-            clobber_end_lines.append(
-                f'              llvm.inline_asm has_side_effects asm_dialect = att "", '
-                f'"{{v[{start_reg}:{end_reg}]}}" %reserved_vgpr_{block_idx} : (vector<{block_size}xi32>)-> ()'
-            )
-    
-    # SGPR restore
-    if total_sgpr > 0:
-        for block_idx in range(num_sgpr_blocks):
-            start_reg = sgpr_start + block_idx * MAX_VECTOR_SIZE
-            end_reg = min(sgpr_start + (block_idx + 1) * MAX_VECTOR_SIZE, sgpr_start + total_sgpr) - 1
-            block_size = end_reg - start_reg + 1
-            clobber_end_lines.append(
-                f'              llvm.inline_asm has_side_effects asm_dialect = att "", '
-                f'"{{s[{start_reg}:{end_reg}]}}" %reserved_sgpr_{block_idx} : (vector<{block_size}xi32>)-> ()'
-            )
-    
-    # AGPR restore
-    if total_agpr > 0:
-        for block_idx in range(num_agpr_blocks):
-            start_reg = block_idx * MAX_VECTOR_SIZE
-            end_reg = min((block_idx + 1) * MAX_VECTOR_SIZE, total_agpr) - 1
-            block_size = end_reg - start_reg + 1
-            clobber_end_lines.append(
-                f'              llvm.inline_asm has_side_effects asm_dialect = att "", '
-                f'"{{a[{start_reg}:{end_reg}]}}" %reserved_agpr_{block_idx} : (vector<{block_size}xi32>)-> ()'
-            )
-    
-    clobber_end_lines.append('              // === End Clobbering End ===')
-    clobber_end = '\n'.join(clobber_end_lines) + '\n'
+    # 移除了有問題的 clobber end 代碼（會導致 LLVM 生成 spill 代碼）
+    # 快照機制已經保存了需要的暫存器值，不需要額外的 clobber/restore
+    clobber_end = '              // === Printf Section End ===\n'
     
     # === 生成每個 @PRINT 的快照指令 ===
     # 建立 next_instruction -> snapshot_code 的映射
     snapshot_insertions = {}  # {clean_instr: snapshot_code}
     for d_idx, directive in enumerate(directives):
-        if directive.next_instruction and d_idx in directive_snapshots:
+        has_vgpr_snap = d_idx in directive_vgpr_snapshots
+        has_sgpr_snap = d_idx in directive_sgpr_snapshots
+        has_cond_snap = d_idx in directive_cond_snapshots
+        
+        if directive.next_instruction and (has_vgpr_snap or has_sgpr_snap or has_cond_snap):
             # 清理 next_instruction 以便匹配
             clean_instr = directive.next_instruction.strip()
             if ';' in clean_instr:
@@ -942,8 +973,27 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             
             # 生成快照指令
             snap_lines = [f'              // === Snapshot for @PRINT at line {directive.line_number + 1} ===']
-            for r_idx, orig_reg, snap_vgpr in directive_snapshots[d_idx]:
-                snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{snap_vgpr}, {orig_reg}", ""  : () -> ()')
+            
+            # VGPR 快照：使用 v_mov_b32
+            if has_vgpr_snap:
+                for r_idx, orig_reg, snap_vgpr in directive_vgpr_snapshots[d_idx]:
+                    snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{snap_vgpr}, {orig_reg}", ""  : () -> ()')
+            
+            # SGPR 快照：使用 s_mov_b32
+            if has_sgpr_snap:
+                for r_idx, orig_reg, snap_sgpr in directive_sgpr_snapshots[d_idx]:
+                    snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 s{snap_sgpr}, {orig_reg}", ""  : () -> ()')
+            
+            # 條件暫存器快照
+            if has_cond_snap:
+                cond_reg, snap_num, is_vgpr, cond_type = directive_cond_snapshots[d_idx]
+                if is_vgpr:
+                    snap_lines.append(f'              // Condition register snapshot: {cond_reg} -> v{snap_num}')
+                    snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{snap_num}, {cond_reg}", ""  : () -> ()')
+                else:
+                    snap_lines.append(f'              // Condition register snapshot: {cond_reg} -> s{snap_num}')
+                    snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 s{snap_num}, {cond_reg}", ""  : () -> ()')
+            
             snap_lines.append(f'              // === End Snapshot ===')
             
             snapshot_insertions[clean_instr] = '\n'.join(snap_lines)
@@ -1014,7 +1064,12 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         for instr in not_inserted:
             print(f"          - {instr[:60]}...")
     
-    return '\n'.join(modified_lines)
+    # 計算所需的暫存器數量（用於後續 ISA metadata 修復）
+    # 需要包含：快照 VGPR + workitem_id backup VGPR
+    required_vgpr = WORKITEM_ID_BACKUP_VGPR + 1 if has_conditional_printf else (snapshot_vgpr_start + total_snapshot_vgprs)
+    required_sgpr = snapshot_sgpr_start + total_snapshot_sgprs
+    
+    return '\n'.join(modified_lines), required_vgpr, required_sgpr
 
 
 # ============================================================
@@ -1477,7 +1532,8 @@ def rename_conflicting_labels(isa_text: str, original_isa_file: pathlib.Path) ->
     return '\n'.join(modified_lines)
 
 
-def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf: bool = True) -> str:
+def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf: bool = True,
+                     required_vgpr: int = 0, required_sgpr: int = 0) -> str:
     """
     修復 ISA metadata：從原始 ISA 文件提取正確的 metadata
     
@@ -1491,6 +1547,8 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
         isa_text: 需要修復的 ISA 文本
         original_isa_file: 原始 ISA 文件路徑
         has_printf: 是否有 printf 注入（影響 args 合併策略）
+        required_vgpr: printf 快照所需的 VGPR 數量（將更新 .amdhsa_next_free_vgpr）
+        required_sgpr: printf 快照所需的 SGPR 數量（將更新 .amdhsa_next_free_sgpr）
     
     Returns:
         修復後的 ISA 文本
@@ -1695,11 +1753,40 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
         )
         print(f"[Info] Fixed kernarg_segment_ptr = {attrs['kernarg_segment_ptr']}")
     
+    # === 修復快照暫存器分配 ===
+    # printf 快照使用的 VGPR/SGPR 可能超出 MLIR 生成的範圍，需要更新 .amdhsa_next_free_vgpr/sgpr
+    if required_vgpr > 0:
+        # 找出目前的 next_free_vgpr 值
+        vgpr_match = re.search(r'\.amdhsa_next_free_vgpr\s+(\d+)', fixed_isa)
+        if vgpr_match:
+            current_vgpr = int(vgpr_match.group(1))
+            if required_vgpr > current_vgpr:
+                fixed_isa = re.sub(
+                    r'(\.amdhsa_next_free_vgpr)\s+\d+',
+                    rf'\1 {required_vgpr}',
+                    fixed_isa
+                )
+                print(f"[Info] Fixed next_free_vgpr: {current_vgpr} -> {required_vgpr} (for snapshot registers)")
+    
+    if required_sgpr > 0:
+        # 找出目前的 next_free_sgpr 值
+        sgpr_match = re.search(r'\.amdhsa_next_free_sgpr\s+(\d+)', fixed_isa)
+        if sgpr_match:
+            current_sgpr = int(sgpr_match.group(1))
+            if required_sgpr > current_sgpr:
+                fixed_isa = re.sub(
+                    r'(\.amdhsa_next_free_sgpr)\s+\d+',
+                    rf'\1 {required_sgpr}',
+                    fixed_isa
+                )
+                print(f"[Info] Fixed next_free_sgpr: {current_sgpr} -> {required_sgpr} (for snapshot registers)")
+    
     return fixed_isa
 
 
 def build_debug_hsaco(gpumlir_path: pathlib.Path, chip: str, workdir: pathlib.Path, 
-                      original_isa_file: pathlib.Path = None, has_printf: bool = False):
+                      original_isa_file: pathlib.Path = None, has_printf: bool = False,
+                      required_vgpr: int = 0, required_sgpr: int = 0):
     """
     從修改後的 GPU MLIR 生成 HSACO
     
@@ -1709,6 +1796,8 @@ def build_debug_hsaco(gpumlir_path: pathlib.Path, chip: str, workdir: pathlib.Pa
         workdir: 工作目錄
         original_isa_file: 原始 ISA 文件路徑（用於提取 metadata）
         has_printf: 是否有 printf 注入（影響 metadata 合併策略）
+        required_vgpr: printf 快照所需的 VGPR 數量
+        required_sgpr: printf 快照所需的 SGPR 數量
     """
     for tool in ["mlir-opt", "llvm-mc", "lld"]:
         ensure_tool(tool)
@@ -1766,7 +1855,7 @@ def build_debug_hsaco(gpumlir_path: pathlib.Path, chip: str, workdir: pathlib.Pa
     # 修復 ISA metadata（從原始 ISA 提取 kernel args 等）
     # 重要：如果有 printf，需要保留 hidden_hostcall_buffer
     if original_isa_file is not None:
-        isa_text = fix_isa_metadata(isa_text, original_isa_file, has_printf)
+        isa_text = fix_isa_metadata(isa_text, original_isa_file, has_printf, required_vgpr, required_sgpr)
         # 重命名衝突的標籤（printf 生成的 .LBB* 與原始 ISA 衝突）
         isa_text = rename_conflicting_labels(isa_text, original_isa_file)
     
@@ -1868,7 +1957,7 @@ def main():
 使用範例：
   1. 在 .s 檔案中標註：
      ; @PRINT fmt="v6=%f" reg=v6 type=f32
-     ; @PRINT cond=tid_eq(0) fmt="s[0:1]=%p" reg=s0 type=ptr
+     ; @PRINT cond=v6_eq(0.0) fmt="A=%f, B=%f" reg=v6,v7 type=f32,f32
 
   2. 執行工具：
      python3 asm_debug.py input.s --output-dir debug_output
@@ -1986,7 +2075,7 @@ def main():
         print("")
         print("   Recommendations:")
         print("   1. Use --no-printf for functional verification")
-        print("   2. Use cond=tid_eq(0) to limit printf to single thread")
+        print("   2. Use cond=REG_eq(N) to limit printf (e.g., v6_eq(0.0))")
         print("   3. Place @PRINT only after all barriers complete")
         print("=" * 60 + "\n")
     
@@ -2005,13 +2094,16 @@ def main():
     # 4. 注入 printf 程式碼（如果有 @PRINT 且未禁用）
     has_printf = bool(directives) and not args.no_printf
     
+    required_vgpr = 0
+    required_sgpr = 0
+    
     if not directives or args.no_printf:
         print(f"\nUsing original GPU MLIR (no printf injection)")
         modified_path = gpumlir_path
     else:
         print(f"\n=== Injecting printf code ===")
         gpumlir_text = gpumlir_path.read_text()
-        modified_mlir = inject_printf_into_mlir(gpumlir_text, directives, reg_info)
+        modified_mlir, required_vgpr, required_sgpr = inject_printf_into_mlir(gpumlir_text, directives, reg_info)
         
         modified_path = workdir / f"{input_path.stem}_debug_injected.gpumlir"
         modified_path.write_text(modified_mlir)
@@ -2034,7 +2126,8 @@ def main():
         return
     
     # 6. 生成 HSACO
-    hsaco_path = build_debug_hsaco(modified_path, args.chip, workdir, input_path, has_printf)
+    hsaco_path = build_debug_hsaco(modified_path, args.chip, workdir, input_path, has_printf,
+                                    required_vgpr, required_sgpr)
     
     print(f"\n=== Done ===")
     print(f"Debug HSACO: {hsaco_path}")
