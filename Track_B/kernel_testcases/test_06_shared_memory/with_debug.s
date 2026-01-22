@@ -45,7 +45,8 @@ _Z15sharedMemKernelPKiPii:              ; @_Z15sharedMemKernelPKiPii
 	s_add_u32 s0, s6, s0
 	s_addc_u32 s1, s7, s1
 	s_waitcnt lgkmcnt(0)
-; @PRINT fmt="[After barrier] Reduction result: v1=%d" reg=v1 type=i32
+; 使用新語法 + 條件式（只讓 tid=0 的 thread 輸出，減少 hostcall 競爭）
+; @PRINT if $tid == 0: f"[After barrier] Reduction result: v1={v1:d}"
 	global_store_dword v0, v1, s[0:1]
 .LBB0_5:
 	s_endpgm

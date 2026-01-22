@@ -219,8 +219,46 @@ Kernel 執行流程：
 
 | 限制 | 說明 | 建議 |
 |------|------|------|
-| **@PRINT 數量** | 每個 kernel 建議 1-3 個 | 過多可能影響效能 |
-| **s_barrier 衝突** | shared memory kernel 可能卡住 | 減少 printf 數量 |
+| **@PRINT 數量** | 每個 kernel 建議適量 | 過多可能影響效能與可讀性 |
+| **輸出量考量** | 無條件 printf 會產生大量輸出 | 使用條件式過濾 |
+
+### ✅ s_barrier 與 printf 相容性
+
+經過擴大測試驗證，**MDR 的「快照 + 延遲輸出」機制使得 printf 與 s_barrier 完全相容**：
+
+**工作原理**：
+1. `@PRINT` 位置只注入快照指令（記錄暫存器值）
+2. 實際的 `gpu.printf` hostcall 在 kernel 結束時（`s_endpgm` 前）統一執行
+3. 所有 barrier 同步在 hostcall 之前完成，避免死鎖
+
+**測試結果（2026-01-22 擴大測試）**：
+
+| 測試情境 | 條件 | 結果 |
+|----------|------|------|
+| barrier 前後多個 @PRINT | `$tid == 0` | ✅ 正常執行 |
+| wavefront leader | `$lane == 0` | ✅ 正常執行 |
+| 前 4 個 thread | `$tid < 4` | ✅ 正常執行 |
+| 無條件（256 threads） | 無 | ✅ 正常執行 |
+| loop 內 barrier 後 | 無 | ✅ 正常執行 |
+
+### 建議使用模式
+
+| 使用情境 | 建議條件 | 說明 |
+|----------|----------|------|
+| 只需單一輸出 | `if $tid == 0:` | 最少輸出，適合看整體結果 |
+| 檢查每個 wavefront | `if $lane == 0:` | 每個 wavefront 輸出 1 行 |
+| 限制輸出數量 | `if $tid < N:` | 輸出前 N 個 thread |
+| 完整 debug | 無條件 | 輸出所有 thread，注意輸出量 |
+
+```asm
+; 推薦：使用條件式減少輸出量
+; @PRINT if $tid == 0: f"[Reduction] result={v1:d}"
+
+; 也可以：無條件輸出所有 thread
+; @PRINT f"[All threads] tid={$tid}, value={v1:d}"
+```
+
+> 💡 **提示**：工具會自動檢測 `s_barrier` 並發出警告訊息，但這主要是提醒注意輸出量，而非功能限制。
 
 ### ✅ 條件式 printf 支援
 

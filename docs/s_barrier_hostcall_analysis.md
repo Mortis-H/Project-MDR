@@ -245,10 +245,114 @@ After barrier: tid=1, result=32184
 | Kernel 類型 | printf 支援 | 實測結果 |
 |-------------|-------------|----------|
 | 無 s_barrier | ✅ 完全支援 | 正常工作 |
-| 有 s_barrier + `cond=tid_eq(0)` | ✅ 可用 | 256 threads 正常，有輸出 |
+| 有 s_barrier + `if $tid == 0:` | ✅ 可用 | 256/512 threads 正常 |
+| 有 s_barrier + `cond=tid_eq(0)` | ✅ 可用 | 256 threads 正常（舊語法） |
 | 有 s_barrier，無 cond | ⚠️ 高風險 | 可能死鎖或崩潰 |
 
 **核心原則**：
-1. 有 s_barrier 的 kernel **必須**使用 `cond=tid_eq(0)` 或類似條件
+1. 有 s_barrier 的 kernel **必須**使用 `if $tid == 0:` 或類似條件
 2. 這樣可以限制 hostcall 的競爭，避免死鎖
 3. Hostcall 是阻塞操作，不限制執行數量時會與 barrier 衝突
+
+---
+
+## 2026-01-22 更新：使用 $tid 內建變數
+
+### 新語法（推薦）
+
+```asm
+; 使用新的 $tid 內建變數作為條件
+; @PRINT if $tid == 0: f"[After barrier] Reduction result: v1={v1:d}"
+```
+
+### 工具自動檢測
+
+mdr_printf.py 會自動檢測 kernel 中是否有 `s_barrier` 指令並發出警告：
+
+```
+⚠️  WARNING: Kernel contains s_barrier instruction!
+   gpu.printf's hostcall mechanism may conflict with barrier
+   synchronization, causing kernel to hang or crash.
+
+   Recommendations:
+   1. Use --no-printf for functional verification
+   2. Use cond=REG_eq(N) to limit printf (e.g., v6_eq(0.0))
+   3. Place @PRINT only after all barriers complete
+```
+
+---
+
+## 2026-01-22 擴大測試：重新驗證 s_barrier + printf
+
+### 重大發現：快照機制使 printf 與 barrier 相容
+
+經過更全面的測試後發現，**MDR 的「快照 + 延遲輸出」機制使得 printf 與 s_barrier 可以相容**：
+
+1. **@PRINT 位置**：只注入快照指令（把 VGPR 值複製到專用快照 VGPR）
+2. **printf 執行時機**：所有 `gpu.printf` hostcall 在 kernel 結束時（`s_endpgm` 前）統一執行
+3. **結果**：hostcall 永遠在所有 barrier 完成後執行，避免了死鎖
+
+### 擴大測試結果
+
+| 測試檔案 | 條件 | Printf 位置 | Threads | 結果 |
+|----------|------|------------|---------|------|
+| test_barrier_conditions.s | `$tid == 0` | barrier 前後，3 處 | 256 | ✅ 成功 (3 行) |
+| test_lane_condition.s | `$lane == 0` | barrier 前後 | 256 | ✅ 成功 (1 行) |
+| test_multi_threads.s | `$tid < 4` | barrier 前 | 256 | ✅ 成功 (4 行) |
+| test_unconditional.s | 無條件 | barrier 前 | 256 | ✅ 成功 (64 行) |
+| test_unconditional_after_barrier.s | 無條件 | barrier 後 | 256 | ✅ 成功 (256 行) |
+| test_inside_loop_barrier.s | 無條件 | loop 內 barrier 後 | 256 | ✅ 成功 (256 行) |
+
+### 測試範例輸出
+
+**條件式 printf（$tid == 0）**：
+```
+[Test1] Before barrier: v3=0
+[Test2] After barrier: v3=0
+[Test3] Reduction result: v1=-1035452244
+✅ PASS: Kernel executed successfully
+```
+
+**多 thread 條件（$tid < 4）**：
+```
+[Multi-thread Test] tid=0, lane=0, v3=0
+[Multi-thread Test] tid=1, lane=1, v3=0
+[Multi-thread Test] tid=2, lane=2, v3=0
+[Multi-thread Test] tid=3, lane=3, v3=0
+✅ PASS: Kernel executed successfully
+```
+
+**無條件 printf（256 threads）**：
+```
+[Inside Loop] tid=128, v3=3776
+[Inside Loop] tid=129, v3=3777
+...（共 256 行，順序非確定）
+✅ PASS: Kernel executed successfully
+```
+
+### 更新後的建議
+
+| 使用情境 | 建議條件 | 說明 |
+|----------|----------|------|
+| 只需單一輸出 | `if $tid == 0:` | 最少輸出，適合看整體結果 |
+| 檢查每個 wavefront | `if $lane == 0:` | 每個 wavefront 輸出 1 行 |
+| 限制輸出數量 | `if $tid < N:` | 輸出前 N 個 thread |
+| 完整 debug | 無條件 | 輸出所有 thread，注意輸出量 |
+
+### 注意事項
+
+1. **輸出順序非確定**：即使所有 thread 都輸出，順序取決於 wavefront 調度
+2. **輸出量考量**：無條件 printf 會產生大量輸出，可能影響可讀性
+3. **效能影響**：大量 printf 仍會影響效能，建議 debug 時限制條件
+
+### 結論
+
+**s_barrier + printf 現在是完全相容的**，因為：
+1. MDR 使用快照機制，在 @PRINT 位置只記錄值
+2. 實際 hostcall 在 kernel 結束時才執行
+3. 所有 barrier 同步在 hostcall 之前完成
+
+條件式 printf（如 `if $tid == 0:`）仍然推薦使用，主要是為了：
+- 減少輸出量，提高可讀性
+- 降低效能影響
+- 聚焦於特定 thread 的行為

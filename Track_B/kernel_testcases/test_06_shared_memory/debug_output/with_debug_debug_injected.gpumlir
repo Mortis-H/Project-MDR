@@ -1,14 +1,15 @@
 module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "amdgcn-amd-amdhsa--gfx950"} {
   gpu.module @amdisa_kernels {
     gpu.func @_Z15sharedMemKernelPKiPii(%arg0: !llvm.ptr, %arg1: !llvm.ptr, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: i16, %arg7: i16, %arg8: i16, %arg9: i16, %arg10: i16, %arg11: i16, %arg12: !llvm.ptr, %arg13: !llvm.ptr, %arg14: !llvm.ptr, %arg15: i16) kernel attributes {amdisa.agpr_count = 0 : i32, amdisa.kernarg_segment_size = 280 : i32, amdisa.sgpr_count = 15 : i32, amdisa.vgpr_count = 6 : i32} {
-              // === Register Clobbering Start ===
+              // === Kernarg Backup Start ===
               // Save kernarg pointer for printf (to s[18:19])
               llvm.inline_asm has_side_effects "s_mov_b64 s[18:19], s[0:1]", ""  : () -> ()
-              // Protecting 8 VGPRs
-              %reserved_vgpr_0 = llvm.inline_asm has_side_effects asm_dialect = att "", "={v[0:7]}": () -> vector<8xi32>
-              // Protecting 16 SGPRs (s[4:19])
-              %reserved_sgpr_0 = llvm.inline_asm has_side_effects asm_dialect = att "", "={s[4:19]}": () -> vector<16xi32>
-              // === End Clobbering Start ===
+              // Save workitem_id (v0) to v29 for conditional printf
+              llvm.inline_asm has_side_effects "v_mov_b32 v29, v0", ""  : () -> ()
+              // === Built-in variable: $tid (local thread ID) ===
+              // Backup workitem_id_x (v0) to v30
+              llvm.inline_asm has_side_effects "v_mov_b32 v30, v0", ""  : () -> ()
+              // === Kernarg Backup End ===
 
       llvm.inline_asm has_side_effects "\09s_load_dword s3, s[0:1], 0x24", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09s_load_dword s8, s[0:1], 0x10", ""  : () -> ()
@@ -28,15 +29,18 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "\09global_load_dword v3, v[2:3], off", ""  : () -> ()
               // Restore kernarg pointer for printf (from s[18:19])
               llvm.inline_asm has_side_effects "s_mov_b64 s[0:1], s[18:19]", ""  : () -> ()
-              // === @PRINT from line 48 (using snapshots) ===
-              // Using snapshot v6 for v1
-              %print_val_0_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v6", "=v": () -> i32
-              gpu.printf "[After barrier] Reduction result: v1=%d\0A", %print_val_0_0 : i32
+              // === @PRINT from line 49 (using snapshots) ===
+              // Using snapshot v28 for v1
+              %print_val_0_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v28", "=v": () -> i32
+              // Conditional printf: read $tid from v30
+              %cond_tid_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v30", "=v": () -> i32
+              %cmp_val_0 = arith.constant 0 : i32
+              %cond_0 = arith.cmpi eq, %cond_tid_0, %cmp_val_0 : i32
+              scf.if %cond_0 {
+                gpu.printf "[After barrier] Reduction result: v1=%d\0A", %print_val_0_0 : i32
+              }
               // === End @PRINT ===
-              // === Register Clobbering End ===
-              llvm.inline_asm has_side_effects asm_dialect = att "", "{v[0:7]}" %reserved_vgpr_0 : (vector<8xi32>)-> ()
-              llvm.inline_asm has_side_effects asm_dialect = att "", "{s[4:19]}" %reserved_sgpr_0 : (vector<16xi32>)-> ()
-              // === End Clobbering End ===
+              // === Printf Section End ===
 
       llvm.inline_asm has_side_effects ".LBB0_2:", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09s_or_b64 exec, exec, s[0:1]", ""  : () -> ()
@@ -58,8 +62,8 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "\09s_add_u32 s0, s6, s0", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09s_addc_u32 s1, s7, s1", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09s_waitcnt lgkmcnt(0)", ""  : () -> ()
-              // === Snapshot for @PRINT at line 48 ===
-              llvm.inline_asm has_side_effects "v_mov_b32 v6, v1", ""  : () -> ()
+              // === Snapshot for @PRINT at line 49 ===
+              llvm.inline_asm has_side_effects "v_mov_b32 v28, v1", ""  : () -> ()
               // === End Snapshot ===
       llvm.inline_asm has_side_effects "\09global_store_dword v0, v1, s[0:1]", ""  : () -> ()
       llvm.inline_asm has_side_effects ".LBB0_5:", ""  : () -> ()
