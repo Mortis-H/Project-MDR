@@ -175,6 +175,46 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 
 ---
 
+## ⚠️ 重要：執行模型與輸出順序
+
+### 快照 + 延遲輸出機制
+
+MDR 使用 **快照（Snapshot）+ 延遲輸出** 策略：
+
+```
+Kernel 執行流程：
+┌────────────────────────────────┐
+│  @PRINT #1 位置 → 只做 snapshot │  ← 保存當時的暫存器值到高編號 VGPR
+│  ... kernel 繼續執行 ...        │
+│  @PRINT #2 位置 → 只做 snapshot │
+│  ... kernel 繼續執行 ...        │
+├────────────────────────────────┤
+│  kernel 結束前（s_endpgm 之前）  │  ← 所有 printf 集中在這裡執行
+│    printf #1 (使用 snapshot 值) │
+│    printf #2 (使用 snapshot 值) │
+└────────────────────────────────┘
+```
+
+### 輸出順序說明
+
+| 特性 | 說明 |
+|------|------|
+| **@PRINT 順序** | 輸出按照 @PRINT 在原始碼中的順序，先印完 #1 的所有 thread，再印 #2 |
+| **Thread 順序** | 同一條 @PRINT 內的 thread 順序由 GPU runtime 決定，**不保證排序** |
+| **不反映真實執行順序** | 因為所有 printf 都在 kernel 結尾執行，無法觀察 wavefront 間的交錯執行 |
+
+> ⚠️ **注意**：輸出看起來很整齊（tid 0, 1, 2...）是 GPU SIMD 執行模型和 printf 機制的行為，**不是 MDR 做了排序**。在複雜的 kernel 中，不同 wavefront 的輸出順序可能會交錯。
+
+### 為什麼這樣設計？
+
+| 原因 | 說明 |
+|------|------|
+| **避免干擾 kernel** | printf 會使用大量 VGPR/SGPR，如果在原地執行會破壞 kernel 狀態 |
+| **保證 snapshot 正確** | 在 @PRINT 位置 snapshot 暫存器值，確保印出的是「當時」的值 |
+| **簡化 register 管理** | 只需要在 kernel 結尾統一處理 clobbering |
+
+---
+
 ## ⚠️ 使用限制
 
 | 限制 | 說明 | 建議 |
