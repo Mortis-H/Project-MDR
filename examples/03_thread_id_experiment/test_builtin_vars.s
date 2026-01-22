@@ -12,13 +12,10 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt lgkmcnt(0)
 	s_and_b32 s3, s3, 0xffff
 	s_mul_i32 s2, s2, s3
-; 新語法：Python f-string 風格
-; @PRINT f"[SGPR Test] n={s4}, base_idx={s2}"
-; === 測試 $tid 和 $lane 條件 ===
-; 只印出前 4 個 thread
-; @PRINT if $tid < 4: f"[tid<4] tid={$tid}, lane={$lane}"
-; 只印出 lane 0（每個 wavefront 的第一個 thread）
-; @PRINT if $lane == 0: f"[lane==0] tid={$tid} (wavefront leader)"
+	
+	; 測試內建變數 $tid 和 $lane
+; @PRINT f"[Builtin Test] $tid={$tid}, $lane={$lane}"
+
 	v_add_u32_e32 v0, s2, v0
 	v_cmp_gt_i32_e32 vcc, s4, v0
 	s_and_saveexec_b64 s[2:3], vcc
@@ -35,11 +32,11 @@ _Z9vectorAddPKfS0_Pfi:
 	global_load_dword v7, v[2:3], off
 	v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]
 	s_waitcnt vmcnt(0)
-; @PRINT f"A = {v6:.3f}, B = {v7:.3f}, C = {v2:.3f}"
-; @PRINT f"[Expr] (A+B)x2/7={(v6+v7)*2/7:.2f}, A-B={v6-v7:.2f}, A*B={v6*v7:.2f}"
-; @PRINT if v6 <= 2.0: f"Before ADD (v6<=2): v6 = {v6:.3f}, v7 = {v7:.2f}"
+	
+	; 混合使用內建變數和暫存器
+; @PRINT f"[Data] tid={$tid}: A={v6:.2f}, B={v7:.2f}"
+
 	v_add_f32_e32 v2, v6, v7
-; @PRINT if v6 > 2.0: f"After v6 = {v6:.2f}, v7 = {v7:.2f}, v2 = {v2:.2f}"
 	global_store_dword v[0:1], v2, off
 .LBB0_2:
 	s_endpgm
@@ -64,9 +61,9 @@ _Z9vectorAddPKfS0_Pfi:
 		.amdhsa_system_sgpr_workgroup_id_z 0
 		.amdhsa_system_sgpr_workgroup_info 0
 		.amdhsa_system_vgpr_workitem_id 0
-		.amdhsa_next_free_vgpr 8
-		.amdhsa_next_free_sgpr 8
-		.amdhsa_accum_offset 8
+		.amdhsa_next_free_vgpr 16
+		.amdhsa_next_free_sgpr 12
+		.amdhsa_accum_offset 16
 		.amdhsa_reserve_vcc 1
 		.amdhsa_float_round_mode_32 0
 		.amdhsa_float_round_mode_16_64 0
@@ -119,7 +116,7 @@ amdhsa.kernels:
     .private_segment_fixed_size: 0
     .sgpr_count:     14
     .symbol:         _Z9vectorAddPKfS0_Pfi.kd
-    .vgpr_count:     8
+    .vgpr_count:     16
     .wavefront_size: 64
 amdhsa.target:   amdgcn-amd-amdhsa--gfx950
 amdhsa.version:

@@ -4,8 +4,15 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
               // === Kernarg Backup Start ===
               // Save kernarg pointer for printf (to s[18:19])
               llvm.inline_asm has_side_effects "s_mov_b64 s[18:19], s[0:1]", ""  : () -> ()
-              // Save workitem_id (v0) to v86 for conditional printf
-              llvm.inline_asm has_side_effects "v_mov_b32 v86, v0", ""  : () -> ()
+              // Save workitem_id (v0) to v98 for conditional printf
+              llvm.inline_asm has_side_effects "v_mov_b32 v98, v0", ""  : () -> ()
+              // === Built-in variable: $tid (local thread ID) ===
+              // Backup workitem_id_x (v0) to v99
+              llvm.inline_asm has_side_effects "v_mov_b32 v99, v0", ""  : () -> ()
+              // === Built-in variable: $lane (wavefront lane ID) ===
+              // Calculate lane ID using v_mbcnt instructions
+              llvm.inline_asm has_side_effects "v_mbcnt_lo_u32_b32 v100, -1, 0", ""  : () -> ()
+              llvm.inline_asm has_side_effects "v_mbcnt_hi_u32_b32 v100, -1, v100", ""  : () -> ()
               // === Kernarg Backup End ===
 
       llvm.inline_asm has_side_effects "\09s_load_dword s3, s[0:1], 0x2c", ""  : () -> ()
@@ -28,32 +35,32 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "\09s_waitcnt lgkmcnt(0)", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[4:5], s[4:5], 0, v[0:1]", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[2:3], s[6:7], 0, v[0:1]", ""  : () -> ()
-      llvm.inline_asm has_side_effects "\09global_load_dword v6, v[4:5], off      ; \E8\BC\89\E5\85\A5 A[tid]", ""  : () -> ()
-      llvm.inline_asm has_side_effects "\09global_load_dword v7, v[2:3], off      ; \E8\BC\89\E5\85\A5 B[tid]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09global_load_dword v6, v[4:5], off", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09global_load_dword v7, v[2:3], off", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09s_waitcnt vmcnt(0)", ""  : () -> ()
-              // === Snapshot for @PRINT at line 33 ===
-              llvm.inline_asm has_side_effects "v_mov_b32 v76, v6", ""  : () -> ()
-              llvm.inline_asm has_side_effects "v_mov_b32 v77, v7", ""  : () -> ()
-              llvm.inline_asm has_side_effects "v_mov_b32 v78, v2", ""  : () -> ()
+              // === Snapshot for @PRINT at line 38 ===
+              llvm.inline_asm has_side_effects "v_mov_b32 v88, v6", ""  : () -> ()
+              llvm.inline_asm has_side_effects "v_mov_b32 v89, v7", ""  : () -> ()
+              llvm.inline_asm has_side_effects "v_mov_b32 v90, v2", ""  : () -> ()
               // === End Snapshot ===
-              // === Snapshot for @PRINT at line 34 ===
-              llvm.inline_asm has_side_effects "v_mov_b32 v79, v6", ""  : () -> ()
-              llvm.inline_asm has_side_effects "v_mov_b32 v80, v7", ""  : () -> ()
-              // Expression register snapshot: v6 -> v79
-              llvm.inline_asm has_side_effects "v_mov_b32 v79, v6", ""  : () -> ()
-              // Expression register snapshot: v7 -> v80
-              llvm.inline_asm has_side_effects "v_mov_b32 v80, v7", ""  : () -> ()
+              // === Snapshot for @PRINT at line 39 ===
+              llvm.inline_asm has_side_effects "v_mov_b32 v91, v6", ""  : () -> ()
+              llvm.inline_asm has_side_effects "v_mov_b32 v92, v7", ""  : () -> ()
+              // Expression register snapshot: v6 -> v91
+              llvm.inline_asm has_side_effects "v_mov_b32 v91, v6", ""  : () -> ()
+              // Expression register snapshot: v7 -> v92
+              llvm.inline_asm has_side_effects "v_mov_b32 v92, v7", ""  : () -> ()
               // === End Snapshot ===
-              // === Snapshot for @PRINT at line 35 ===
-              llvm.inline_asm has_side_effects "v_mov_b32 v81, v6", ""  : () -> ()
-              llvm.inline_asm has_side_effects "v_mov_b32 v82, v7", ""  : () -> ()
+              // === Snapshot for @PRINT at line 40 ===
+              llvm.inline_asm has_side_effects "v_mov_b32 v93, v6", ""  : () -> ()
+              llvm.inline_asm has_side_effects "v_mov_b32 v94, v7", ""  : () -> ()
               // === End Snapshot ===
-      llvm.inline_asm has_side_effects "\09v_add_f32_e32 v2, v6, v7               ; C = A + B", ""  : () -> ()
-              // === Snapshot for @PRINT at line 37 ===
-              llvm.inline_asm has_side_effects "v_mov_b32 v83, v6", ""  : () -> ()
-              llvm.inline_asm has_side_effects "v_mov_b32 v84, v7", ""  : () -> ()
-              llvm.inline_asm has_side_effects "v_mov_b32 v85, v2", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_add_f32_e32 v2, v6, v7", ""  : () -> ()
+              // === Snapshot for @PRINT at line 42 ===
+              llvm.inline_asm has_side_effects "v_mov_b32 v95, v6", ""  : () -> ()
+              llvm.inline_asm has_side_effects "v_mov_b32 v96, v7", ""  : () -> ()
+              llvm.inline_asm has_side_effects "v_mov_b32 v97, v2", ""  : () -> ()
               // === End Snapshot ===
       llvm.inline_asm has_side_effects "\09global_store_dword v[0:1], v2, off", ""  : () -> ()
               // Restore kernarg pointer for printf (from s[18:19])
@@ -65,64 +72,88 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
               %print_val_0_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, s21", "=v": () -> i32
               gpu.printf "[SGPR Test] n=%d, base_idx=%d\0A", %print_val_0_0, %print_val_0_1 : i32, i32
               // === End @PRINT ===
-              // === @PRINT from line 33 (using snapshots) ===
-              // Using snapshot v76 for v6
-              %print_val_1_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v76", "=v": () -> f32
-              // Using snapshot v77 for v7
-              %print_val_1_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v77", "=v": () -> f32
-              // Using snapshot v78 for v2
-              %print_val_1_2 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v78", "=v": () -> f32
-              gpu.printf "A = %.3f, B = %.3f, C = %.3f\0A", %print_val_1_0, %print_val_1_1, %print_val_1_2 : f32, f32, f32
-              // === End @PRINT ===
-              // === @PRINT from line 34 (using snapshots) ===
-              // Expression: (v6+v7)*2/7 (using snapshots)
-              // Using snapshot v79 for v6
-              %expr_2_0_reg_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v79", "=v": () -> f32
-              // Using snapshot v80 for v7
-              %expr_2_0_reg_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v80", "=v": () -> f32
-              %expr_2_0_tmp_2 = arith.addf %expr_2_0_reg_0, %expr_2_0_reg_1 : f32
-              %expr_2_0_const_3 = arith.constant 2.0 : f32
-              %expr_2_0_tmp_4 = arith.mulf %expr_2_0_tmp_2, %expr_2_0_const_3 : f32
-              %expr_2_0_const_5 = arith.constant 7.0 : f32
-              %expr_2_0_tmp_6 = arith.divf %expr_2_0_tmp_4, %expr_2_0_const_5 : f32
-              // Expression: v6-v7 (using snapshots)
-              // Using snapshot v79 for v6
-              %expr_2_1_reg_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v79", "=v": () -> f32
-              // Using snapshot v80 for v7
-              %expr_2_1_reg_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v80", "=v": () -> f32
-              %expr_2_1_tmp_2 = arith.subf %expr_2_1_reg_0, %expr_2_1_reg_1 : f32
-              // Expression: v6*v7 (using snapshots)
-              // Using snapshot v79 for v6
-              %expr_2_2_reg_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v79", "=v": () -> f32
-              // Using snapshot v80 for v7
-              %expr_2_2_reg_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v80", "=v": () -> f32
-              %expr_2_2_tmp_2 = arith.mulf %expr_2_2_reg_0, %expr_2_2_reg_1 : f32
-              gpu.printf "[Expr] (A+B)x2/7=%.2f, A-B=%.2f, A*B=%.2f\0A", %expr_2_0_tmp_6, %expr_2_1_tmp_2, %expr_2_2_tmp_2 : f32, f32, f32
-              // === End @PRINT ===
-              // === @PRINT from line 35 (using snapshots) ===
-              // Using snapshot v81 for v6
-              %print_val_3_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v81", "=v": () -> f32
-              // Using snapshot v82 for v7
-              %print_val_3_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v82", "=v": () -> f32
-              // Conditional printf: v6 le 2.0
-              %cmp_val_3 = arith.constant 2.0 : f32
-              %cond_3 = arith.cmpf ole, %print_val_3_0, %cmp_val_3 : f32
-              scf.if %cond_3 {
-                gpu.printf "Before ADD (v6<=2): v6 = %.3f, v7 = %.2f\0A", %print_val_3_0, %print_val_3_1 : f32, f32
+              // === @PRINT from line 19 (using snapshots) ===
+              // Built-in $tid: read from v99
+              %print_val_1_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v99", "=v": () -> i32
+              // Built-in $lane: read from v100
+              %print_val_1_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v100", "=v": () -> i32
+              // Conditional printf: read $tid from v99
+              %cond_tid_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v99", "=v": () -> i32
+              %cmp_val_1 = arith.constant 4 : i32
+              %cond_1 = arith.cmpi slt, %cond_tid_1, %cmp_val_1 : i32
+              scf.if %cond_1 {
+                gpu.printf "[tid<4] tid=%d, lane=%d\0A", %print_val_1_0, %print_val_1_1 : i32, i32
               }
               // === End @PRINT ===
-              // === @PRINT from line 37 (using snapshots) ===
-              // Using snapshot v83 for v6
-              %print_val_4_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v83", "=v": () -> f32
-              // Using snapshot v84 for v7
-              %print_val_4_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v84", "=v": () -> f32
-              // Using snapshot v85 for v2
-              %print_val_4_2 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v85", "=v": () -> f32
+              // === @PRINT from line 21 (using snapshots) ===
+              // Built-in $tid: read from v99
+              %print_val_2_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v99", "=v": () -> i32
+              // Conditional printf: read $lane from v100
+              %cond_lane_2 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v100", "=v": () -> i32
+              %cmp_val_2 = arith.constant 0 : i32
+              %cond_2 = arith.cmpi eq, %cond_lane_2, %cmp_val_2 : i32
+              scf.if %cond_2 {
+                gpu.printf "[lane==0] tid=%d (wavefront leader)\0A", %print_val_2_0 : i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 38 (using snapshots) ===
+              // Using snapshot v88 for v6
+              %print_val_3_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v88", "=v": () -> f32
+              // Using snapshot v89 for v7
+              %print_val_3_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v89", "=v": () -> f32
+              // Using snapshot v90 for v2
+              %print_val_3_2 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v90", "=v": () -> f32
+              gpu.printf "A = %.3f, B = %.3f, C = %.3f\0A", %print_val_3_0, %print_val_3_1, %print_val_3_2 : f32, f32, f32
+              // === End @PRINT ===
+              // === @PRINT from line 39 (using snapshots) ===
+              // Expression: (v6+v7)*2/7 (using snapshots)
+              // Using snapshot v91 for v6
+              %expr_4_0_reg_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v91", "=v": () -> f32
+              // Using snapshot v92 for v7
+              %expr_4_0_reg_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v92", "=v": () -> f32
+              %expr_4_0_tmp_2 = arith.addf %expr_4_0_reg_0, %expr_4_0_reg_1 : f32
+              %expr_4_0_const_3 = arith.constant 2.0 : f32
+              %expr_4_0_tmp_4 = arith.mulf %expr_4_0_tmp_2, %expr_4_0_const_3 : f32
+              %expr_4_0_const_5 = arith.constant 7.0 : f32
+              %expr_4_0_tmp_6 = arith.divf %expr_4_0_tmp_4, %expr_4_0_const_5 : f32
+              // Expression: v6-v7 (using snapshots)
+              // Using snapshot v91 for v6
+              %expr_4_1_reg_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v91", "=v": () -> f32
+              // Using snapshot v92 for v7
+              %expr_4_1_reg_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v92", "=v": () -> f32
+              %expr_4_1_tmp_2 = arith.subf %expr_4_1_reg_0, %expr_4_1_reg_1 : f32
+              // Expression: v6*v7 (using snapshots)
+              // Using snapshot v91 for v6
+              %expr_4_2_reg_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v91", "=v": () -> f32
+              // Using snapshot v92 for v7
+              %expr_4_2_reg_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v92", "=v": () -> f32
+              %expr_4_2_tmp_2 = arith.mulf %expr_4_2_reg_0, %expr_4_2_reg_1 : f32
+              gpu.printf "[Expr] (A+B)x2/7=%.2f, A-B=%.2f, A*B=%.2f\0A", %expr_4_0_tmp_6, %expr_4_1_tmp_2, %expr_4_2_tmp_2 : f32, f32, f32
+              // === End @PRINT ===
+              // === @PRINT from line 40 (using snapshots) ===
+              // Using snapshot v93 for v6
+              %print_val_5_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v93", "=v": () -> f32
+              // Using snapshot v94 for v7
+              %print_val_5_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v94", "=v": () -> f32
+              // Conditional printf: v6 le 2.0
+              %cmp_val_5 = arith.constant 2.0 : f32
+              %cond_5 = arith.cmpf ole, %print_val_5_0, %cmp_val_5 : f32
+              scf.if %cond_5 {
+                gpu.printf "Before ADD (v6<=2): v6 = %.3f, v7 = %.2f\0A", %print_val_5_0, %print_val_5_1 : f32, f32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 42 (using snapshots) ===
+              // Using snapshot v95 for v6
+              %print_val_6_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v95", "=v": () -> f32
+              // Using snapshot v96 for v7
+              %print_val_6_1 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v96", "=v": () -> f32
+              // Using snapshot v97 for v2
+              %print_val_6_2 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v97", "=v": () -> f32
               // Conditional printf: v6 gt 2.0
-              %cmp_val_4 = arith.constant 2.0 : f32
-              %cond_4 = arith.cmpf ogt, %print_val_4_0, %cmp_val_4 : f32
-              scf.if %cond_4 {
-                gpu.printf "After v6 = %.2f, v7 = %.2f, v2 = %.3f\0A", %print_val_4_0, %print_val_4_1, %print_val_4_2 : f32, f32, f32
+              %cmp_val_6 = arith.constant 2.0 : f32
+              %cond_6 = arith.cmpf ogt, %print_val_6_0, %cmp_val_6 : f32
+              scf.if %cond_6 {
+                gpu.printf "After v6 = %.2f, v7 = %.2f, v2 = %.2f\0A", %print_val_6_0, %print_val_6_1, %print_val_6_2 : f32, f32, f32
               }
               // === End @PRINT ===
               // === Printf Section End ===

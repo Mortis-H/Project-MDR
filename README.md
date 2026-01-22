@@ -79,6 +79,26 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 | `{v6:d}` | i32 | 整數 | `42` |
 | `{v6*v7:.2f}` | f32 | 表達式 | `6.28` |
 | `{(v6+v7)*2:.2f}` | f32 | 複合表達式 | `12.00` |
+| `{$tid}` | i32 | Local Thread ID | `42` |
+| `{$lane}` | i32 | Wavefront Lane ID | `37` |
+
+### 內建變數
+
+| 變數 | 說明 | 範圍 | 計算方式 |
+|------|------|------|----------|
+| `{$tid}` | Local Thread ID (workitem_id_x) | 0 ~ workgroup_size-1 | 備份 v0 |
+| `{$lane}` | Wavefront Lane ID | 0-63 | v_mbcnt_lo + v_mbcnt_hi |
+
+**使用範例：**
+```asm
+; 印出 thread ID 和資料
+; @PRINT f"[tid={$tid}] A={v6:.3f}"
+
+; 使用 lane ID 追蹤 wavefront 內的執行順序
+; @PRINT f"[lane={$lane}] processing value {v6:.2f}"
+```
+
+> 💡 `$tid` 和 `$lane` 不使用 `gpu.thread_id`，避免污染 SGPR。使用純 assembly 指令計算。
 
 ### 條件運算子
 
@@ -90,6 +110,18 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 | `<=` | 小於等於 | `if s4 <= 64:` |
 | `>` | 大於 | `if v6 > 2.0:` |
 | `>=` | 大於等於 | `if v6 >= 1.0:` |
+
+**條件式支援內建變數：**
+```asm
+; 只印出前 4 個 thread
+; @PRINT if $tid < 4: f"[tid<4] data={v6:.2f}"
+
+; 只印出每個 wavefront 的 leader (lane 0)
+; @PRINT if $lane == 0: f"[wavefront leader] tid={$tid}"
+
+; 只印出第一個 wavefront 的 thread
+; @PRINT if $tid < 64: f"[first wavefront] lane={$lane}"
+```
 
 ---
 
@@ -105,6 +137,8 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 | **快照機制** | 在 `@PRINT` 位置捕捉暫存器值 | Before/After 觀察 |
 | **條件印出** | 基於暫存器值過濾輸出 | `if v6 > 2.0:` |
 | **表達式計算** | 四則運算 + 括號 | `{v6*v7:.2f}`, `{(v6+v7)*2:.2f}` |
+| **內建變數 $tid** | Local Thread ID (workitem_id_x) | `{$tid}` |
+| **內建變數 $lane** | Wavefront Lane ID (0-63) | `{$lane}` |
 | **自動測試** | `--test` 選項 | `--test --test-size 64` |
 
 ### 支援的暫存器類型
@@ -174,14 +208,6 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 | 功能 | 原因 |
 |------|------|
 | AGPR 直接印出 | 需要額外指令轉換 |
-
-### 🔜 待討論功能
-
-| 功能 | 說明 | 挑戰 |
-|------|------|------|
-| `{$tid}` 內建變數 | 在 f-string 中印出 thread ID | `gpu.thread_id` 會污染 SGPR |
-
-**可能的解決方案**：在 kernel 開頭快照 `v0`（AMDGPU ABI 規定 `v0` = workitem_id_x），避開 `gpu.thread_id`。需與使用者討論後決定實現方式。
 
 ---
 
@@ -401,9 +427,19 @@ Project-MDR/
 
 ## 更新日誌
 
+### v1.7 (2026-01-22)
+- ✅ **新增內建變數 `{$tid}` 和 `{$lane}`**
+  - `{$tid}`: Local Thread ID (workitem_id_x, 0 ~ workgroup_size-1)
+  - `{$lane}`: Wavefront Lane ID (0-63)
+  - 使用純 assembly 指令計算，不污染 SGPR
+  - `$tid` 透過在 kernel 開頭備份 v0 實現
+  - `$lane` 透過 v_mbcnt_lo/hi_u32_b32 指令計算
+- ✅ **支援 `$tid` 和 `$lane` 作為條件式**
+  - `if $tid < 4:` - 只印出前 4 個 thread
+  - `if $lane == 0:` - 只印出 wavefront leaders
+
 ### v1.6 (2026-01-21)
 - 📝 **文件更新**：移除舊語法說明，統一使用 f-string 語法
-- 🔜 新增「待討論功能」章節：`{$tid}` 內建變數
 
 ### v1.5 (2026-01-21)
 - ✅ **支援複合表達式運算**

@@ -64,6 +64,10 @@ class PrintDirective:
     - cond=v6_gt(2.0) - 只印出 v6 > 2.0 的 thread
     - 條件暫存器和類型自動從 cond= 提取
     - 如果條件暫存器不在 reg= 中，會自動創建快照
+    
+    內建變數：
+    - {$tid} - Local Thread ID (workitem_id_x, 0 ~ workgroup_size-1)
+    - {$lane} - Wavefront Lane ID (0-63)
     """
     line_number: int           # 在 .s 檔案中的行號（0-based）
     format_string: str         # printf 格式字串
@@ -74,12 +78,23 @@ class PrintDirective:
     condition_type: Optional[str] = None  # 條件暫存器的類型（自動從比較值推導）
     next_instruction: Optional[str] = None  # @PRINT 之後的第一條 ISA 指令
     expressions: Optional[List[str]] = None  # 計算表達式列表（如 ["v6 * v7"]）
+    uses_tid: bool = False     # 是否使用了 $tid 內建變數
+    uses_lane: bool = False    # 是否使用了 $lane 內建變數
+    all_placeholders: Optional[List[Tuple[str, str]]] = None  # 所有 placeholder 的原始順序 [(value, type), ...]
     
     def __str__(self):
         cond_str = f" [cond={self.condition}]" if self.condition else ""
+        builtin_str = ""
+        if self.uses_tid or self.uses_lane:
+            builtins = []
+            if self.uses_tid:
+                builtins.append("$tid")
+            if self.uses_lane:
+                builtins.append("$lane")
+            builtin_str = f" [builtins={','.join(builtins)}]"
         if self.expressions:
-            return f"@PRINT at line {self.line_number}: {self.format_string} (expr={self.expressions}){cond_str}"
-        return f"@PRINT at line {self.line_number}: {self.format_string} ({self.registers}){cond_str}"
+            return f"@PRINT at line {self.line_number}: {self.format_string} (expr={self.expressions}){cond_str}{builtin_str}"
+        return f"@PRINT at line {self.line_number}: {self.format_string} ({self.registers}){cond_str}{builtin_str}"
 
 
 def parse_fstring_format(fstring: str) -> Tuple[str, List[str], List[str]]:
@@ -96,6 +111,10 @@ def parse_fstring_format(fstring: str) -> Tuple[str, List[str], List[str]]:
     - {v6:d} - 整數 i32
     - {v6:ld} - 長整數 i64
     - {expr} - 表達式（如 {v6*v7:.2f}）
+    
+    內建變數：
+    - {$tid} - Local Thread ID (workitem_id_x, 0 ~ workgroup_size-1)
+    - {$lane} - Wavefront Lane ID (0-63)
     """
     registers = []
     types = []
@@ -116,6 +135,13 @@ def parse_fstring_format(fstring: str) -> Tuple[str, List[str], List[str]]:
         
         reg_or_expr = reg_or_expr.strip()
         fmt_spec = fmt_spec.strip()
+        
+        # 檢查是否是內建變數
+        if reg_or_expr == '$tid' or reg_or_expr == '$lane':
+            # 內建變數：$tid (local thread ID) 或 $lane (wavefront lane ID)
+            registers.append(reg_or_expr)
+            types.append('i32')  # thread ID 總是 i32
+            return '%d'
         
         # 判斷是暫存器還是表達式
         is_simple_reg = re.match(r'^[vs]\d+$', reg_or_expr)
@@ -170,8 +196,8 @@ def parse_condition_pythonic(cond_str: str) -> Optional[str]:
     """
     解析 Python 風格的條件式
     
-    輸入: "if v6 > 2.0:" 或 "if s4 == 64:"
-    輸出: "v6_gt(2.0)" 或 "s4_eq(64)"
+    輸入: "if v6 > 2.0:" 或 "if s4 == 64:" 或 "if $tid < 10:" 或 "if $lane == 0:"
+    輸出: "v6_gt(2.0)" 或 "s4_eq(64)" 或 "$tid_lt(10)" 或 "$lane_eq(0)"
     
     支援的運算子：
     - == -> eq
@@ -180,6 +206,11 @@ def parse_condition_pythonic(cond_str: str) -> Optional[str]:
     - <= -> le
     - > -> gt
     - >= -> ge
+    
+    支援的變數：
+    - [vs]\\d+ (暫存器，如 v6, s4)
+    - $tid (local thread ID)
+    - $lane (wavefront lane ID)
     """
     # 移除 "if " 前綴和 ":" 後綴
     cond_str = cond_str.strip()
@@ -191,6 +222,7 @@ def parse_condition_pythonic(cond_str: str) -> Optional[str]:
     
     # 解析條件式
     # 支援: v6 > 2.0, v6 >= 2.0, v6 == 0, v6 != 0, v6 < 10, v6 <= 10
+    # 支援: $tid < 10, $tid == 0, $lane < 32, $lane == 0
     op_map = {
         '==': 'eq',
         '!=': 'ne',
@@ -268,32 +300,71 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
         # 解析 f-string
         printf_format, parsed_regs, parsed_types = parse_fstring_format(fstring_content)
         
-        # 分離暫存器和表達式
+        # 分離暫存器、表達式、和內建變數
+        # 重要：維護各自的類型列表，確保順序正確
+        # 同時保存原始順序 (all_placeholders) 用於 printf 參數對齊
         registers = []
+        reg_types = []
         expressions = []
-        types = []
+        expr_types = []
+        all_placeholders = []  # 保存原始順序 [(value, type), ...]
+        uses_tid = False
+        uses_lane = False
         
         for reg_or_expr, typ in zip(parsed_regs, parsed_types):
+            # 保存原始順序
+            all_placeholders.append((reg_or_expr, typ))
+            
+            # 檢查是否是內建變數
+            if reg_or_expr == '$tid':
+                uses_tid = True
+                expressions.append(reg_or_expr)
+                expr_types.append(typ)
+            elif reg_or_expr == '$lane':
+                uses_lane = True
+                expressions.append(reg_or_expr)
+                expr_types.append(typ)
             # 判斷是暫存器還是表達式
-            if re.match(r'^[vs]\d+$', reg_or_expr):
+            elif re.match(r'^[vs]\d+$', reg_or_expr):
                 registers.append(reg_or_expr)
-                types.append(typ)
+                reg_types.append(typ)
             else:
                 expressions.append(reg_or_expr)
-                types.append(typ)
+                expr_types.append(typ)
+        
+        # 合併類型列表：先 registers 類型，後 expressions 類型
+        types = reg_types + expr_types
+        
+        # 輸出內建變數使用資訊
+        if uses_tid:
+            print(f"[Info] Using $tid (local thread ID) at line {line_number + 1}")
+        if uses_lane:
+            print(f"[Info] Using $lane (wavefront lane ID) at line {line_number + 1}")
         
         # 處理條件暫存器
         if condition:
-            cond_parse = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', condition)
-            if cond_parse:
-                cond_reg, cond_op, cond_value = cond_parse.groups()
-                if '.' in cond_value:
-                    condition_type = 'f32'
-                else:
-                    condition_type = 'i32'
-                if cond_reg not in registers:
-                    condition_register = cond_reg
-                    print(f"[Info] Condition register {cond_reg} (type={condition_type}) needs separate snapshot")
+            # 先檢查是否是內建變數條件
+            builtin_cond_parse = re.match(r'(\$tid|\$lane)_(\w+)\((-?\d+(?:\.\d+)?)\)', condition)
+            if builtin_cond_parse:
+                builtin_var, cond_op, cond_value = builtin_cond_parse.groups()
+                if builtin_var == '$tid':
+                    uses_tid = True
+                    print(f"[Info] Condition uses $tid at line {line_number + 1}")
+                elif builtin_var == '$lane':
+                    uses_lane = True
+                    print(f"[Info] Condition uses $lane at line {line_number + 1}")
+            else:
+                # 檢查是否是暫存器條件
+                cond_parse = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', condition)
+                if cond_parse:
+                    cond_reg, cond_op, cond_value = cond_parse.groups()
+                    if '.' in cond_value:
+                        condition_type = 'f32'
+                    else:
+                        condition_type = 'i32'
+                    if cond_reg not in registers:
+                        condition_register = cond_reg
+                        print(f"[Info] Condition register {cond_reg} (type={condition_type}) needs separate snapshot")
         
         if not registers and not expressions:
             print(f"[Warning] @PRINT f-string has no placeholders at line {line_number + 1}")
@@ -307,7 +378,10 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
             condition=condition,
             condition_register=condition_register,
             condition_type=condition_type,
-            expressions=expressions if expressions else None
+            expressions=expressions if expressions else None,
+            uses_tid=uses_tid,
+            uses_lane=uses_lane,
+            all_placeholders=all_placeholders
         )
     
     # ========== 舊語法（向後相容）==========
@@ -743,7 +817,8 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
                                    sgpr_snapshots: List[Tuple[int, str, int]] = None,
                                    workitem_id_backup_vgpr: int = None,
                                    cond_snapshot: Tuple[str, int, bool, str] = None,
-                                   expr_snapshot: Dict[str, str] = None) -> str:
+                                   expr_snapshot: Dict[str, str] = None,
+                                   builtin_vars: Dict[str, int] = None) -> str:
     """
     生成使用快照暫存器的 gpu.printf MLIR 程式碼
     
@@ -755,6 +830,7 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
         workitem_id_backup_vgpr: workitem_id 備份暫存器（未使用，保留以相容）
         cond_snapshot: 條件暫存器快照 (cond_reg, snapshot_num, is_vgpr, cond_type)
         expr_snapshot: 表達式暫存器快照映射 {原始暫存器: 快照暫存器}
+        builtin_vars: 內建變數備份暫存器 {'tid_vgpr': int, 'lane_vgpr': int}
     
     Returns:
         MLIR 程式碼字串
@@ -765,71 +841,132 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
     lines.append(f'              // === @PRINT from line {directive.line_number + 1} (using snapshots) ===')
     
     var_names = []
-    reg_types = directive.types[:len(directive.registers)]
-    expr_types = directive.types[len(directive.registers):]
     
-    # 建立 reg_idx -> (snapshot_reg, reg_type) 的映射
-    # reg_type: 'v' for VGPR, 's' for SGPR
-    snapshot_map = {}
-    for r_idx, _, snap_vgpr in vgpr_snapshots:
-        if r_idx >= 0:  # r_idx == -1 是表達式暫存器
-            snapshot_map[r_idx] = (snap_vgpr, 'v')
+    # 建立暫存器名稱 -> (snapshot_reg, snapshot_type) 的映射
+    reg_snapshot_map = {}
+    for r_idx, orig_reg, snap_vgpr in vgpr_snapshots:
+        reg_snapshot_map[orig_reg] = (f'v{snap_vgpr}', 'v')
     if sgpr_snapshots:
-        for r_idx, _, snap_sgpr in sgpr_snapshots:
-            if r_idx >= 0:
-                snapshot_map[r_idx] = (snap_sgpr, 's')
+        for r_idx, orig_reg, snap_sgpr in sgpr_snapshots:
+            reg_snapshot_map[orig_reg] = (f's{snap_sgpr}', 's')
     
-    # 建立完整的表達式快照映射（包含 reg= 中的暫存器）
+    # 建立完整的表達式快照映射（用於表達式計算）
     full_expr_snapshot = {}
     if expr_snapshot:
         full_expr_snapshot.update(expr_snapshot)
-    # 加入 reg= 中的暫存器快照
-    for r_idx, orig_reg, snap_vgpr in vgpr_snapshots:
-        if r_idx >= 0:
-            full_expr_snapshot[orig_reg] = f'v{snap_vgpr}'
-    if sgpr_snapshots:
-        for r_idx, orig_reg, snap_sgpr in sgpr_snapshots:
-            if r_idx >= 0:
-                full_expr_snapshot[orig_reg] = f's{snap_sgpr}'
+    for orig_reg, (snap_reg, _) in reg_snapshot_map.items():
+        full_expr_snapshot[orig_reg] = snap_reg
     
-    # 1. 生成 value bindings（使用快照暫存器）
-    for i, (reg, typ) in enumerate(zip(directive.registers, reg_types)):
-        var_name = f'print_val_{unique_id}_{i}'
-        var_names.append(var_name)
-        
-        # 如果有快照，使用快照暫存器
-        if i in snapshot_map:
-            snap_num, snap_type = snapshot_map[i]
-            snapshot_reg = f'{snap_type}{snap_num}'
-            lines.append(f'              // Using snapshot {snapshot_reg} for {reg}')
-            lines.append(generate_value_binding(snapshot_reg, typ, var_name))
-        else:
-            # 沒有快照的（例如 AGPR），使用原始暫存器
-            lines.append(generate_value_binding(reg, typ, var_name))
-    
-    # 2. 生成表達式計算（如果有）- 使用快照暫存器
-    if directive.expressions:
-        for i, (expr, typ) in enumerate(zip(directive.expressions, expr_types)):
-            try:
-                # 傳入快照映射，讓表達式使用快照暫存器
-                expr_code, result_var = compile_expression_to_mlir(expr, typ, unique_id, i, full_expr_snapshot)
-                if expr_code:
-                    lines.append(f'              // Expression: {expr} (using snapshots)')
-                    lines.append(expr_code)
-                var_names.append(result_var)
-            except Exception as e:
-                print(f"[Warning] Failed to compile expression '{expr}': {e}")
-                fallback_var = f'expr_fallback_{unique_id}_{i}'
-                mlir_type = map_type_to_mlir(typ)
-                if typ.startswith('f'):
-                    lines.append(f'              %{fallback_var} = arith.constant 0.0 : {mlir_type}')
+    # === 按照原始順序生成所有值（使用 all_placeholders）===
+    # 這確保 printf 參數順序與格式字串中的 placeholder 順序一致
+    if directive.all_placeholders:
+        for i, (value, typ) in enumerate(directive.all_placeholders):
+            var_name = f'print_val_{unique_id}_{i}'
+            mlir_type = map_type_to_mlir(typ)
+            
+            # 檢查是否是內建變數
+            if value == '$tid':
+                # $tid: Local Thread ID (workitem_id_x)
+                if builtin_vars and builtin_vars.get('tid_vgpr') is not None:
+                    tid_vgpr = builtin_vars['tid_vgpr']
+                    lines.append(f'              // Built-in $tid: read from v{tid_vgpr}')
+                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{tid_vgpr}", "=v": () -> i32')
                 else:
-                    lines.append(f'              %{fallback_var} = arith.constant 0 : {mlir_type}')
-                var_names.append(fallback_var)
+                    lines.append(f'              // Built-in $tid: WARNING - reading v0 directly (may be modified)')
+                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v0", "=v": () -> i32')
+                var_names.append(var_name)
+            
+            elif value == '$lane':
+                # $lane: Wavefront Lane ID (0-63)
+                if builtin_vars and builtin_vars.get('lane_vgpr') is not None:
+                    lane_vgpr = builtin_vars['lane_vgpr']
+                    lines.append(f'              // Built-in $lane: read from v{lane_vgpr}')
+                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{lane_vgpr}", "=v": () -> i32')
+                else:
+                    lines.append(f'              // Built-in $lane: calculating lane ID on the fly')
+                    lines.append(f'              %{var_name}_lo = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_lo_u32_b32 $0, -1, 0", "=v": () -> i32')
+                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_hi_u32_b32 $0, -1, $1", "=v,v": (%{var_name}_lo) -> i32')
+                var_names.append(var_name)
+            
+            elif re.match(r'^[vs]\d+$', value):
+                # 簡單暫存器
+                if value in reg_snapshot_map:
+                    snap_reg, _ = reg_snapshot_map[value]
+                    lines.append(f'              // Using snapshot {snap_reg} for {value}')
+                    lines.append(generate_value_binding(snap_reg, typ, var_name))
+                else:
+                    lines.append(generate_value_binding(value, typ, var_name))
+                var_names.append(var_name)
+            
+            else:
+                # 表達式
+                try:
+                    expr_code, result_var = compile_expression_to_mlir(value, typ, unique_id, i, full_expr_snapshot)
+                    if expr_code:
+                        lines.append(f'              // Expression: {value} (using snapshots)')
+                        lines.append(expr_code)
+                    var_names.append(result_var)
+                except Exception as e:
+                    print(f"[Warning] Failed to compile expression '{value}': {e}")
+                    if typ.startswith('f'):
+                        lines.append(f'              %{var_name} = arith.constant 0.0 : {mlir_type}')
+                    else:
+                        lines.append(f'              %{var_name} = arith.constant 0 : {mlir_type}')
+                    var_names.append(var_name)
+    else:
+        # Fallback: 使用舊的處理方式（向後兼容）
+        reg_types = directive.types[:len(directive.registers)]
+        expr_types = directive.types[len(directive.registers):]
+        
+        for i, (reg, typ) in enumerate(zip(directive.registers, reg_types)):
+            var_name = f'print_val_{unique_id}_{i}'
+            if reg in reg_snapshot_map:
+                snap_reg, _ = reg_snapshot_map[reg]
+                lines.append(f'              // Using snapshot {snap_reg} for {reg}')
+                lines.append(generate_value_binding(snap_reg, typ, var_name))
+            else:
+                lines.append(generate_value_binding(reg, typ, var_name))
+            var_names.append(var_name)
+        
+        if directive.expressions:
+            for i, (expr, typ) in enumerate(zip(directive.expressions, expr_types)):
+                var_name = f'expr_val_{unique_id}_{i}'
+                if expr == '$tid':
+                    if builtin_vars and builtin_vars.get('tid_vgpr') is not None:
+                        tid_vgpr = builtin_vars['tid_vgpr']
+                        lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{tid_vgpr}", "=v": () -> i32')
+                    else:
+                        lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v0", "=v": () -> i32')
+                    var_names.append(var_name)
+                elif expr == '$lane':
+                    if builtin_vars and builtin_vars.get('lane_vgpr') is not None:
+                        lane_vgpr = builtin_vars['lane_vgpr']
+                        lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{lane_vgpr}", "=v": () -> i32')
+                    else:
+                        lines.append(f'              %{var_name}_lo = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_lo_u32_b32 $0, -1, 0", "=v": () -> i32')
+                        lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_hi_u32_b32 $0, -1, $1", "=v,v": (%{var_name}_lo) -> i32')
+                    var_names.append(var_name)
+                else:
+                    try:
+                        expr_code, result_var = compile_expression_to_mlir(expr, typ, unique_id, i, full_expr_snapshot)
+                        if expr_code:
+                            lines.append(expr_code)
+                        var_names.append(result_var)
+                    except Exception as e:
+                        mlir_type = map_type_to_mlir(typ)
+                        if typ.startswith('f'):
+                            lines.append(f'              %{var_name} = arith.constant 0.0 : {mlir_type}')
+                        else:
+                            lines.append(f'              %{var_name} = arith.constant 0 : {mlir_type}')
+                        var_names.append(var_name)
     
     # 準備 printf 的參數列表
     args = ', '.join(f'%{name}' for name in var_names)
-    types = ', '.join(map_type_to_mlir(t) for t in directive.types)
+    # 使用 all_placeholders 中的類型順序（如果有的話）
+    if directive.all_placeholders:
+        types = ', '.join(map_type_to_mlir(t) for _, t in directive.all_placeholders)
+    else:
+        types = ', '.join(map_type_to_mlir(t) for t in directive.types)
     
     # MLIR string 中的換行需使用 \0A
     escaped_format = directive.format_string.replace('\\n', '\\0A')
@@ -844,10 +981,50 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
     # 注意：條件暫存器必須在 reg= 中列出，才能使用快照值
     
     if directive.condition:
-        # 嘗試匹配暫存器值條件：v0_eq(1), s4_gt(0) 等
-        reg_cond_match = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', directive.condition)
+        # 嘗試匹配內建變數條件：$tid_eq(0), $lane_lt(32) 等
+        builtin_cond_match = re.match(r'(\$tid|\$lane)_(\w+)\((-?\d+(?:\.\d+)?)\)', directive.condition)
         
-        if reg_cond_match:
+        if builtin_cond_match:
+            builtin_var, cmp_op, cmp_value = builtin_cond_match.groups()
+            
+            # 使用對應的備份 VGPR
+            if builtin_var == '$tid' and builtin_vars and builtin_vars.get('tid_vgpr') is not None:
+                tid_vgpr = builtin_vars['tid_vgpr']
+                snapshot_var = f'%cond_tid_{unique_id}'
+                lines.append(f'              // Conditional printf: read $tid from v{tid_vgpr}')
+                lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{tid_vgpr}", "=v": () -> i32')
+            elif builtin_var == '$lane' and builtin_vars and builtin_vars.get('lane_vgpr') is not None:
+                lane_vgpr = builtin_vars['lane_vgpr']
+                snapshot_var = f'%cond_lane_{unique_id}'
+                lines.append(f'              // Conditional printf: read $lane from v{lane_vgpr}')
+                lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{lane_vgpr}", "=v": () -> i32')
+            else:
+                # Fallback: 直接讀取 v0 或計算 lane
+                if builtin_var == '$tid':
+                    snapshot_var = f'%cond_tid_{unique_id}'
+                    lines.append(f'              // Conditional printf: read $tid from v0 (WARNING: may be modified)')
+                    lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v0", "=v": () -> i32')
+                else:
+                    snapshot_var = f'%cond_lane_{unique_id}'
+                    lines.append(f'              // Conditional printf: calculate $lane on the fly')
+                    lines.append(f'              %cond_lane_lo_{unique_id} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_lo_u32_b32 $0, -1, 0", "=v": () -> i32')
+                    lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_hi_u32_b32 $0, -1, $1", "=v,v": (%cond_lane_lo_{unique_id}) -> i32')
+            
+            # 整數比較
+            cmp_ops = {'eq': 'eq', 'ne': 'ne', 'lt': 'slt', 'le': 'sle', 'gt': 'sgt', 'ge': 'sge'}
+            mlir_cmp = cmp_ops.get(cmp_op, 'eq')
+            cmp_value_int = int(float(cmp_value))
+            
+            lines.append(f'              %cmp_val_{unique_id} = arith.constant {cmp_value_int} : i32')
+            lines.append(f'              %cond_{unique_id} = arith.cmpi {mlir_cmp}, {snapshot_var}, %cmp_val_{unique_id} : i32')
+            lines.append(f'              scf.if %cond_{unique_id} {{')
+            lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
+            lines.append(f'              }}')
+            
+            print(f"[Info] Conditional printf (builtin): {builtin_var} {cmp_op} {cmp_value}")
+        
+        # 嘗試匹配暫存器值條件：v0_eq(1), s4_gt(0) 等
+        elif reg_cond_match := re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', directive.condition):
             cond_reg, cmp_op, cmp_value = reg_cond_match.groups()
             
             # 找出這個暫存器對應的快照
@@ -1181,12 +1358,41 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b64 s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], s[0:1]", ""  : () -> ()')
     
     # 檢查是否有條件式 printf，如果有則保存 workitem_id (v0)
-    # 使用 v14 作為 workitem_id 的備份（在快照暫存器之後）
+    # 使用在快照暫存器之後的 VGPR
     WORKITEM_ID_BACKUP_VGPR = snapshot_vgpr_start + total_snapshot_vgprs
     has_conditional_printf = any(d.condition for d in directives)
     if has_conditional_printf:
         clobber_start_lines.append(f'              // Save workitem_id (v0) to v{WORKITEM_ID_BACKUP_VGPR} for conditional printf')
         clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{WORKITEM_ID_BACKUP_VGPR}, v0", ""  : () -> ()')
+    
+    # === 內建變數支援：$tid 和 $lane ===
+    # 檢查是否有任何 directive 使用了內建變數
+    uses_tid = any(d.uses_tid for d in directives)
+    uses_lane = any(d.uses_lane for d in directives)
+    
+    # 分配專用 VGPR 給內建變數（在 WORKITEM_ID_BACKUP 之後）
+    next_builtin_vgpr = WORKITEM_ID_BACKUP_VGPR + (1 if has_conditional_printf else 0)
+    
+    # $tid: Local Thread ID (workitem_id_x) - 備份 v0
+    TID_BACKUP_VGPR = None
+    if uses_tid:
+        TID_BACKUP_VGPR = next_builtin_vgpr
+        next_builtin_vgpr += 1
+        clobber_start_lines.append(f'              // === Built-in variable: $tid (local thread ID) ===')
+        clobber_start_lines.append(f'              // Backup workitem_id_x (v0) to v{TID_BACKUP_VGPR}')
+        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TID_BACKUP_VGPR}, v0", ""  : () -> ()')
+        print(f"[Info] Built-in $tid: v0 -> v{TID_BACKUP_VGPR}")
+    
+    # $lane: Wavefront Lane ID (0-63) - 使用 v_mbcnt 計算
+    LANE_BACKUP_VGPR = None
+    if uses_lane:
+        LANE_BACKUP_VGPR = next_builtin_vgpr
+        next_builtin_vgpr += 1
+        clobber_start_lines.append(f'              // === Built-in variable: $lane (wavefront lane ID) ===')
+        clobber_start_lines.append(f'              // Calculate lane ID using v_mbcnt instructions')
+        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mbcnt_lo_u32_b32 v{LANE_BACKUP_VGPR}, -1, 0", ""  : () -> ()')
+        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mbcnt_hi_u32_b32 v{LANE_BACKUP_VGPR}, -1, v{LANE_BACKUP_VGPR}", ""  : () -> ()')
+        print(f"[Info] Built-in $lane: v_mbcnt -> v{LANE_BACKUP_VGPR}")
     
     clobber_start_lines.append('              // === Kernarg Backup End ===')
     clobber_start = '\n'.join(clobber_start_lines) + '\n'
@@ -1202,7 +1408,12 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         expr_snap = directive_expr_snapshots.get(i, None)
         # 如果有條件式 printf，傳入 workitem_id 備份暫存器
         tid_backup = WORKITEM_ID_BACKUP_VGPR if has_conditional_printf else None
-        printf_blocks.append(generate_printf_with_snapshot(directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap, expr_snap))
+        # 傳入內建變數備份暫存器
+        builtin_vars = {
+            'tid_vgpr': TID_BACKUP_VGPR,
+            'lane_vgpr': LANE_BACKUP_VGPR
+        }
+        printf_blocks.append(generate_printf_with_snapshot(directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap, expr_snap, builtin_vars))
     
     printf_section = '\n'.join(printf_blocks)
     
@@ -1334,8 +1545,9 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             print(f"          - {instr[:60]}...")
     
     # 計算所需的暫存器數量（用於後續 ISA metadata 修復）
-    # 需要包含：快照 VGPR + workitem_id backup VGPR
-    required_vgpr = WORKITEM_ID_BACKUP_VGPR + 1 if has_conditional_printf else (snapshot_vgpr_start + total_snapshot_vgprs)
+    # 需要包含：快照 VGPR + workitem_id backup VGPR + 內建變數 VGPR
+    # next_builtin_vgpr 已經計算了所有需要的 VGPR（包括 conditional、$tid、$lane）
+    required_vgpr = next_builtin_vgpr
     required_sgpr = snapshot_sgpr_start + total_snapshot_sgprs
     
     return '\n'.join(modified_lines), required_vgpr, required_sgpr
