@@ -26,15 +26,15 @@ _Z9vectorAddPKfS0_Pfi:
 	s_waitcnt lgkmcnt(0)
 	v_lshl_add_u64 v[4:5], s[4:5], 0, v[0:1]
 	v_lshl_add_u64 v[2:3], s[6:7], 0, v[0:1]
-	global_load_dword v6, v[4:5], off      ; 載入 A[tid]
-	global_load_dword v7, v[2:3], off      ; 載入 B[tid]
+	global_load_dword v6, v[4:5], off
+	global_load_dword v7, v[2:3], off
 	v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]
 	s_waitcnt vmcnt(0)
-
+; @PRINT f"A = {v6:.3f}, B = {v7:.3f}, C = {v2:.3f}"
 ; @PRINT f"[Expr] (A+B)x2/7={(v6+v7)*2/7:.2f}, A-B={v6-v7:.2f}, A*B={v6*v7:.2f}"
-; @PRINT if v6 <= 2.0: f" Before ADD (A<2): A={v6:.3f}, B={v7:.2f}"
-	v_add_f32_e32 v2, v6, v7               ; C = A + B
-; @PRINT if v6 > 2.0: f" After v6 = {v6:.2f}, v7 = {v7:.2f}, C={v2:.3f}"
+; @PRINT if v6 <= 2.0: f"Before ADD (v6<=2): v6 = {v6:.3f}, v7 = {v7:.2f}"
+	v_add_f32_e32 v2, v6, v7
+; @PRINT if v6 > 2.0: f"After v6 = {v6:.2f}, v7 = {v7:.2f}, v2 = {v2:.3f}"
 	global_store_dword v[0:1], v2, off
 .LBB0_2:
 	s_endpgm

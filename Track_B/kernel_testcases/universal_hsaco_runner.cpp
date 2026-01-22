@@ -160,11 +160,7 @@ bool run_float_vector_add(hipFunction_t func, int N) {
 
     if (ok) {
         std::cout << "✅ PASS: All " << N << " elements correct\n";
-        std::cout << "Sample results:\n";
-        for (int i = 0; i < std::min(5, N); i++) {
-            std::cout << "  [" << i << "] " << hA[i] << " + " << hB[i] 
-                      << " = " << hC[i] << "\n";
-        }
+
     } else {
         std::cout << "❌ FAIL: " << error_count << " errors found\n";
     }
@@ -236,11 +232,6 @@ bool run_float_vector_mul(hipFunction_t func, int N) {
 
     if (ok) {
         std::cout << "✅ PASS: All " << N << " elements correct\n";
-        std::cout << "Sample results:\n";
-        for (int i = 0; i < std::min(5, N); i++) {
-            std::cout << "  [" << i << "] " << hA[i] << " * " << hB[i] 
-                      << " = " << hC[i] << "\n";
-        }
     } else {
         std::cout << "❌ FAIL: " << error_count << " errors found\n";
     }
@@ -374,12 +365,6 @@ bool run_float_saxpy(hipFunction_t func, int N) {
 
     if (ok) {
         std::cout << "✅ PASS: All " << N << " elements correct\n";
-        std::cout << "Sample results (alpha=" << alpha << "):\n";
-        for (int i = 0; i < std::min(5, N); i++) {
-            std::cout << "  [" << i << "] " << alpha << " * " << hX[i] 
-                      << " + " << (hY_expected[i] - alpha * hX[i]) 
-                      << " = " << hY[i] << "\n";
-        }
     } else {
         std::cout << "❌ FAIL: " << error_count << " errors found\n";
     }
@@ -529,10 +514,7 @@ bool run_int_kernel_inout(hipFunction_t func, int N) {
     HIP_CHECK(hipMemcpy(hOut.data(), dOut, bytes, hipMemcpyDeviceToHost));
 
     std::cout << "✅ PASS: Kernel executed successfully\n";
-    std::cout << "Sample results:\n";
-    for (int i = 0; i < std::min(5, N); i++) {
-        std::cout << "  [" << i << "] input=" << hIn[i] << ", output=" << hOut[i] << "\n";
-    }
+
 
     HIP_CHECK(hipFree(dIn));
     HIP_CHECK(hipFree(dOut));
