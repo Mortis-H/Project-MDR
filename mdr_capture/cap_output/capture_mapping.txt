@@ -3,12 +3,11 @@ CAPTURE Register Mapping
 ======================================================================
 
 Generated from: with_capture_clobber_final.s
-Total captures: 2
-Total values: 4
+Total captures: 5
+Total values: 9
 
 ----------------------------------------------------------------------
 CAPTURE #0 (Line 31)
-  Condition: tid_eq(0)
 
   Register     : v2                   → v10    (f32)
   Register     : v3                   → v11    (f32)
@@ -17,7 +16,25 @@ CAPTURE #0 (Line 31)
 CAPTURE #1 (Line 33)
   Condition: tid_eq(0)
 
-  Register     : v2                   → v12    (f32)
-  Expression   : v2*2.0               → v13    (f32)
+  Expression   : (v2*2.0)/(v3+v2*(234+567)) → v12    (f32)
+
+----------------------------------------------------------------------
+CAPTURE #2 (Line 34)
+
+  Expression   : (v2+v3)*2.0          → v13    (f32)
+  Expression   : v2*(v3+4.0)          → v14    (f32)
+
+----------------------------------------------------------------------
+CAPTURE #3 (Line 35)
+  Condition: tid_eq(0)
+
+  Expression   : v2+v3*2.0-5.0        → v15    (f32)
+  Expression   : (v2+3.0)/(v3+1.0)    → v16    (f32)
+
+----------------------------------------------------------------------
+CAPTURE #4 (Line 36)
+
+  Expression   : (v2*v2+v3*v3)        → v17    (f32)
+  Expression   : (v2+v3)*(v2-1.0)     → v18    (f32)
 
 ======================================================================

@@ -12,6 +12,12 @@ _Z9vectorAddPKfS0_Pfi:
 	;;#ASMSTART
 	;;#ASMEND
 	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
+	;;#ASMEND
+	;;#ASMSTART
 		s_load_dword s3, s[0:1], 0x2c
 	;;#ASMEND
 	;;#ASMSTART
@@ -72,43 +78,73 @@ _Z9vectorAddPKfS0_Pfi:
 		s_waitcnt vmcnt(0)
 	;;#ASMEND
 	;;#ASMSTART
-		s_mov_b64 s[8:9], exec
-	;;#ASMEND
-	;;#ASMSTART
-		v_cmp_eq_u32_e32 vcc, 0, v14
-	;;#ASMEND
-	;;#ASMSTART
-		s_and_b64 exec, exec, vcc
-	;;#ASMEND
-	;;#ASMSTART
 		v_mov_b32 v10, v2
 	;;#ASMEND
 	;;#ASMSTART
 		v_mov_b32 v11, v3
 	;;#ASMEND
 	;;#ASMSTART
-		s_mov_b64 exec, s[8:9]
-	;;#ASMEND
-	;;#ASMSTART
 		v_add_f32_e32 v2, v6, v7
 	;;#ASMEND
 	;;#ASMSTART
-		s_mov_b64 s[10:11], exec
+		s_mov_b64 s[8:9], exec
 	;;#ASMEND
 	;;#ASMSTART
-		v_cmp_eq_u32_e32 vcc, 0, v15
+		v_cmp_eq_u32_e32 vcc, 0, v19
 	;;#ASMEND
 	;;#ASMSTART
 		s_and_b64 exec, exec, vcc
 	;;#ASMEND
 	;;#ASMSTART
-		v_mov_b32 v12, v2
+		v_mul_f32 v20, v2, 2.0
 	;;#ASMEND
 	;;#ASMSTART
-		v_mul_f32 v13, v2, 2.0
+		v_add_f32 v22, v3, v21
+	;;#ASMEND
+	;;#ASMSTART
+		s_mov_b64 exec, s[8:9]
+	;;#ASMEND
+	;;#ASMSTART
+		v_add_f32 v25, v2, v3
+	;;#ASMEND
+	;;#ASMSTART
+		v_mul_f32 v13, v25, 2.0
+	;;#ASMEND
+	;;#ASMSTART
+		v_add_f32 v25, v3, 4.0
+	;;#ASMEND
+	;;#ASMSTART
+		v_mul_f32 v14, v2, v25
+	;;#ASMEND
+	;;#ASMSTART
+		s_mov_b64 s[10:11], exec
+	;;#ASMEND
+	;;#ASMSTART
+		v_cmp_eq_u32_e32 vcc, 0, v29
+	;;#ASMEND
+	;;#ASMSTART
+		s_and_b64 exec, exec, vcc
+	;;#ASMEND
+	;;#ASMSTART
+		v_add_f32 v31, v3, 1.0
 	;;#ASMEND
 	;;#ASMSTART
 		s_mov_b64 exec, s[10:11]
+	;;#ASMEND
+	;;#ASMSTART
+		v_mul_f32 v35, v2, v2
+	;;#ASMEND
+	;;#ASMSTART
+		v_mul_f32 v36, v3, v3
+	;;#ASMEND
+	;;#ASMSTART
+		v_add_f32 v17, v35, v36
+	;;#ASMEND
+	;;#ASMSTART
+		v_add_f32 v35, v2, v3
+	;;#ASMEND
+	;;#ASMSTART
+		v_mul_f32 v18, v2, -1.0
 	;;#ASMEND
 	;;#ASMSTART
 		global_store_dword v[0:1], v2, off
@@ -141,9 +177,9 @@ _Z9vectorAddPKfS0_Pfi:
 		.amdhsa_system_sgpr_workgroup_id_z 0
 		.amdhsa_system_sgpr_workgroup_info 0
 		.amdhsa_system_vgpr_workitem_id 0
-		.amdhsa_next_free_vgpr 16
+		.amdhsa_next_free_vgpr 40
 		.amdhsa_next_free_sgpr 12
-		.amdhsa_accum_offset 16
+		.amdhsa_accum_offset 40
 		.amdhsa_reserve_vcc 1
 		.amdhsa_float_round_mode_32 0
 		.amdhsa_float_round_mode_16_64 0
@@ -165,7 +201,7 @@ _Z9vectorAddPKfS0_Pfi:
 .Lfunc_end0:
 	.size	_Z9vectorAddPKfS0_Pfi, .Lfunc_end0-_Z9vectorAddPKfS0_Pfi
 
-	.set _Z9vectorAddPKfS0_Pfi.num_vgpr, 16
+	.set _Z9vectorAddPKfS0_Pfi.num_vgpr, 40
 	.set _Z9vectorAddPKfS0_Pfi.num_agpr, 0
 	.set _Z9vectorAddPKfS0_Pfi.numbered_sgpr, 12
 	.set _Z9vectorAddPKfS0_Pfi.num_named_barrier, 0
@@ -214,7 +250,7 @@ amdhsa.kernels:
   .symbol: _Z9vectorAddPKfS0_Pfi.kd
   .uniform_work_group_size: 1
   .uses_dynamic_stack: false
-  .vgpr_count: 16
+  .vgpr_count: 40
   .vgpr_spill_count: 0
   .wavefront_size: 64
 amdhsa.target: amdgcn-amd-amdhsa--gfx950

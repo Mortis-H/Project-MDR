@@ -1,0 +1,24 @@
+33,49c33,35
+< 	s_mul_i32 s3, s16, s5
+< 	s_mul_hi_u32 s24, s16, s4
+< 	s_add_i32 s3, s24, s3
+< 	s_mul_i32 s17, s17, s4
+< 	s_add_i32 s17, s3, s17
+< 	s_mul_i32 s16, s16, s4
+< 	s_lshl_b64 s[16:17], s[16:17], 2
+< 	s_add_u32 s12, s12, s16
+< 	s_mul_i32 s3, s18, s5
+< 	s_mul_hi_u32 s16, s18, s4
+< 	s_addc_u32 s13, s13, s17
+< 	s_add_i32 s3, s16, s3
+< 	s_mul_i32 s16, s19, s4
+< 	s_add_i32 s17, s3, s16
+< 	s_mul_i32 s16, s18, s4
+< 	s_lshl_b64 s[16:17], s[16:17], 2
+< 	s_add_u32 s14, s14, s16
+---
+> ; @CAPTURE expr="s12:s13 + s16:s17*s4*4" dst=s12:s13 type=i64
+> ; @CAPTURE expr="s14:s15 + s18:s19*s4*4" dst=s14:s15 type=i64
+> ; @CAPTURE expr="s18:s19*s4*4" dst=s16:s17 type=i64
+52d37
+< 	s_addc_u32 s15, s15, s17

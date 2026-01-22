@@ -8,7 +8,10 @@ AMD ISA Assembly Capture Tool (Register-based)
 使用方式：
 1. 在 .s 檔案中標註要捕獲的內容：
    ; @CAPTURE src=v2,v3 dst=v10,v11 type=f32,f32
-   ; @CAPTURE cond=tid_eq(0) src=v2 dst=v10 expr="v2*2.0" type=f32,f32
+   ; @CAPTURE if $tid == 0: src=v2 dst=v10 expr="v2*2.0" type=f32,f32
+   ; @CAPTURE f"A={v2}, B={v3}" dst=v10,v11
+   ; @CAPTURE if $tid == 0: f"A={v2}, A*2={(v2*2.0)}" dst=v12,v13
+   ; @CAPTURE expr="s12:s13 + s16:s17*4" dst=s12:s13 type=i64
 
 2. 執行此工具：
    python3 mdr_cap.py input.s --output-dir output
@@ -53,12 +56,106 @@ class CaptureDirective:
     types: List[str]              # 類型
     condition: Optional[str] = None
     expressions: Optional[List[str]] = None
+    ordered_values: Optional[List[Tuple[str, bool]]] = None  # [(value, is_expression), ...]
     
     def __str__(self):
         cond_str = f" [cond={self.condition}]" if self.condition else ""
         if self.expressions:
             return f"@CAPTURE at line {self.line_number + 1}: {self.source_registers} + expr={self.expressions} → {self.target_registers}{cond_str}"
         return f"@CAPTURE at line {self.line_number + 1}: {self.source_registers} → {self.target_registers}{cond_str}"
+
+
+def parse_capture_fstring(fstring: str) -> Tuple[List[str], List[str]]:
+    """
+    解析 @CAPTURE 的 Python f-string placeholder
+    
+    輸入: f"A={v6:.3f}, B={(v6+v7):.2f}"
+    輸出: (["v6", "(v6+v7)"], ["f32", "f32"])
+    
+    支援的格式說明符：
+    - {v6} - 預設格式（VGPR 預設 f32，SGPR 預設 i32）
+    - {v6:f} 或 {v6:.f} - 浮點數 f32
+    - {v6:.3f} - 浮點數（精度僅影響輸出顯示）
+    - {v6:d} - 整數 i32
+    - {v6:ld} - 長整數 i64
+    - {expr} - 表達式（如 {(v6*v7):.2f}）
+    """
+    values = []
+    types = []
+    pattern = r'\{([^}]+)\}'
+    
+    for match in re.finditer(pattern, fstring):
+        content = match.group(1)
+        
+        if ':' in content:
+            reg_or_expr, fmt_spec = content.rsplit(':', 1)
+        else:
+            reg_or_expr = content
+            fmt_spec = ''
+        
+        reg_or_expr = reg_or_expr.strip()
+        fmt_spec = fmt_spec.strip()
+        
+        if reg_or_expr in ('$tid', '$lane'):
+            raise ValueError("Builtin $tid/$lane is not supported in @CAPTURE")
+        
+        values.append(reg_or_expr)
+        
+        is_simple_reg = re.match(r'^[vs]\d+$', reg_or_expr)
+        if fmt_spec:
+            if fmt_spec == 'd':
+                types.append('i32')
+            elif fmt_spec == 'ld':
+                types.append('i64')
+            elif fmt_spec == 'f' or fmt_spec == '.f':
+                types.append('f32')
+            elif fmt_spec == 'lf':
+                types.append('f64')
+            elif fmt_spec.endswith('f'):
+                # 忽略精度，僅判斷為浮點
+                types.append('f32')
+            else:
+                if is_simple_reg and reg_or_expr.startswith('s'):
+                    types.append('i32')
+                else:
+                    types.append('f32')
+        else:
+            if is_simple_reg and reg_or_expr.startswith('s'):
+                types.append('i32')
+            else:
+                types.append('f32')
+    
+    return values, types
+
+
+def _parse_reg_pair(reg: str) -> Optional[Tuple[str, int, int]]:
+    """解析 s/v/a 暫存器 pair：s[12:13] 或 s12:s13"""
+    m = re.match(r'^([sva])\[(\d+):(\d+)\]$', reg)
+    if m:
+        reg_type, lo, hi = m.group(1), int(m.group(2)), int(m.group(3))
+        return reg_type, lo, hi
+    m = re.match(r'^([sva])(\d+):(?:[sva])?(\d+)$', reg)
+    if m:
+        reg_type, lo, hi = m.group(1), int(m.group(2)), int(m.group(3))
+        return reg_type, lo, hi
+    return None
+
+
+def _is_reg_pair(reg: str, reg_type: Optional[str] = None) -> bool:
+    parsed = _parse_reg_pair(reg)
+    if not parsed:
+        return False
+    if reg_type is None:
+        return True
+    return parsed[0] == reg_type
+
+
+def _format_sgpr_pair(reg: str) -> Tuple[int, int]:
+    parsed = _parse_reg_pair(reg)
+    if not parsed or parsed[0] != 's':
+        raise ValueError(f"Invalid SGPR pair: {reg}")
+    _, lo, hi = parsed
+    return lo, hi
 
 
 @dataclass
@@ -75,11 +172,19 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
     """
     解析 @CAPTURE 指令
     
-    支援兩種格式：
+    支援語法：
     1. 舊格式（向後兼容）：reg=v2,v3 type=f32,f32
        - 自動使用相同的 register 作為目標（in-place capture）
     2. 新格式：src=v2,v3 dst=v10,v11 type=f32,f32
        - 顯式指定目標 register
+    3. Pythonic 條件式（僅支援 $tid / tid）：
+       - if $tid == 0: src=... dst=... type=...
+       - if tid >= 8: src=... dst=... type=...
+    4. Python f-string 風格（從 placeholder 推導 type）：
+       - f"A={v2}, B={v3}" dst=v10,v11
+       - if $tid == 0: f"A={v2}, A*2={(v2*2.0)}" dst=v12,v13
+    5. SGPR 64-bit pair（以 sLO:sHI 表示）：
+       - expr="s12:s13 + s16:s17*4" dst=s12:s13 type=i64
     """
     match = re.search(r'[;#]\s*@CAPTURE\s+(.+)', line)
     if not match:
@@ -87,31 +192,82 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
     
     directive_content = match.group(1).strip()
     
+    # 解析 Pythonic 條件式（if ... :)
+    condition = None
+    cond_prefix_match = re.match(r'(if\s+[^:]+:)\s*(.*)$', directive_content)
+    if cond_prefix_match:
+        cond_str, remainder = cond_prefix_match.groups()
+        internal_cond = parse_condition_pythonic(cond_str)
+        if internal_cond:
+            condition = internal_cond
+            directive_content = remainder.strip()
+        else:
+            print(f"[Warning] Invalid pythonic condition at line {line_number + 1}: {cond_str}")
+    
     # 解析各個屬性
     # 舊格式：reg=...
-    reg_match = re.search(r'\breg\s*=\s*([\w,\[\]:\s]+?)(?:\s+(?:type|cond|expr|$))', directive_content)
+    reg_match = re.search(r'\breg\s*=\s*([\w,\[\]:\s]+?)(?=\s+(?:type|cond|expr)\b|$)', directive_content)
     # 新格式：src=... dst=...
-    src_match = re.search(r'\bsrc\s*=\s*([\w,\[\]:\s]+?)(?:\s+(?:dst|type|cond|expr|$))', directive_content)
-    dst_match = re.search(r'\bdst\s*=\s*([\w,\[\]:\s]+?)(?:\s+(?:src|type|cond|expr|$))', directive_content)
+    src_match = re.search(r'\bsrc\s*=\s*([\w,\[\]:\s]+?)(?=\s+(?:dst|type|cond|expr)\b|$)', directive_content)
+    dst_match = re.search(r'\bdst\s*=\s*([\w,\[\]:\s]+?)(?=\s+(?:src|type|cond|expr)\b|$)', directive_content)
     
-    type_match = re.search(r'type\s*=\s*([\w,\s]+?)(?:\s+(?:reg|src|dst|cond|expr|$)|$)', directive_content)
+    type_match = re.search(r'type\s*=\s*([\w,\s]+?)(?=\s+(?:reg|src|dst|cond|expr)\b|$)', directive_content)
     cond_match = re.search(r'cond\s*=\s*(\w+\([^)]+\))', directive_content)
     expr_match = re.search(r'expr\s*=\s*"([^"]+)"', directive_content)
+    fstring_match = re.search(r'f"([^"]*)"', directive_content)
     
-    if not type_match:
+    if not type_match and not fstring_match:
         print(f"[Warning] @CAPTURE missing 'type' at line {line_number + 1}")
         return None
     
     # 解析類型
-    type_str = type_match.group(1).strip().rstrip(',')
-    types = [t.strip() for t in type_str.split(',')]
+    types = []
+    if type_match:
+        type_str = type_match.group(1).strip().rstrip(',')
+        types = [t.strip() for t in type_str.split(',')]
     
     # 解析 source 和 target registers
     source_registers = []
     target_registers = []
+    expressions = []
+    ordered_values = []
     
+    # f-string 模式：從 placeholder 推導來源/表達式與類型
+    if fstring_match:
+        if not dst_match:
+            print(f"[Warning] @CAPTURE f-string missing 'dst' at line {line_number + 1}")
+            return None
+        
+        fstring_content = fstring_match.group(1)
+        try:
+            parsed_values, parsed_types = parse_capture_fstring(fstring_content)
+        except Exception as e:
+            print(f"[Warning] Failed to parse @CAPTURE f-string at line {line_number + 1}: {e}")
+            return None
+        
+        if not parsed_values:
+            print(f"[Warning] @CAPTURE f-string has no placeholders at line {line_number + 1}")
+            return None
+        
+        # f-string 使用 placeholder 的順序
+        ordered_values = []
+        for val in parsed_values:
+            if re.match(r'^[vs]\d+$', val):
+                source_registers.append(val)
+                ordered_values.append((val, False))
+            else:
+                expressions.append(val)
+                ordered_values.append((val, True))
+        
+        types = parsed_types
+        
+        dst_str = dst_match.group(1).strip().rstrip(',')
+        target_registers = [r.strip() for r in dst_str.split(',')]
+        
+        if reg_match or src_match or expr_match or type_match:
+            print(f"[Info] @CAPTURE f-string ignores reg/src/expr/type at line {line_number + 1}")
     # 優先使用新格式（src/dst）
-    if src_match and dst_match:
+    elif src_match and dst_match:
         # 新格式：src=... dst=...
         src_str = src_match.group(1).strip().rstrip(',')
         source_registers = [r.strip() for r in src_str.split(',')]
@@ -139,13 +295,13 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
         return None
     
     # 解析表達式
-    expressions = []
-    if expr_match:
+    if expr_match and not fstring_match:
         expr_str = expr_match.group(1).strip()
         expressions = [e.strip() for e in expr_str.split(';')]
     
-    # 條件
-    condition = cond_match.group(1) if cond_match else None
+    # 條件（cond= 會覆蓋 pythonic 條件式）
+    if cond_match:
+        condition = cond_match.group(1)
     
     # 驗證
     if not source_registers and not expressions:
@@ -167,6 +323,33 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
     if total_values != len(target_registers):
         print(f"[Warning] Source/target register count mismatch at line {line_number + 1}: {total_values} sources vs {len(target_registers)} targets")
         return None
+
+    # 驗證 i64 需要 SGPR pair 目標
+    for typ, dst in zip(types, target_registers):
+        if typ == 'i64':
+            if not _is_reg_pair(dst, 's'):
+                print(f"[Warning] i64 target must be SGPR pair (sLO:sHI) at line {line_number + 1}: {dst}")
+                return None
+        else:
+            if _is_reg_pair(dst, 's'):
+                print(f"[Warning] Non-i64 target cannot be SGPR pair at line {line_number + 1}: {dst}")
+                return None
+    
+    if not ordered_values:
+        ordered_values = [(r, False) for r in source_registers]
+        if expressions:
+            ordered_values.extend((e, True) for e in expressions)
+    
+    # 驗證 i64 來源（若為 register）
+    for (value, is_expr), typ in zip(ordered_values, types):
+        if typ == 'i64':
+            if not is_expr and not _is_reg_pair(value, 's'):
+                print(f"[Warning] i64 source must be SGPR pair (sLO:sHI) at line {line_number + 1}: {value}")
+                return None
+        else:
+            if not is_expr and _is_reg_pair(value, 's'):
+                print(f"[Warning] Non-i64 source cannot be SGPR pair at line {line_number + 1}: {value}")
+                return None
     
     return CaptureDirective(
         line_number=line_number,
@@ -174,7 +357,8 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
         target_registers=target_registers,
         types=types,
         condition=condition,
-        expressions=expressions if expressions else None
+        expressions=expressions if expressions else None,
+        ordered_values=ordered_values if ordered_values else None
     )
 
 
@@ -191,6 +375,52 @@ def parse_asm_file(asm_path: pathlib.Path) -> Tuple[List[str], List[CaptureDirec
                 print(f"[Info] Found: {directive}")
     
     return lines, directives
+
+
+def parse_condition_pythonic(cond_str: str) -> Optional[str]:
+    """
+    解析 Python 風格的條件式（僅支援 $tid / tid）
+    
+    輸入: "if $tid > 2:" 或 "if tid == 0:"
+    輸出: "tid_gt(2)" 或 "tid_eq(0)"
+    
+    支援的運算子：
+    - == -> eq
+    - != -> ne
+    - < -> lt
+    - <= -> le
+    - > -> gt
+    - >= -> ge
+    """
+    # 移除 "if " 前綴和 ":" 後綴
+    cond_str = cond_str.strip()
+    if cond_str.startswith('if '):
+        cond_str = cond_str[3:]
+    if cond_str.endswith(':'):
+        cond_str = cond_str[:-1]
+    cond_str = cond_str.strip()
+    
+    op_map = {
+        '==': 'eq',
+        '!=': 'ne',
+        '<=': 'le',
+        '>=': 'ge',
+        '<': 'lt',
+        '>': 'gt'
+    }
+    
+    for op_symbol, op_name in sorted(op_map.items(), key=lambda x: -len(x[0])):
+        if op_symbol in cond_str:
+            parts = cond_str.split(op_symbol, 1)
+            if len(parts) == 2:
+                reg = parts[0].strip()
+                value = parts[1].strip()
+                if reg in ('$tid', 'tid'):
+                    return f"tid_{op_name}({value})"
+                print(f"[Warning] Unsupported pythonic condition register: {reg} (only $tid/tid)")
+                return None
+    
+    return None
 
 
 # ============================================================
@@ -246,7 +476,13 @@ def collect_all_target_registers(directives: List[CaptureDirective]) -> Set[str]
     """收集所有用戶定義的目標 registers"""
     all_targets = set()
     for directive in directives:
-        all_targets.update(directive.target_registers)
+        for reg in directive.target_registers:
+            if _is_reg_pair(reg):
+                reg_type, lo, hi = _parse_reg_pair(reg)
+                all_targets.add(f"{reg_type}{lo}")
+                all_targets.add(f"{reg_type}{hi}")
+            else:
+                all_targets.add(reg)
     return all_targets
 
 
@@ -257,15 +493,24 @@ def calculate_final_register_usage(original_usage: Dict[str, int],
     
     # 分析目標 registers 的最大編號
     for reg in target_registers:
-        if reg.startswith('v'):
-            num = int(reg[1:])
-            final_usage['vgpr'] = max(final_usage['vgpr'], num + 1)
-        elif reg.startswith('s'):
-            num = int(reg[1:])
-            final_usage['sgpr'] = max(final_usage['sgpr'], num + 1)
-        elif reg.startswith('a'):
-            num = int(reg[1:])
-            final_usage['agpr'] = max(final_usage['agpr'], num + 1)
+        if _is_reg_pair(reg):
+            reg_type, lo, hi = _parse_reg_pair(reg)
+            if reg_type == 'v':
+                final_usage['vgpr'] = max(final_usage['vgpr'], hi + 1)
+            elif reg_type == 's':
+                final_usage['sgpr'] = max(final_usage['sgpr'], hi + 1)
+            elif reg_type == 'a':
+                final_usage['agpr'] = max(final_usage['agpr'], hi + 1)
+        else:
+            if reg.startswith('v'):
+                num = int(reg[1:])
+                final_usage['vgpr'] = max(final_usage['vgpr'], num + 1)
+            elif reg.startswith('s'):
+                num = int(reg[1:])
+                final_usage['sgpr'] = max(final_usage['sgpr'], num + 1)
+            elif reg.startswith('a'):
+                num = int(reg[1:])
+                final_usage['agpr'] = max(final_usage['agpr'], num + 1)
     
     return final_usage
 
@@ -285,6 +530,20 @@ def parse_expression(expr: str) -> List[Tuple[str, str]]:
         
         if ch.isspace():
             i += 1
+            continue
+        
+        # SGPR/VGPR/AGPR pair: s[12:13] or s12:s13
+        pair_match = re.match(r'([sva])\[(\d+):(\d+)\]', expr[i:])
+        if pair_match:
+            reg_type, lo, hi = pair_match.group(1), pair_match.group(2), pair_match.group(3)
+            tokens.append(('REG64', f"{reg_type}{lo}:{reg_type}{hi}"))
+            i += len(pair_match.group(0))
+            continue
+        pair_match = re.match(r'([sva])(\d+):(?:[sva])?(\d+)', expr[i:])
+        if pair_match:
+            reg_type, lo, hi = pair_match.group(1), pair_match.group(2), pair_match.group(3)
+            tokens.append(('REG64', f"{reg_type}{lo}:{reg_type}{hi}"))
+            i += len(pair_match.group(0))
             continue
         
         if ch in 'vsa' and i + 1 < len(expr) and expr[i + 1].isdigit():
@@ -324,7 +583,47 @@ def parse_expression(expr: str) -> List[Tuple[str, str]]:
     return tokens
 
 
-def compile_expression_to_isa(expr: str, result_type: str, target_reg: str) -> List[str]:
+def count_ops_in_expression(expr: str) -> int:
+    """估算表達式的運算子數量，用於分配暫存 VGPR。"""
+    expr = expr.strip()
+    # 移除最外層括號（避免 token 過多時誤判）
+    while expr.startswith('(') and expr.endswith(')'):
+        depth = 0
+        balanced = True
+        for i, ch in enumerate(expr):
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+                if depth == 0 and i != len(expr) - 1:
+                    balanced = False
+                    break
+        if balanced and depth == 0:
+            expr = expr[1:-1].strip()
+        else:
+            break
+    try:
+        tokens = parse_expression(expr)
+    except Exception:
+        return 0
+    return sum(1 for t in tokens if t[0] == 'OP')
+
+
+def count_i64_temp_pairs(expr: str) -> int:
+    """估算 i64 表達式所需的 SGPR pair 暫存數量（保守估計）。"""
+    try:
+        tokens = parse_expression(expr)
+    except Exception:
+        return 0
+    op_count = sum(1 for t in tokens if t[0] == 'OP')
+    non_pair_operands = sum(1 for t in tokens if t[0] in ('REG', 'NUM'))
+    # 保守估計：每個運算可能需要額外暫存（乘法需要中間值）
+    return op_count * 2 + non_pair_operands
+
+
+def compile_expression_to_isa(expr: str, result_type: str, target_reg: str,
+                              temp_pool: Optional[List[str]] = None,
+                              temp_sgpr_pairs: Optional[List[Tuple[int, int]]] = None) -> List[str]:
     """
     將表達式編譯為 ISA 指令列表
     
@@ -336,71 +635,275 @@ def compile_expression_to_isa(expr: str, result_type: str, target_reg: str) -> L
     Returns:
         ISA 指令列表
     """
+    expr = expr.strip()
+    
+    # 移除最外層多餘的括號，例如 "(v2*2.0)"
+    def strip_outer_parens(text: str) -> str:
+        while text.startswith('(') and text.endswith(')'):
+            depth = 0
+            balanced = True
+            for i, ch in enumerate(text):
+                if ch == '(':
+                    depth += 1
+                elif ch == ')':
+                    depth -= 1
+                    if depth == 0 and i != len(text) - 1:
+                        balanced = False
+                        break
+            if balanced and depth == 0:
+                text = text[1:-1].strip()
+            else:
+                break
+        return text
+    
+    expr = strip_outer_parens(expr)
     tokens = parse_expression(expr)
     instructions = []
     
-    # 簡化版：只支持簡單的二元運算（a op b）
-    if len(tokens) == 3 and tokens[1][0] == 'OP':
-        left_type, left_val = tokens[0]
-        op = tokens[1][1]
-        right_type, right_val = tokens[2]
-        
-        # 確定操作數和常數
-        if left_type == 'REG' and right_type == 'NUM':
-            reg = left_val
-            const = right_val
-        elif left_type == 'NUM' and right_type == 'REG':
-            const = left_val
-            reg = right_val
-        elif left_type == 'REG' and right_type == 'REG':
-            # 兩個 register 的運算
-            if result_type.startswith('f'):
-                if op == '*':
-                    instructions.append(f"\tv_mul_f32 {target_reg}, {left_val}, {right_val}")
-                elif op == '+':
-                    instructions.append(f"\tv_add_f32 {target_reg}, {left_val}, {right_val}")
-                elif op == '-':
-                    instructions.append(f"\tv_sub_f32 {target_reg}, {left_val}, {right_val}")
-                else:
-                    raise ValueError(f"Unsupported operation: {op}")
+    def to_rpn(expr_tokens: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+        precedence = {'+': 1, '-': 1, '*': 2, '/': 2}
+        output = []
+        op_stack = []
+        for tok_type, tok_val in expr_tokens:
+            if tok_type in ('REG', 'NUM', 'REG64'):
+                output.append((tok_type, tok_val))
+            elif tok_type == 'OP':
+                while op_stack and op_stack[-1][0] == 'OP' and precedence[op_stack[-1][1]] >= precedence[tok_val]:
+                    output.append(op_stack.pop())
+                op_stack.append((tok_type, tok_val))
+            elif tok_type == 'LPAREN':
+                op_stack.append((tok_type, tok_val))
+            elif tok_type == 'RPAREN':
+                while op_stack and op_stack[-1][0] != 'LPAREN':
+                    output.append(op_stack.pop())
+                if not op_stack:
+                    raise ValueError(f"Mismatched parentheses in expression: {expr}")
+                op_stack.pop()  # 移除 LPAREN
             else:
-                if op == '*':
-                    instructions.append(f"\tv_mul_lo_u32 {target_reg}, {left_val}, {right_val}")
-                elif op == '+':
-                    instructions.append(f"\tv_add_u32 {target_reg}, {left_val}, {right_val}")
-                elif op == '-':
-                    instructions.append(f"\tv_sub_u32 {target_reg}, {left_val}, {right_val}")
-                else:
-                    raise ValueError(f"Unsupported operation: {op}")
-            return instructions
-        else:
+                raise ValueError(f"Unsupported token: {tok_type}")
+        while op_stack:
+            if op_stack[-1][0] == 'LPAREN':
+                raise ValueError(f"Mismatched parentheses in expression: {expr}")
+            output.append(op_stack.pop())
+        return output
+    
+    def format_const(value: str) -> str:
+        if result_type.startswith('f') and '.' not in value:
+            return f"{value}.0"
+        return value
+    
+    # i64 or REG64: 使用 SGPR pair 指令序列
+    if result_type == 'i64' or any(t[0] == 'REG64' for t in tokens):
+        rpn = to_rpn(tokens)
+        op_count = sum(1 for t in rpn if t[0] == 'OP')
+        if op_count == 0:
             raise ValueError(f"Unsupported expression format: {expr}")
         
-        # 生成 ISA 指令（register op constant）
-        if result_type.startswith('f'):
-            # 浮點運算
-            if op == '*':
-                instructions.append(f"\tv_mul_f32 {target_reg}, {reg}, {const}")
-            elif op == '+':
-                instructions.append(f"\tv_add_f32 {target_reg}, {reg}, {const}")
-            elif op == '-':
-                instructions.append(f"\tv_sub_f32 {target_reg}, {reg}, {const}")
-            elif op == '/':
-                raise ValueError("Division by constant not yet supported")
+        sgpr_pool = [] if temp_sgpr_pairs is None else list(temp_sgpr_pairs)
+        
+        def alloc_pair() -> Tuple[int, int]:
+            if not sgpr_pool:
+                raise ValueError("i64 expression needs temp SGPR pairs")
+            return sgpr_pool.pop(0)
+        
+        def format_imm32(val: int) -> str:
+            if val < 0:
+                val &= 0xffffffff
+            if val > 9:
+                return hex(val)
+            return str(val)
+        
+        def ensure_pair(item: Tuple[str, str]) -> Tuple[int, int]:
+            kind, value = item
+            if kind == 'PAIR':
+                return value
+            if kind == 'REG':
+                lo, hi = alloc_pair()
+                instructions.append(f"\ts_mov_b32 s{lo}, {value}")
+                instructions.append(f"\ts_mov_b32 s{hi}, 0")
+                return lo, hi
+            if kind == 'NUM':
+                lo, hi = alloc_pair()
+                num = int(float(value))
+                lo_val = num & 0xffffffff
+                hi_val = (num >> 32) & 0xffffffff
+                instructions.append(f"\ts_mov_b32 s{lo}, {format_imm32(lo_val)}")
+                instructions.append(f"\ts_mov_b32 s{hi}, {format_imm32(hi_val)}")
+                return lo, hi
+            raise ValueError(f"Unsupported operand for i64: {kind}")
+        
+        def ensure_reg32(item: Tuple[str, str]) -> str:
+            kind, value = item
+            if kind == 'REG':
+                return value
+            if kind == 'NUM':
+                lo, _ = alloc_pair()
+                num = int(float(value))
+                instructions.append(f"\ts_mov_b32 s{lo}, {format_imm32(num)}")
+                return f"s{lo}"
+            raise ValueError(f"Unsupported operand for i64 mul: {kind}")
+        
+        def parse_pair_str(reg: str) -> Tuple[int, int]:
+            lo, hi = _format_sgpr_pair(reg)
+            return lo, hi
+        
+        stack: List[Tuple[str, Tuple[int, int] or str]] = []
+        op_seen = 0
+        target_lo, target_hi = parse_pair_str(target_reg)
+        
+        for tok_type, tok_val in rpn:
+            if tok_type == 'REG64':
+                if not _is_reg_pair(tok_val, 's'):
+                    raise ValueError(f"Only SGPR pair supported for i64: {tok_val}")
+                stack.append(('PAIR', parse_pair_str(tok_val)))
+                continue
+            if tok_type in ('REG', 'NUM'):
+                stack.append((tok_type, tok_val))
+                continue
+            if tok_type != 'OP':
+                raise ValueError(f"Unexpected token in i64 RPN: {tok_type}")
+            if len(stack) < 2:
+                raise ValueError(f"Invalid expression: {expr}")
+            
+            op_seen += 1
+            right = stack.pop()
+            left = stack.pop()
+            
+            # 選擇目的暫存器
+            if op_seen == op_count:
+                dest_lo, dest_hi = target_lo, target_hi
             else:
-                raise ValueError(f"Unsupported operation: {op}")
+                dest_lo, dest_hi = alloc_pair()
+            
+            if tok_val in ('+', '-'):
+                l_lo, l_hi = ensure_pair(left)
+                r_lo, r_hi = ensure_pair(right)
+                if tok_val == '+':
+                    instructions.append(f"\ts_add_u32 s{dest_lo}, s{l_lo}, s{r_lo}")
+                    instructions.append(f"\ts_addc_u32 s{dest_hi}, s{l_hi}, s{r_hi}")
+                else:
+                    instructions.append(f"\ts_sub_u32 s{dest_lo}, s{l_lo}, s{r_lo}")
+                    instructions.append(f"\ts_subb_u32 s{dest_hi}, s{l_hi}, s{r_hi}")
+                stack.append(('PAIR', (dest_lo, dest_hi)))
+                continue
+            
+            if tok_val == '*':
+                # 64-bit pair * 32-bit 或 32-bit * 32-bit
+                if left[0] == 'PAIR' and right[0] != 'PAIR':
+                    l_lo, l_hi = left[1]
+                    rhs = ensure_reg32(right)
+                    tmp_lo, tmp_hi = alloc_pair()
+                    instructions.append(f"\ts_mul_i32 s{dest_lo}, s{l_lo}, {rhs}")
+                    instructions.append(f"\ts_mul_hi_u32 s{tmp_lo}, s{l_lo}, {rhs}")
+                    instructions.append(f"\ts_mul_i32 s{tmp_hi}, s{l_hi}, {rhs}")
+                    instructions.append(f"\ts_add_i32 s{dest_hi}, s{tmp_lo}, s{tmp_hi}")
+                    stack.append(('PAIR', (dest_lo, dest_hi)))
+                    continue
+                if right[0] == 'PAIR' and left[0] != 'PAIR':
+                    r_lo, r_hi = right[1]
+                    rhs = ensure_reg32(left)
+                    tmp_lo, tmp_hi = alloc_pair()
+                    instructions.append(f"\ts_mul_i32 s{dest_lo}, s{r_lo}, {rhs}")
+                    instructions.append(f"\ts_mul_hi_u32 s{tmp_lo}, s{r_lo}, {rhs}")
+                    instructions.append(f"\ts_mul_i32 s{tmp_hi}, s{r_hi}, {rhs}")
+                    instructions.append(f"\ts_add_i32 s{dest_hi}, s{tmp_lo}, s{tmp_hi}")
+                    stack.append(('PAIR', (dest_lo, dest_hi)))
+                    continue
+                if left[0] != 'PAIR' and right[0] != 'PAIR':
+                    l_reg = ensure_reg32(left)
+                    r_reg = ensure_reg32(right)
+                    instructions.append(f"\ts_mul_i32 s{dest_lo}, {l_reg}, {r_reg}")
+                    instructions.append(f"\ts_mul_hi_u32 s{dest_hi}, {l_reg}, {r_reg}")
+                    stack.append(('PAIR', (dest_lo, dest_hi)))
+                    continue
+                raise ValueError("i64 multiply of two SGPR pairs is not supported")
+            
+            raise ValueError(f"Unsupported i64 operation: {tok_val}")
+        
+        return instructions
+    
+    rpn = to_rpn(tokens)
+    op_count = sum(1 for t in rpn if t[0] == 'OP')
+    if op_count == 0:
+        raise ValueError(f"Unsupported expression format: {expr}")
+    
+    # 預留足夠的暫存器，若無則退回舊行為
+    temp_pool = [] if temp_pool is None else list(temp_pool)
+    
+    stack: List[Tuple[str, str]] = []
+    op_seen = 0
+    
+    for tok_type, tok_val in rpn:
+        if tok_type in ('REG', 'NUM'):
+            stack.append((tok_type, tok_val))
+            continue
+        
+        if tok_type != 'OP':
+            raise ValueError(f"Unexpected token in RPN: {tok_type}")
+        
+        if len(stack) < 2:
+            raise ValueError(f"Invalid expression: {expr}")
+        
+        op_seen += 1
+        right_type, right_val = stack.pop()
+        left_type, left_val = stack.pop()
+        
+        # 常數折疊
+        if left_type == 'NUM' and right_type == 'NUM':
+            left_num = float(left_val) if result_type.startswith('f') else int(left_val)
+            right_num = float(right_val) if result_type.startswith('f') else int(right_val)
+            if tok_val == '+':
+                result_num = left_num + right_num
+            elif tok_val == '-':
+                result_num = left_num - right_num
+            elif tok_val == '*':
+                result_num = left_num * right_num
+            elif tok_val == '/':
+                if result_type.startswith('f'):
+                    result_num = left_num / right_num
+                else:
+                    raise ValueError("Integer division is not supported")
+            else:
+                raise ValueError(f"Unsupported operation: {tok_val}")
+            stack.append(('NUM', str(result_num)))
+            continue
+        
+        # 選擇目的暫存器
+        if op_seen == op_count:
+            dest = target_reg
         else:
-            # 整數運算
-            if op == '*':
-                instructions.append(f"\tv_mul_lo_u32 {target_reg}, {reg}, {const}")
-            elif op == '+':
-                instructions.append(f"\tv_add_u32 {target_reg}, {reg}, {const}")
-            elif op == '-':
-                instructions.append(f"\tv_sub_u32 {target_reg}, {reg}, {const}")
+            if not temp_pool:
+                raise ValueError("Complex expression needs temp VGPRs")
+            dest = temp_pool.pop(0)
+        
+        # 運算元格式化
+        left_op = format_const(left_val) if left_type == 'NUM' else left_val
+        right_op = format_const(right_val) if right_type == 'NUM' else right_val
+        
+        if result_type.startswith('f'):
+            if tok_val == '*':
+                instructions.append(f"\tv_mul_f32 {dest}, {left_op}, {right_op}")
+            elif tok_val == '+':
+                instructions.append(f"\tv_add_f32 {dest}, {left_op}, {right_op}")
+            elif tok_val == '-':
+                instructions.append(f"\tv_sub_f32 {dest}, {left_op}, {right_op}")
+            elif tok_val == '/':
+                instructions.append(f"\tv_div_f32 {dest}, {left_op}, {right_op}")
             else:
-                raise ValueError(f"Unsupported operation: {op}")
-    else:
-        raise ValueError(f"Complex expressions not yet supported: {expr}")
+                raise ValueError(f"Unsupported operation: {tok_val}")
+        else:
+            if tok_val == '*':
+                instructions.append(f"\tv_mul_lo_u32 {dest}, {left_op}, {right_op}")
+            elif tok_val == '+':
+                instructions.append(f"\tv_add_u32 {dest}, {left_op}, {right_op}")
+            elif tok_val == '-':
+                instructions.append(f"\tv_sub_u32 {dest}, {left_op}, {right_op}")
+            elif tok_val == '/':
+                raise ValueError("Integer division is not supported")
+            else:
+                raise ValueError(f"Unsupported operation: {tok_val}")
+        
+        stack.append(('REG', dest))
     
     return instructions
 
@@ -457,55 +960,79 @@ def generate_capture_isa_code(directive: CaptureDirective, unique_id: int,
             lines.append(f"\t{cmp_instr} vcc, {value}, v{temp_vgpr}")
             lines.append(f"\ts_and_b64 exec, exec, vcc")
     
-    # 2. 生成 register 複製指令
-    for i, (src_reg, dst_reg, typ) in enumerate(zip(
-        directive.source_registers, 
-        directive.target_registers[:len(directive.source_registers)],
-        directive.types[:len(directive.source_registers)]
-    )):
-        lines.append(f"; Capture: {src_reg} → {dst_reg}")
-        lines.append(f"\tv_mov_b32 {dst_reg}, {src_reg}")
-        
-        mappings.append(CaptureMapping(
-            directive_id=unique_id,
-            source=src_reg,
-            target_register=dst_reg,
-            type_str=typ,
-            is_expression=False
-        ))
+    # 2. 生成 register 複製指令與表達式計算（依原始順序）
+    ordered_values = directive.ordered_values
+    if not ordered_values:
+        ordered_values = [(r, False) for r in directive.source_registers]
+        if directive.expressions:
+            ordered_values.extend((e, True) for e in directive.expressions)
     
-    # 3. 生成表達式計算（如果有）
-    if directive.expressions:
-        expr_types = directive.types[len(directive.source_registers):]
-        expr_targets = directive.target_registers[len(directive.source_registers):]
+    expr_temp_pool = []
+    if temp_alloc and unique_id in temp_alloc and "expr_vgprs" in temp_alloc[unique_id]:
+        expr_temp_pool = [f"v{n}" for n in temp_alloc[unique_id]["expr_vgprs"]]
+    expr_sgpr_pool = []
+    if temp_alloc and unique_id in temp_alloc and "expr_sgpr_pairs" in temp_alloc[unique_id]:
+        expr_sgpr_pool = temp_alloc[unique_id]["expr_sgpr_pairs"]
+    
+    for (value, is_expr), dst_reg, typ in zip(ordered_values, directive.target_registers, directive.types):
+        if not is_expr:
+            lines.append(f"; Capture: {value} → {dst_reg}")
+            if typ == 'i64':
+                if not _is_reg_pair(dst_reg, 's') or not _is_reg_pair(value, 's'):
+                    raise ValueError(f"i64 capture requires SGPR pair src/dst: {value} -> {dst_reg}")
+                dst_lo, dst_hi = _format_sgpr_pair(dst_reg)
+                src_lo, src_hi = _format_sgpr_pair(value)
+                lines.append(f"\ts_mov_b32 s{dst_lo}, s{src_lo}")
+                lines.append(f"\ts_mov_b32 s{dst_hi}, s{src_hi}")
+            else:
+                lines.append(f"\tv_mov_b32 {dst_reg}, {value}")
+            
+            mappings.append(CaptureMapping(
+                directive_id=unique_id,
+                source=value,
+                target_register=dst_reg,
+                type_str=typ,
+                is_expression=False
+            ))
+            continue
         
-        for i, (expr, dst_reg, typ) in enumerate(zip(directive.expressions, expr_targets, expr_types)):
-            try:
-                lines.append(f"; Expression: {expr} → {dst_reg}")
-                expr_instructions = compile_expression_to_isa(expr, typ, dst_reg)
-                lines.extend(expr_instructions)
-                
-                mappings.append(CaptureMapping(
-                    directive_id=unique_id,
-                    source=expr,
-                    target_register=dst_reg,
-                    type_str=typ,
-                    is_expression=True
-                ))
-            except Exception as e:
-                print(f"[Warning] Failed to compile expression '{expr}': {e}")
-                # Fallback: 複製第一個 register
-                fallback_src = directive.source_registers[0] if directive.source_registers else "v0"
-                lines.append(f"; Fallback for failed expression: {expr}")
+        try:
+            lines.append(f"; Expression: {value} → {dst_reg}")
+            expr_instructions = compile_expression_to_isa(value, typ, dst_reg, expr_temp_pool, expr_sgpr_pool)
+            lines.extend(expr_instructions)
+            
+            mappings.append(CaptureMapping(
+                directive_id=unique_id,
+                source=value,
+                target_register=dst_reg,
+                type_str=typ,
+                is_expression=True
+            ))
+        except Exception as e:
+            print(f"[Warning] Failed to compile expression '{value}': {e}")
+            # Fallback: 複製第一個 register
+            fallback_src = directive.source_registers[0] if directive.source_registers else "v0"
+            lines.append(f"; Fallback for failed expression: {value}")
+            if typ == 'i64':
+                if _is_reg_pair(dst_reg, 's') and _is_reg_pair(fallback_src, 's'):
+                    dst_lo, dst_hi = _format_sgpr_pair(dst_reg)
+                    src_lo, src_hi = _format_sgpr_pair(fallback_src)
+                    lines.append(f"\ts_mov_b32 s{dst_lo}, s{src_lo}")
+                    lines.append(f"\ts_mov_b32 s{dst_hi}, s{src_hi}")
+                else:
+                    dst_lo, dst_hi = _format_sgpr_pair(dst_reg)
+                    lines.append(f"\ts_mov_b32 s{dst_lo}, 0")
+                    lines.append(f"\ts_mov_b32 s{dst_hi}, 0")
+            else:
                 lines.append(f"\tv_mov_b32 {dst_reg}, {fallback_src}")
-                
-                mappings.append(CaptureMapping(
-                    directive_id=unique_id,
-                    source=f"{expr} (fallback: {fallback_src})",
-                    target_register=dst_reg,
-                    type_str=typ,
-                    is_expression=True
-                ))
+            
+            mappings.append(CaptureMapping(
+                directive_id=unique_id,
+                source=f"{value} (fallback: {fallback_src})",
+                target_register=dst_reg,
+                type_str=typ,
+                is_expression=True
+            ))
     
     # 4. 恢復 exec mask（如果有條件）
     if temp_sgpr_start is not None:
@@ -718,6 +1245,11 @@ def extract_original_metadata(original_isa_file: pathlib.Path) -> Dict:
         'next_free_sgpr': r'\.amdhsa_next_free_sgpr\s+(\d+)',
         'reserve_vcc': r'\.amdhsa_reserve_vcc\s+(\d+)',
         'accum_offset': r'\.amdhsa_accum_offset\s+(\d+)',
+        'system_sgpr_workgroup_id_x': r'\.amdhsa_system_sgpr_workgroup_id_x\s+(\d+)',
+        'system_sgpr_workgroup_id_y': r'\.amdhsa_system_sgpr_workgroup_id_y\s+(\d+)',
+        'system_sgpr_workgroup_id_z': r'\.amdhsa_system_sgpr_workgroup_id_z\s+(\d+)',
+        'system_sgpr_workgroup_info': r'\.amdhsa_system_sgpr_workgroup_info\s+(\d+)',
+        'system_vgpr_workitem_id': r'\.amdhsa_system_vgpr_workitem_id\s+(\d+)',
     }
     
     for attr_name, pattern in amdhsa_patterns.items():
@@ -817,6 +1349,41 @@ def update_isa_metadata(isa_text: str, new_vgpr_count: int,
                 rf'\1 {attrs["group_segment_fixed_size"]}',
                 isa_text
             )
+        
+        if 'system_sgpr_workgroup_id_x' in attrs:
+            isa_text = re.sub(
+                r'(\.amdhsa_system_sgpr_workgroup_id_x)\s+\d+',
+                rf'\1 {attrs["system_sgpr_workgroup_id_x"]}',
+                isa_text
+            )
+        
+        if 'system_sgpr_workgroup_id_y' in attrs:
+            isa_text = re.sub(
+                r'(\.amdhsa_system_sgpr_workgroup_id_y)\s+\d+',
+                rf'\1 {attrs["system_sgpr_workgroup_id_y"]}',
+                isa_text
+            )
+        
+        if 'system_sgpr_workgroup_id_z' in attrs:
+            isa_text = re.sub(
+                r'(\.amdhsa_system_sgpr_workgroup_id_z)\s+\d+',
+                rf'\1 {attrs["system_sgpr_workgroup_id_z"]}',
+                isa_text
+            )
+        
+        if 'system_sgpr_workgroup_info' in attrs:
+            isa_text = re.sub(
+                r'(\.amdhsa_system_sgpr_workgroup_info)\s+\d+',
+                rf'\1 {attrs["system_sgpr_workgroup_info"]}',
+                isa_text
+            )
+        
+        if 'system_vgpr_workitem_id' in attrs:
+            isa_text = re.sub(
+                r'(\.amdhsa_system_vgpr_workitem_id)\s+\d+',
+                rf'\1 {attrs["system_vgpr_workitem_id"]}',
+                isa_text
+            )
     
     # 更新 YAML metadata
     yaml_match = re.search(r'\.amdgpu_metadata\s+---\s+(.*?)\.\.\.',
@@ -912,15 +1479,40 @@ def allocate_temp_registers(directives: List[CaptureDirective],
     next_sgpr = max(final_reg_info['sgpr'], 4)  # 避免使用系統保留 s[0:3]
     
     for directive_id, directive in enumerate(directives):
-        if not directive.condition:
-            continue
+        entry: Dict[str, int] = {}
         
-        temp_alloc[directive_id] = {
-            "vgpr": next_vgpr,
-            "sgpr_start": next_sgpr,
-        }
-        next_vgpr += 1
-        next_sgpr += 2
+        if directive.condition:
+            entry["vgpr"] = next_vgpr
+            entry["sgpr_start"] = next_sgpr
+            next_vgpr += 1
+            next_sgpr += 2
+        
+        expr_op_count = 0
+        expr_sgpr_pairs_needed = 0
+        ordered_values = directive.ordered_values
+        if not ordered_values:
+            ordered_values = [(r, False) for r in directive.source_registers]
+            if directive.expressions:
+                ordered_values.extend((e, True) for e in directive.expressions)
+        for (value, is_expr), typ in zip(ordered_values, directive.types):
+            if not is_expr:
+                continue
+            if typ == 'i64':
+                expr_sgpr_pairs_needed += count_i64_temp_pairs(value)
+            else:
+                expr_op_count += count_ops_in_expression(value)
+        
+        if expr_op_count > 0:
+            entry["expr_vgprs"] = list(range(next_vgpr, next_vgpr + expr_op_count))
+            next_vgpr += expr_op_count
+        if expr_sgpr_pairs_needed > 0:
+            entry["expr_sgpr_pairs"] = [
+                (lo, lo + 1) for lo in range(next_sgpr, next_sgpr + expr_sgpr_pairs_needed * 2, 2)
+            ]
+            next_sgpr += expr_sgpr_pairs_needed * 2
+        
+        if entry:
+            temp_alloc[directive_id] = entry
     
     final_reg_info['vgpr'] = next_vgpr
     final_reg_info['sgpr'] = next_sgpr
@@ -1120,7 +1712,10 @@ def main():
 使用範例：
   1. 在 .s 檔案中標註：
      ; @CAPTURE src=v2,v3 dst=v10,v11 type=f32,f32
-     ; @CAPTURE cond=tid_eq(0) src=v2 dst=v10 expr="v2*2.0" type=f32,f32
+     ; @CAPTURE if $tid == 0: src=v2 dst=v10 expr="v2*2.0" type=f32,f32
+     ; @CAPTURE f"A={v2}, B={v3}" dst=v10,v11
+     ; @CAPTURE if $tid == 0: f"A={v2}, A*2={(v2*2.0)}" dst=v12,v13
+     ; @CAPTURE expr="s12:s13 + s16:s17*4" dst=s12:s13 type=i64
 
   2. 執行工具：
      python3 mdr_cap.py input.s --output-dir output
@@ -1205,8 +1800,14 @@ def main():
         print(f"  1. Insert capture ISA instructions at @CAPTURE locations")
         for i, directive in enumerate(directives):
             print(f"     CAPTURE #{i} at line {directive.line_number + 1}:")
-            for src, dst, typ in zip(directive.source_registers, directive.target_registers, directive.types):
-                print(f"       {src} → {dst} ({typ})")
+            ordered_values = directive.ordered_values
+            if not ordered_values:
+                ordered_values = [(r, False) for r in directive.source_registers]
+                if directive.expressions:
+                    ordered_values.extend((e, True) for e in directive.expressions)
+            for (value, is_expr), dst, typ in zip(ordered_values, directive.target_registers, directive.types):
+                label = "expr" if is_expr else "reg"
+                print(f"       {label}: {value} → {dst} ({typ})")
         print(f"  2. Update metadata: VGPR count = {final_reg_info['vgpr']}")
         print(f"  3. Generate injected.s")
         print(f"  4. Convert to MLIR with clobber protection")

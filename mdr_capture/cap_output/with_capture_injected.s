@@ -28,39 +28,68 @@ _Z9vectorAddPKfS0_Pfi:
 	global_load_dword v7, v[2:3], off
 	v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]
 	s_waitcnt vmcnt(0)
-; @CAPTURE cond=tid_eq(0) src=v2,v3 dst=v10,v11 type=f32,f32
+; @CAPTURE f"A={v2}, B={v3}" dst=v10,v11
 ; === @CAPTURE #0 from line 31 ===
-; Condition: tid_eq(0)
-; Re-compute thread ID (v0 may have been modified)
-	v_mbcnt_lo_u32_b32 14, -1, 0
-	v_mbcnt_hi_u32_b32 14, -1, 14
-	s_mov_b64 s[8:9], exec
-	v_cmp_eq_u32_e32 vcc, 0, v14
-	s_and_b64 exec, exec, vcc
 ; Capture: v2 → v10
 	v_mov_b32 v10, v2
 ; Capture: v3 → v11
 	v_mov_b32 v11, v3
-; Restore exec mask
-	s_mov_b64 exec, s[8:9]
 ; === End @CAPTURE #0 ===
 	v_add_f32_e32 v2, v6, v7
-; @CAPTURE cond=tid_eq(0) src=v2 dst=v12,v13 expr="v2*2.0" type=f32,f32
+; @CAPTURE if $tid == 0: f"A*2={(v2*2.0)/(v3+v2*(234+567))}" dst=v12
 ; === @CAPTURE #1 from line 33 ===
 ; Condition: tid_eq(0)
 ; Re-compute thread ID (v0 may have been modified)
-	v_mbcnt_lo_u32_b32 15, -1, 0
-	v_mbcnt_hi_u32_b32 15, -1, 15
-	s_mov_b64 s[10:11], exec
-	v_cmp_eq_u32_e32 vcc, 0, v15
+	v_mbcnt_lo_u32_b32 19, -1, 0
+	v_mbcnt_hi_u32_b32 19, -1, 19
+	s_mov_b64 s[8:9], exec
+	v_cmp_eq_u32_e32 vcc, 0, v19
 	s_and_b64 exec, exec, vcc
-; Capture: v2 → v12
-	v_mov_b32 v12, v2
-; Expression: v2*2.0 → v13
-	v_mul_f32 v13, v2, 2.0
+; Expression: (v2*2.0)/(v3+v2*(234+567)) → v12
+	v_mul_f32 v20, v2, 2.0
+	v_mul_f32 v21, v2, 801.0
+	v_add_f32 v22, v3, v21
+	v_div_f32 v12, v20, v22
+; Restore exec mask
+	s_mov_b64 exec, s[8:9]
+; === End @CAPTURE #1 ===
+; @CAPTURE f"A={(v2+v3)*2.0}, B={v2*(v3+4.0)}" dst=v13,v14
+; === @CAPTURE #2 from line 34 ===
+; Expression: (v2+v3)*2.0 → v13
+	v_add_f32 v25, v2, v3
+	v_mul_f32 v13, v25, 2.0
+; Expression: v2*(v3+4.0) → v14
+	v_add_f32 v25, v3, 4.0
+	v_mul_f32 v14, v2, v25
+; === End @CAPTURE #2 ===
+; @CAPTURE if $tid == 0: f"C={v2+v3*2.0-5.0}, D={(v2+3.0)/(v3+1.0)}" dst=v15,v16
+; === @CAPTURE #3 from line 35 ===
+; Condition: tid_eq(0)
+; Re-compute thread ID (v0 may have been modified)
+	v_mbcnt_lo_u32_b32 29, -1, 0
+	v_mbcnt_hi_u32_b32 29, -1, 29
+	s_mov_b64 s[10:11], exec
+	v_cmp_eq_u32_e32 vcc, 0, v29
+	s_and_b64 exec, exec, vcc
+; Expression: v2+v3*2.0-5.0 → v15
+	v_add_f32 v15, v3, -10.0
+; Expression: (v2+3.0)/(v3+1.0) → v16
+	v_add_f32 v30, v2, 3.0
+	v_add_f32 v31, v3, 1.0
+	v_div_f32 v16, v30, v31
 ; Restore exec mask
 	s_mov_b64 exec, s[10:11]
-; === End @CAPTURE #1 ===
+; === End @CAPTURE #3 ===
+; @CAPTURE f"E={(v2*v2+v3*v3)}, F={(v2+v3)*(v2-1.0)}" dst=v17,v18
+; === @CAPTURE #4 from line 36 ===
+; Expression: (v2*v2+v3*v3) → v17
+	v_mul_f32 v35, v2, v2
+	v_mul_f32 v36, v3, v3
+	v_add_f32 v17, v35, v36
+; Expression: (v2+v3)*(v2-1.0) → v18
+	v_add_f32 v35, v2, v3
+	v_mul_f32 v18, v2, -1.0
+; === End @CAPTURE #4 ===
 	global_store_dword v[0:1], v2, off
 .LBB0_2:
 	s_endpgm
@@ -85,7 +114,7 @@ _Z9vectorAddPKfS0_Pfi:
 		.amdhsa_system_sgpr_workgroup_id_z 0
 		.amdhsa_system_sgpr_workgroup_info 0
 		.amdhsa_system_vgpr_workitem_id 0
-		.amdhsa_next_free_vgpr 16
+		.amdhsa_next_free_vgpr 40
 		.amdhsa_next_free_sgpr 12
 		.amdhsa_accum_offset 8
 		.amdhsa_reserve_vcc 1
@@ -140,7 +169,7 @@ amdhsa.kernels:
     .private_segment_fixed_size: 0
     .sgpr_count:     14
     .symbol:         _Z9vectorAddPKfS0_Pfi.kd
-    .vgpr_count: 16
+    .vgpr_count: 40
     .wavefront_size: 64
 amdhsa.target:   amdgcn-amd-amdhsa--gfx950
 amdhsa.version:

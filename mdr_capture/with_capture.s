@@ -28,9 +28,12 @@ _Z9vectorAddPKfS0_Pfi:
 	global_load_dword v7, v[2:3], off
 	v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]
 	s_waitcnt vmcnt(0)
-; @CAPTURE cond=tid_eq(0) src=v2,v3 dst=v10,v11 type=f32,f32
+; @CAPTURE f"A={v2}, B={v3}" dst=v10,v11
 	v_add_f32_e32 v2, v6, v7
-; @CAPTURE cond=tid_eq(0) src=v2 dst=v12,v13 expr="v2*2.0" type=f32,f32
+; @CAPTURE if $tid == 0: f"A*2={(v2*2.0)/(v3+v2*(234+567))}" dst=v12
+; @CAPTURE f"A={(v2+v3)*2.0}, B={v2*(v3+4.0)}" dst=v13,v14
+; @CAPTURE if $tid == 0: f"C={v2+v3*2.0-5.0}, D={(v2+3.0)/(v3+1.0)}" dst=v15,v16
+; @CAPTURE f"E={(v2*v2+v3*v3)}, F={(v2+v3)*(v2-1.0)}" dst=v17,v18
 	global_store_dword v[0:1], v2, off
 .LBB0_2:
 	s_endpgm
