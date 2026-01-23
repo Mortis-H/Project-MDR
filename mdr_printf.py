@@ -97,7 +97,58 @@ class PrintDirective:
         return f"@PRINT at line {self.line_number}: {self.format_string} ({self.registers}){cond_str}{builtin_str}"
 
 
-def parse_fstring_format(fstring: str) -> Tuple[str, List[str], List[str]]:
+def validate_variable(var_name: str, line_number: int = None) -> bool:
+    """
+    驗證變數名稱是否合法
+    
+    合法的變數：
+    - v\\d+ - VGPR（如 v0, v6, v123）
+    - s\\d+ - SGPR（如 s0, s4, s19）
+    - $tid - 內建變數（Local Thread ID）
+    - $lane - 內建變數（Wavefront Lane ID）
+    - 表達式（包含 +, -, *, / 的組合）
+    
+    Returns:
+        True 如果合法
+    
+    Raises:
+        ValueError 如果不合法
+    """
+    var_name = var_name.strip()
+    
+    # 內建變數
+    if var_name in ('$tid', '$lane'):
+        return True
+    
+    # 簡單暫存器 v\d+ 或 s\d+
+    if re.match(r'^[vs]\d+$', var_name):
+        return True
+    
+    # 表達式：檢查是否包含運算符
+    if any(op in var_name for op in ['+', '-', '*', '/', '(', ')']):
+        # 提取表達式中的所有變數
+        tokens = re.findall(r'[vs]\d+|\$\w+', var_name)
+        for token in tokens:
+            if token.startswith('$'):
+                if token not in ('$tid', '$lane'):
+                    line_info = f" (line {line_number + 1})" if line_number is not None else ""
+                    raise ValueError(f"Unknown built-in variable '{token}'{line_info}. Valid built-in variables are: $tid, $lane")
+            elif not re.match(r'^[vs]\d+$', token):
+                line_info = f" (line {line_number + 1})" if line_number is not None else ""
+                raise ValueError(f"Invalid register '{token}'{line_info}. Expected format: v<N> or s<N>")
+        return True
+    
+    # 如果以 $ 開頭但不是已知的內建變數
+    if var_name.startswith('$'):
+        line_info = f" (line {line_number + 1})" if line_number is not None else ""
+        raise ValueError(f"Unknown built-in variable '{var_name}'{line_info}. Valid built-in variables are: $tid, $lane")
+    
+    # 不是暫存器也不是表達式
+    line_info = f" (line {line_number + 1})" if line_number is not None else ""
+    raise ValueError(f"Invalid variable '{var_name}'{line_info}. Expected: v<N>, s<N>, $tid, $lane, or an expression")
+
+
+def parse_fstring_format(fstring: str, line_number: int = None) -> Tuple[str, List[str], List[str]]:
     """
     解析 Python f-string 風格的格式字串
     
@@ -135,6 +186,9 @@ def parse_fstring_format(fstring: str) -> Tuple[str, List[str], List[str]]:
         
         reg_or_expr = reg_or_expr.strip()
         fmt_spec = fmt_spec.strip()
+        
+        # 驗證變數名稱
+        validate_variable(reg_or_expr, line_number)
         
         # 檢查是否是內建變數
         if reg_or_expr == '$tid' or reg_or_expr == '$lane':
@@ -192,7 +246,7 @@ def parse_fstring_format(fstring: str) -> Tuple[str, List[str], List[str]]:
     return printf_format, registers, types
 
 
-def parse_condition_pythonic(cond_str: str) -> Optional[str]:
+def parse_condition_pythonic(cond_str: str, line_number: int = None) -> Optional[str]:
     """
     解析 Python 風格的條件式
     
@@ -238,6 +292,8 @@ def parse_condition_pythonic(cond_str: str) -> Optional[str]:
             if len(parts) == 2:
                 reg = parts[0].strip()
                 value = parts[1].strip()
+                # 驗證條件式中的變數（傳入 line_number 以便顯示錯誤位置）
+                validate_variable(reg, line_number)
                 return f"{reg}_{op_name}({value})"
     
     return None
@@ -292,13 +348,13 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
         if cond_match:
             cond_str = cond_match.group(1)
             # 轉換為內部格式
-            internal_cond = parse_condition_pythonic(cond_str)
+            internal_cond = parse_condition_pythonic(cond_str, line_number)
             if internal_cond:
                 condition = internal_cond
                 print(f"[Info] Parsed condition: '{cond_str}' -> {condition}")
         
         # 解析 f-string
-        printf_format, parsed_regs, parsed_types = parse_fstring_format(fstring_content)
+        printf_format, parsed_regs, parsed_types = parse_fstring_format(fstring_content, line_number)
         
         # 分離暫存器、表達式、和內建變數
         # 重要：維護各自的類型列表，確保順序正確
@@ -2537,7 +2593,12 @@ def main():
     
     # 1. 解析 @PRINT 指令
     print(f"\n=== Parsing @PRINT directives ===")
-    lines, directives, has_barrier = parse_asm_file(input_path)
+    try:
+        lines, directives, has_barrier = parse_asm_file(input_path)
+    except ValueError as e:
+        print(f"\n❌ ERROR: {e}")
+        print(f"\n   Please check your @PRINT directive syntax.")
+        sys.exit(1)
     
     if not directives:
         if args.no_printf:

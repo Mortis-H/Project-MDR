@@ -284,6 +284,26 @@ Kernel 執行流程：
 ; @PRINT if v6 > 2.0: f"C={v2:.3f}"
 ```
 
+### ✅ 編譯時錯誤檢查
+
+工具會在編譯階段檢查 `@PRINT` 語法錯誤，避免執行時才發現問題：
+
+**常見錯誤範例**：
+```asm
+; ❌ 錯誤：打錯內建變數名稱
+; @PRINT if $rid < 4: f"test"     ; $rid 應該是 $tid
+
+; ❌ 錯誤：打錯暫存器名稱
+; @PRINT f"value={x6:.2f}"        ; x6 應該是 v6
+```
+
+**錯誤訊息**：
+```
+❌ ERROR: Unknown built-in variable '$rid' (line 33). Valid built-in variables are: $tid, $lane
+
+   Please check your @PRINT directive syntax.
+```
+
 ### ❌ 不支援的功能
 
 | 功能 | 原因 |
