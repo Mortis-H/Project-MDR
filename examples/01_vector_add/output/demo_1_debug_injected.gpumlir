@@ -27,25 +27,25 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "\09s_waitcnt lgkmcnt(0)", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[4:5], s[4:5], 0, v[0:1]", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[2:3], s[6:7], 0, v[0:1]", ""  : () -> ()
-      llvm.inline_asm has_side_effects "\09global_load_dword v6, v[4:5], off      ; Load A[i] into v6", ""  : () -> ()
-      llvm.inline_asm has_side_effects "\09global_load_dword v7, v[2:3], off      ; Load B[i] into v7", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09global_load_dword v6, v[4:5], off", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09global_load_dword v7, v[2:3], off", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]", ""  : () -> ()
       llvm.inline_asm has_side_effects "\09s_waitcnt vmcnt(0)", ""  : () -> ()
-              // === Snapshot for @PRINT at line 44 ===
+              // === Snapshot for @PRINT at line 31 ===
               llvm.inline_asm has_side_effects "v_mov_b32 v56, v6", ""  : () -> ()
               llvm.inline_asm has_side_effects "v_mov_b32 v57, v7", ""  : () -> ()
               llvm.inline_asm has_side_effects "v_mov_b32 v58, v2", ""  : () -> ()
               // === End Snapshot ===
-      llvm.inline_asm has_side_effects "\09v_add_f32_e32 v2, v6, v7               ; C = A + B", ""  : () -> ()
-              // === Snapshot for @PRINT at line 51 ===
+      llvm.inline_asm has_side_effects "\09v_add_f32_e32 v2, v6, v7", ""  : () -> ()
+              // === Snapshot for @PRINT at line 33 ===
               llvm.inline_asm has_side_effects "v_mov_b32 v59, v6", ""  : () -> ()
               llvm.inline_asm has_side_effects "v_mov_b32 v60, v7", ""  : () -> ()
               llvm.inline_asm has_side_effects "v_mov_b32 v61, v2", ""  : () -> ()
               // === End Snapshot ===
-      llvm.inline_asm has_side_effects "\09global_store_dword v[0:1], v2, off     ; Store C[i]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09global_store_dword v[0:1], v2, off", ""  : () -> ()
               // Restore kernarg pointer for printf (from s[18:19])
               llvm.inline_asm has_side_effects "s_mov_b64 s[0:1], s[18:19]", ""  : () -> ()
-              // === @PRINT from line 44 (using snapshots) ===
+              // === @PRINT from line 31 (using snapshots) ===
               // Built-in $tid: read from v63
               %print_val_0_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v63", "=v": () -> i32
               // Using snapshot v56 for v6
@@ -62,7 +62,7 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
                 gpu.printf "[Before ADD] tid=%d: A=%.2f, B=%.2f, C=%.2f\0A", %print_val_0_0, %print_val_0_1, %print_val_0_2, %print_val_0_3 : i32, f32, f32, f32
               }
               // === End @PRINT ===
-              // === @PRINT from line 51 (using snapshots) ===
+              // === @PRINT from line 33 (using snapshots) ===
               // Built-in $tid: read from v63
               %print_val_1_0 = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v63", "=v": () -> i32
               // Using snapshot v59 for v6
@@ -76,7 +76,7 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
               %cmp_val_1 = arith.constant 4 : i32
               %cond_1 = arith.cmpi slt, %cond_tid_1, %cmp_val_1 : i32
               scf.if %cond_1 {
-                gpu.printf "[After ADD]  tid=%d: A=%.2f, B=%.2f, C=%.2f\0A", %print_val_1_0, %print_val_1_1, %print_val_1_2, %print_val_1_3 : i32, f32, f32, f32
+                gpu.printf "[After ADD] tid=%d: A=%.3f, B=%.3f, C=%.3f\0A", %print_val_1_0, %print_val_1_1, %print_val_1_2, %print_val_1_3 : i32, f32, f32, f32
               }
               // === End @PRINT ===
               // === Printf Section End ===

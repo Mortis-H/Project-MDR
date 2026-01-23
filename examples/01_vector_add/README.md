@@ -52,7 +52,7 @@
 
 ```bash
 # 編譯並測試
-python3 ../../mdr_printf.py with_debug.s --output-dir output --test --test-size 128
+python3 ../../mdr_printf.py demo_2.s --output-dir output --test --test-size 5
 
 # 或分開執行
 python3 ../../mdr_printf.py with_debug.s --output-dir output

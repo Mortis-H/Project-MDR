@@ -28,19 +28,9 @@ _Z9vectorAddPKfS0_Pfi:
 	global_load_dword v7, v[2:3], off
 	v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]
 	s_waitcnt vmcnt(0)
-
-; ============================================================
-; MDR Demo: Observe register values before computation
-; ============================================================
-; @PRINT if $tid < 4: f"[Before ADD] tid={$tid}: A={v6:.2f}, B={v7:.2f}, C={v2:.2f}"
-
+;@PRINT if $tid < 4: f"[Before ADD] tid={$tid}: A={v6:.2f}, B={v7:.2f}, C={v2:.2f}"
 	v_add_f32_e32 v2, v6, v7
-
-; ============================================================
-; MDR Demo: Observe register values after computation
-; ============================================================
-; @PRINT if $tid < 4: f"[After ADD]  tid={$tid}: A={v6:.2f}, B={v7:.2f}, C={v2:.2f}"
-
+;@PRINT if $tid < 4: f"[After ADD] tid={$tid}: A={v6:.3f}, B={v7:.3f}, C={v2:.3f}"
 	global_store_dword v[0:1], v2, off
 .LBB0_2:
 	s_endpgm

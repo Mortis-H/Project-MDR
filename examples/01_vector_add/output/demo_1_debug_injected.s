@@ -63,10 +63,10 @@ _Z9vectorAddPKfS0_Pfi:
 		v_lshl_add_u64 v[2:3], s[6:7], 0, v[0:1]
 	;;#ASMEND
 	;;#ASMSTART
-		global_load_dword v6, v[4:5], off      ; Load A[i] into v6
+		global_load_dword v6, v[4:5], off
 	;;#ASMEND
 	;;#ASMSTART
-		global_load_dword v7, v[2:3], off      ; Load B[i] into v7
+		global_load_dword v7, v[2:3], off
 	;;#ASMEND
 	;;#ASMSTART
 		v_lshl_add_u64 v[0:1], s[2:3], 0, v[0:1]
@@ -84,7 +84,7 @@ _Z9vectorAddPKfS0_Pfi:
 	v_mov_b32 v58, v2
 	;;#ASMEND
 	;;#ASMSTART
-		v_add_f32_e32 v2, v6, v7               ; C = A + B
+		v_add_f32_e32 v2, v6, v7
 	;;#ASMEND
 	;;#ASMSTART
 	v_mov_b32 v59, v6
@@ -96,7 +96,7 @@ _Z9vectorAddPKfS0_Pfi:
 	v_mov_b32 v61, v2
 	;;#ASMEND
 	;;#ASMSTART
-		global_store_dword v[0:1], v2, off     ; Store C[i]
+		global_store_dword v[0:1], v2, off
 	;;#ASMEND
 	;;#ASMSTART
 	s_mov_b64 s[0:1], s[18:19]
@@ -1233,18 +1233,18 @@ _Z9vectorAddPKfS0_Pfi:
 	global_store_dwordx4 v16, v[4:7], s[8:9]
 	s_nop 1
 	v_mov_b32_e32 v4, 0x205d4444
-	v_mov_b32_e32 v5, 0x64697420
-	v_mov_b32_e32 v6, 0x3a64253d
-	v_mov_b32_e32 v7, 0x253d4120
+	v_mov_b32_e32 v5, 0x3d646974
+	v_mov_b32_e32 v6, 0x203a6425
+	v_mov_b32_e32 v7, 0x2e253d41
 	global_store_dwordx4 v16, v[4:7], s[8:9] offset:16
 	s_nop 1
-	v_mov_b32_e32 v4, 0x2c66322e
-	v_mov_b32_e32 v5, 0x253d4220
-	v_mov_b32_e32 v7, 0x253d4320
+	v_mov_b32_e32 v4, 0x202c6633
+	v_mov_b32_e32 v5, 0x2e253d42
+	v_mov_b32_e32 v7, 0x2e253d43
 	v_mov_b32_e32 v6, v4
 	global_store_dwordx4 v16, v[4:7], s[8:9] offset:32
 	s_nop 1
-	v_mov_b32_e32 v4, 0xa66322e
+	v_mov_b32_e32 v4, 0xa6633
 	v_mov_b32_e32 v5, v17
 	v_mov_b32_e32 v6, v17
 	v_mov_b32_e32 v7, v17

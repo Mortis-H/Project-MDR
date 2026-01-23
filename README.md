@@ -17,6 +17,9 @@ MDR（Memory Debug and Register）是專為 AMD GPU 開發者設計的 ISA 層�
 - ✅ **自動測試**：內建 `--test` 選項快速驗證
 
 ---
+## Demo 影片
+
+[![asciicast](https://asciinema.org/a/T1FBfXW28dWYa5gM.svg)](https://asciinema.org/a/T1FBfXW28dWYa5gM)
 
 ## 快速開始
 
