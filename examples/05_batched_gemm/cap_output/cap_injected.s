@@ -1,4 +1,4 @@
-	.amdgcn_target "amdgcn-amd-amdhsa--gfx950"
+	.amdgcn_target "amdgcn-amd-amdhsa--gfx942"
 	.amdhsa_code_object_version 6
 	.text
 	.protected	batched_gemm            ; -- Begin function batched_gemm
@@ -30,9 +30,9 @@ batched_gemm:                           ; @batched_gemm
 	v_cmp_gt_i32_e64 s[0:1], s9, v0
 	s_cbranch_scc1 .LBB0_8
 ; %bb.2:                                ; %.lr.ph
-; @CAPTURE expr="s12:s13 + s16:s17*s4*4" dst=s12:s13 type=i64
+; @CAPTURE f"{(s[12:13] + s[16:17]*s4*4):ld}" dst=s[12:13]
 ; === @CAPTURE #0 from line 33 ===
-; Expression: s12:s13 + s16:s17*s4*4 → s12:s13
+; Expression: (s[12:13] + s[16:17]*s4*4) → s[12:13]
 	s_mul_i32 s24, s16, s4
 	s_mul_hi_u32 s26, s16, s4
 	s_mul_i32 s27, s17, s4
@@ -45,9 +45,9 @@ batched_gemm:                           ; @batched_gemm
 	s_add_u32 s12, s12, s28
 	s_addc_u32 s13, s13, s29
 ; === End @CAPTURE #0 ===
-; @CAPTURE expr="s14:s15 + s18:s19*s4*4" dst=s14:s15 type=i64
+; @CAPTURE f"{(s[14:15] + s[18:19]*s4*4):ld}" dst=s[14:15]
 ; === @CAPTURE #1 from line 34 ===
-; Expression: s14:s15 + s18:s19*s4*4 → s14:s15
+; Expression: (s[14:15] + s[18:19]*s4*4) → s[14:15]
 	s_mul_i32 s40, s18, s4
 	s_mul_hi_u32 s42, s18, s4
 	s_mul_i32 s43, s19, s4
@@ -60,19 +60,6 @@ batched_gemm:                           ; @batched_gemm
 	s_add_u32 s14, s14, s44
 	s_addc_u32 s15, s15, s45
 ; === End @CAPTURE #1 ===
-; @CAPTURE expr="s18:s19*s4*4" dst=s16:s17 type=i64
-; === @CAPTURE #2 from line 35 ===
-; Expression: s18:s19*s4*4 → s16:s17
-	s_mul_i32 s56, s18, s4
-	s_mul_hi_u32 s58, s18, s4
-	s_mul_i32 s59, s19, s4
-	s_add_i32 s57, s58, s59
-	s_mov_b32 s60, 4
-	s_mul_i32 s16, s56, s60
-	s_mul_hi_u32 s62, s56, s60
-	s_mul_i32 s63, s57, s60
-	s_add_i32 s17, s62, s63
-; === End @CAPTURE #2 ===
 	v_lshlrev_b32_e32 v4, 2, v2
 	v_lshlrev_b32_e32 v8, 6, v3
 	v_add_u32_e32 v9, v8, v4
@@ -211,7 +198,7 @@ batched_gemm:                           ; @batched_gemm
 		.amdhsa_system_sgpr_workgroup_info 0
 		.amdhsa_system_vgpr_workitem_id 1
 		.amdhsa_next_free_vgpr 34
-		.amdhsa_next_free_sgpr 68
+		.amdhsa_next_free_sgpr 56
 		.amdhsa_accum_offset 36
 		.amdhsa_reserve_vcc 1
 		.amdhsa_float_round_mode_32 0
@@ -279,17 +266,17 @@ batched_gemm:                           ; @batched_gemm
 	.set amdgpu.max_num_agpr, 0
 	.set amdgpu.max_num_sgpr, 0
 	.text
-	.type	__hip_cuid_11af655339320a6f,@object ; @__hip_cuid_11af655339320a6f
+	.type	__hip_cuid_1eb7a5f1b2586ff5,@object ; @__hip_cuid_1eb7a5f1b2586ff5
 	.section	.bss,"aw",@nobits
-	.globl	__hip_cuid_11af655339320a6f
-__hip_cuid_11af655339320a6f:
+	.globl	__hip_cuid_1eb7a5f1b2586ff5
+__hip_cuid_1eb7a5f1b2586ff5:
 	.byte	0                               ; 0x0
-	.size	__hip_cuid_11af655339320a6f, 1
+	.size	__hip_cuid_1eb7a5f1b2586ff5, 1
 
 	.ident	"AMD clang version 20.0.0git (https://github.com/RadeonOpenCompute/llvm-project roc-7.0.1 25314 f4087f6b428f0e6f575ebac8a8a724dab123d06e)"
 	.section	".note.GNU-stack","",@progbits
 	.addrsig
-	.addrsig_sym __hip_cuid_11af655339320a6f
+	.addrsig_sym __hip_cuid_1eb7a5f1b2586ff5
 	.amdgpu_metadata
 ---
 amdhsa.kernels:
@@ -347,7 +334,7 @@ amdhsa.kernels:
     .max_flat_workgroup_size: 1024
     .name:           batched_gemm
     .private_segment_fixed_size: 0
-    .sgpr_count:     68
+    .sgpr_count:     56
     .sgpr_spill_count: 0
     .symbol:         batched_gemm.kd
     .uniform_work_group_size: 1
@@ -355,7 +342,7 @@ amdhsa.kernels:
     .vgpr_count: 34
     .vgpr_spill_count: 0
     .wavefront_size: 64
-amdhsa.target:   amdgcn-amd-amdhsa--gfx950
+amdhsa.target:   amdgcn-amd-amdhsa--gfx942
 amdhsa.version:
   - 1
   - 2

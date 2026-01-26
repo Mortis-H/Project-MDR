@@ -1,4 +1,4 @@
-	.amdgcn_target "amdgcn-amd-amdhsa--gfx950"
+	.amdgcn_target "amdgcn-amd-amdhsa--gfx942"
 	.amdhsa_code_object_version 6
 	.text
 	.protected	batched_gemm            ; -- Begin function batched_gemm
@@ -254,17 +254,17 @@ batched_gemm:                           ; @batched_gemm
 	.set amdgpu.max_num_agpr, 0
 	.set amdgpu.max_num_sgpr, 0
 	.text
-	.type	__hip_cuid_11af655339320a6f,@object ; @__hip_cuid_11af655339320a6f
+	.type	__hip_cuid_1eb7a5f1b2586ff5,@object ; @__hip_cuid_1eb7a5f1b2586ff5
 	.section	.bss,"aw",@nobits
-	.globl	__hip_cuid_11af655339320a6f
-__hip_cuid_11af655339320a6f:
+	.globl	__hip_cuid_1eb7a5f1b2586ff5
+__hip_cuid_1eb7a5f1b2586ff5:
 	.byte	0                               ; 0x0
-	.size	__hip_cuid_11af655339320a6f, 1
+	.size	__hip_cuid_1eb7a5f1b2586ff5, 1
 
 	.ident	"AMD clang version 20.0.0git (https://github.com/RadeonOpenCompute/llvm-project roc-7.0.1 25314 f4087f6b428f0e6f575ebac8a8a724dab123d06e)"
 	.section	".note.GNU-stack","",@progbits
 	.addrsig
-	.addrsig_sym __hip_cuid_11af655339320a6f
+	.addrsig_sym __hip_cuid_1eb7a5f1b2586ff5
 	.amdgpu_metadata
 ---
 amdhsa.kernels:
@@ -330,7 +330,7 @@ amdhsa.kernels:
     .vgpr_count:     34
     .vgpr_spill_count: 0
     .wavefront_size: 64
-amdhsa.target:   amdgcn-amd-amdhsa--gfx950
+amdhsa.target:   amdgcn-amd-amdhsa--gfx942
 amdhsa.version:
   - 1
   - 2

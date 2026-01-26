@@ -6,12 +6,10 @@ AMD ISA Assembly Capture Tool (Register-based)
 在組合語言中插入暫存器快照功能，將值保存到指定的 register 中。
 
 使用方式：
-1. 在 .s 檔案中標註要捕獲的內容：
-   ; @CAPTURE src=v2,v3 dst=v10,v11 type=f32,f32
-   ; @CAPTURE if $tid == 0: src=v2 dst=v10 expr="v2*2.0" type=f32,f32
+1. 在 .s 檔案中標註要捕獲的內容（建議使用 f-string）：
    ; @CAPTURE f"A={v2}, B={v3}" dst=v10,v11
-   ; @CAPTURE if $tid == 0: f"A={v2}, A*2={(v2*2.0)}" dst=v12,v13
-   ; @CAPTURE expr="s12:s13 + s16:s17*4" dst=s12:s13 type=i64
+   ; @CAPTURE if $tid == 0: f"A={v2}, A*2={(v2*2.0):.2f}" dst=v12,v13
+   ; @CAPTURE f"addr={(s[12:13] + s[16:17]*4):ld}" dst=s[12:13]
 
 2. 執行此工具：
    python3 mdr_cap.py input.s --output-dir output
@@ -65,6 +63,30 @@ class CaptureDirective:
         return f"@CAPTURE at line {self.line_number + 1}: {self.source_registers} → {self.target_registers}{cond_str}"
 
 
+def _split_fstring_format_spec(content: str) -> Tuple[str, str]:
+    """
+    在 f-string placeholder 中切分 format spec，忽略括號內的冒號。
+    例如: "s[12:13]:ld" -> ("s[12:13]", "ld")
+    """
+    depth_paren = 0
+    depth_bracket = 0
+    split_at = None
+    for idx, ch in enumerate(content):
+        if ch == '(':
+            depth_paren += 1
+        elif ch == ')':
+            depth_paren = max(depth_paren - 1, 0)
+        elif ch == '[':
+            depth_bracket += 1
+        elif ch == ']':
+            depth_bracket = max(depth_bracket - 1, 0)
+        elif ch == ':' and depth_paren == 0 and depth_bracket == 0:
+            split_at = idx
+    if split_at is None:
+        return content, ''
+    return content[:split_at], content[split_at + 1:]
+
+
 def parse_capture_fstring(fstring: str) -> Tuple[List[str], List[str]]:
     """
     解析 @CAPTURE 的 Python f-string placeholder
@@ -78,6 +100,7 @@ def parse_capture_fstring(fstring: str) -> Tuple[List[str], List[str]]:
     - {v6:.3f} - 浮點數（精度僅影響輸出顯示）
     - {v6:d} - 整數 i32
     - {v6:ld} - 長整數 i64
+    - {s[12:13]:ld} - SGPR 64-bit pair（使用 s[lo:hi] 格式）
     - {expr} - 表達式（如 {(v6*v7):.2f}）
     """
     values = []
@@ -86,22 +109,27 @@ def parse_capture_fstring(fstring: str) -> Tuple[List[str], List[str]]:
     
     for match in re.finditer(pattern, fstring):
         content = match.group(1)
-        
-        if ':' in content:
-            reg_or_expr, fmt_spec = content.rsplit(':', 1)
-        else:
-            reg_or_expr = content
-            fmt_spec = ''
+        if re.match(r'^[sva]\d+:(?:[sva])?\d+$', content.strip()):
+            raise ValueError("Use s[lo:hi] format for register pairs in f-strings (e.g., s[12:13])")
+        reg_or_expr, fmt_spec = _split_fstring_format_spec(content)
         
         reg_or_expr = reg_or_expr.strip()
         fmt_spec = fmt_spec.strip()
+
+        if re.match(r'^[sva]\d+:(?:[sva])?\d+$', reg_or_expr):
+            raise ValueError("Use s[lo:hi] format for register pairs in f-strings (e.g., s[12:13])")
         
         if reg_or_expr in ('$tid', '$lane'):
             raise ValueError("Builtin $tid/$lane is not supported in @CAPTURE")
         
         values.append(reg_or_expr)
-        
-        is_simple_reg = re.match(r'^[vs]\d+$', reg_or_expr)
+
+        pair_match = re.match(r'^([sva])\[(\d+):(\d+)\]$', reg_or_expr)
+        is_reg_pair = pair_match is not None
+        if is_reg_pair and pair_match.group(1) != 's':
+            raise ValueError("Only SGPR pair s[lo:hi] is supported in f-string placeholders")
+
+        is_simple_reg = re.match(r'^[sva]\d+$', reg_or_expr)
         if fmt_spec:
             if fmt_spec == 'd':
                 types.append('i32')
@@ -115,13 +143,21 @@ def parse_capture_fstring(fstring: str) -> Tuple[List[str], List[str]]:
                 # 忽略精度，僅判斷為浮點
                 types.append('f32')
             else:
-                if is_simple_reg and reg_or_expr.startswith('s'):
+                if is_reg_pair and reg_or_expr.startswith('s'):
+                    types.append('i64')
+                elif is_simple_reg and reg_or_expr.startswith('s'):
                     types.append('i32')
+                elif re.search(r's\[\d+:\d+\]', reg_or_expr):
+                    types.append('i64')
                 else:
                     types.append('f32')
         else:
-            if is_simple_reg and reg_or_expr.startswith('s'):
+            if is_reg_pair and reg_or_expr.startswith('s'):
+                types.append('i64')
+            elif is_simple_reg and reg_or_expr.startswith('s'):
                 types.append('i32')
+            elif re.search(r's\[\d+:\d+\]', reg_or_expr):
+                types.append('i64')
             else:
                 types.append('f32')
     
@@ -129,7 +165,7 @@ def parse_capture_fstring(fstring: str) -> Tuple[List[str], List[str]]:
 
 
 def _parse_reg_pair(reg: str) -> Optional[Tuple[str, int, int]]:
-    """解析 s/v/a 暫存器 pair：s[12:13] 或 s12:s13"""
+    """解析 s/v/a 暫存器 pair：s[12:13]（建議）或 s12:s13（舊式）"""
     m = re.match(r'^([sva])\[(\d+):(\d+)\]$', reg)
     if m:
         reg_type, lo, hi = m.group(1), int(m.group(2)), int(m.group(3))
@@ -158,6 +194,28 @@ def _format_sgpr_pair(reg: str) -> Tuple[int, int]:
     return lo, hi
 
 
+def _is_deprecated_reg_pair(reg: str) -> bool:
+    return re.match(r'^[sva]\d+:(?:[sva])?\d+$', reg) is not None
+
+
+def _normalize_reg_pair_style(reg: str, line_number: int, field: str) -> str:
+    if _is_deprecated_reg_pair(reg):
+        parsed = _parse_reg_pair(reg)
+        if parsed:
+            reg_type, lo, hi = parsed
+            fixed = f"{reg_type}[{lo}:{hi}]"
+            print(f"[Warning] Deprecated register pair format at line {line_number + 1} in {field}: {reg} -> {fixed}")
+            return fixed
+    return reg
+
+
+def _is_plain_register_token(token: str) -> bool:
+    return (
+        re.match(r'^[sva]\d+$', token) is not None
+        or re.match(r'^[sva]\[\d+:\d+\]$', token) is not None
+    )
+
+
 @dataclass
 class CaptureMapping:
     """記錄 capture 的結果存放在哪個 register"""
@@ -180,11 +238,12 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
     3. Pythonic 條件式（僅支援 $tid / tid）：
        - if $tid == 0: src=... dst=... type=...
        - if tid >= 8: src=... dst=... type=...
-    4. Python f-string 風格（從 placeholder 推導 type）：
+    4. Python f-string 風格（建議，從 placeholder 推導 type）：
        - f"A={v2}, B={v3}" dst=v10,v11
-       - if $tid == 0: f"A={v2}, A*2={(v2*2.0)}" dst=v12,v13
-    5. SGPR 64-bit pair（以 sLO:sHI 表示）：
-       - expr="s12:s13 + s16:s17*4" dst=s12:s13 type=i64
+       - if $tid == 0: f"A={v2}, A*2={(v2*2.0):.2f}" dst=v12,v13
+       - f"addr={(s[12:13] + s[16:17]*4):ld}" dst=s[12:13]
+    5. expr=（舊式，仍支援但建議改用 f-string）：
+       - expr="v2*2.0" dst=v10 type=f32
     """
     match = re.search(r'[;#]\s*@CAPTURE\s+(.+)', line)
     if not match:
@@ -252,7 +311,7 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
         # f-string 使用 placeholder 的順序
         ordered_values = []
         for val in parsed_values:
-            if re.match(r'^[vs]\d+$', val):
+            if _is_plain_register_token(val):
                 source_registers.append(val)
                 ordered_values.append((val, False))
             else:
@@ -262,7 +321,10 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
         types = parsed_types
         
         dst_str = dst_match.group(1).strip().rstrip(',')
-        target_registers = [r.strip() for r in dst_str.split(',')]
+        target_registers = [
+            _normalize_reg_pair_style(r.strip(), line_number, "dst")
+            for r in dst_str.split(',')
+        ]
         
         if reg_match or src_match or expr_match or type_match:
             print(f"[Info] @CAPTURE f-string ignores reg/src/expr/type at line {line_number + 1}")
@@ -270,19 +332,31 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
     elif src_match and dst_match:
         # 新格式：src=... dst=...
         src_str = src_match.group(1).strip().rstrip(',')
-        source_registers = [r.strip() for r in src_str.split(',')]
+        source_registers = [
+            _normalize_reg_pair_style(r.strip(), line_number, "src")
+            for r in src_str.split(',')
+        ]
         
         dst_str = dst_match.group(1).strip().rstrip(',')
-        target_registers = [r.strip() for r in dst_str.split(',')]
+        target_registers = [
+            _normalize_reg_pair_style(r.strip(), line_number, "dst")
+            for r in dst_str.split(',')
+        ]
     elif dst_match and not src_match:
         # 只有 dst（可能只有表達式）
         dst_str = dst_match.group(1).strip().rstrip(',')
-        target_registers = [r.strip() for r in dst_str.split(',')]
+        target_registers = [
+            _normalize_reg_pair_style(r.strip(), line_number, "dst")
+            for r in dst_str.split(',')
+        ]
         # source_registers 留空，稍後會檢查是否有表達式
     elif reg_match:
         # 舊格式：reg=... (in-place capture)
         reg_str = reg_match.group(1).strip().rstrip(',')
-        registers = [r.strip() for r in reg_str.split(',')]
+        registers = [
+            _normalize_reg_pair_style(r.strip(), line_number, "reg")
+            for r in reg_str.split(',')
+        ]
         source_registers = registers
         target_registers = registers  # 使用相同的 register
         print(f"[Info] Old format detected at line {line_number + 1}, using in-place capture: {registers}")
@@ -297,6 +371,8 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
     # 解析表達式
     if expr_match and not fstring_match:
         expr_str = expr_match.group(1).strip()
+        if re.search(r'\b[sva]\d+:(?:[sva])?\d+\b', expr_str):
+            print(f"[Warning] Deprecated register pair format in expr at line {line_number + 1}; use s[lo:hi]")
         expressions = [e.strip() for e in expr_str.split(';')]
     
     # 條件（cond= 會覆蓋 pythonic 條件式）
@@ -316,8 +392,8 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
     # 如果使用舊格式且有表達式，需要額外的目標 registers
     if reg_match and expressions:
         print(f"[Warning] Old format with expressions at line {line_number + 1}")
-        print(f"          Please use new format: src=... dst=... to specify target registers for expressions")
-        print(f"          Example: src=v2 dst=v2,v10 expr=\"v2*2.0\" type=f32,f32")
+        print(f"          Please use new format or f-string to specify target registers for expressions")
+        print(f"          Example: f\"A={{v2}}, A*2={{(v2*2.0):.2f}}\" dst=v2,v10")
         return None
     
     if total_values != len(target_registers):
@@ -328,11 +404,11 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
     for typ, dst in zip(types, target_registers):
         if typ == 'i64':
             if not _is_reg_pair(dst, 's'):
-                print(f"[Warning] i64 target must be SGPR pair (sLO:sHI) at line {line_number + 1}: {dst}")
+                print(f"[Warning] i64 target must be SGPR pair (s[lo:hi]) at line {line_number + 1}: {dst}")
                 return None
         else:
-            if _is_reg_pair(dst, 's'):
-                print(f"[Warning] Non-i64 target cannot be SGPR pair at line {line_number + 1}: {dst}")
+            if _is_reg_pair(dst):
+                print(f"[Warning] Non-i64 target cannot be register pair at line {line_number + 1}: {dst}")
                 return None
     
     if not ordered_values:
@@ -344,11 +420,11 @@ def parse_capture_directive(line: str, line_number: int) -> Optional[CaptureDire
     for (value, is_expr), typ in zip(ordered_values, types):
         if typ == 'i64':
             if not is_expr and not _is_reg_pair(value, 's'):
-                print(f"[Warning] i64 source must be SGPR pair (sLO:sHI) at line {line_number + 1}: {value}")
+                print(f"[Warning] i64 source must be SGPR pair (s[lo:hi]) at line {line_number + 1}: {value}")
                 return None
         else:
-            if not is_expr and _is_reg_pair(value, 's'):
-                print(f"[Warning] Non-i64 source cannot be SGPR pair at line {line_number + 1}: {value}")
+            if not is_expr and _is_reg_pair(value):
+                print(f"[Warning] Non-i64 source cannot be register pair at line {line_number + 1}: {value}")
                 return None
     
     return CaptureDirective(
@@ -532,7 +608,7 @@ def parse_expression(expr: str) -> List[Tuple[str, str]]:
             i += 1
             continue
         
-        # SGPR/VGPR/AGPR pair: s[12:13] or s12:s13
+        # SGPR/VGPR/AGPR pair: s[12:13] (preferred) or s12:s13 (legacy)
         pair_match = re.match(r'([sva])\[(\d+):(\d+)\]', expr[i:])
         if pair_match:
             reg_type, lo, hi = pair_match.group(1), pair_match.group(2), pair_match.group(3)
@@ -1710,12 +1786,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用範例：
-  1. 在 .s 檔案中標註：
-     ; @CAPTURE src=v2,v3 dst=v10,v11 type=f32,f32
-     ; @CAPTURE if $tid == 0: src=v2 dst=v10 expr="v2*2.0" type=f32,f32
+  1. 在 .s 檔案中標註（建議使用 f-string）：
      ; @CAPTURE f"A={v2}, B={v3}" dst=v10,v11
-     ; @CAPTURE if $tid == 0: f"A={v2}, A*2={(v2*2.0)}" dst=v12,v13
-     ; @CAPTURE expr="s12:s13 + s16:s17*4" dst=s12:s13 type=i64
+     ; @CAPTURE if $tid == 0: f"A={v2}, A*2={(v2*2.0):.2f}" dst=v12,v13
+     ; @CAPTURE f"addr={(s[12:13] + s[16:17]*4):ld}" dst=s[12:13]
 
   2. 執行工具：
      python3 mdr_cap.py input.s --output-dir output

@@ -37,11 +37,14 @@ git clone --depth 1 https://github.com/llvm/llvm-project.git
 cd llvm-project
 cmake -S llvm -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
-  -DLLVM_ENABLE_PROJECTS="mlir" \
+  -DLLVM_ENABLE_PROJECTS="mlir;lld" \
   -DLLVM_TARGETS_TO_BUILD="AMDGPU;X86" \
   -DCMAKE_INSTALL_PREFIX=/tmp/llvm-install
 
 ninja -C build install
+
+# Make LLVM/MLIR tools available in PATH
+export PATH=/tmp/llvm-install/bin:$PATH
 ```
 
 ### 2. Build AMDISA Toolkit
@@ -59,7 +62,13 @@ cmake -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release
 
 # Build
-ninja -C build
+ninja -C build 
+
+# (Optional) Build tools explicitly
+ninja -C build amdisa-translate
+
+# Make amdisa-translate available in PATH
+export PATH=$(pwd)/build/bin:$PATH
 ```
 
 ---
@@ -98,7 +107,7 @@ The examples directory contains three main tools and sample files:
 cd examples
 
 # Basic usage: Generate HSACO from .s file
-python3 pipeline.py sample_isa/kernel_isa.s
+python3 pipeline.py sample_isa/kernel_isa.s --chip=gfx950
 ```
 
 **Workflow:**

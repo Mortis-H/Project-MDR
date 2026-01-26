@@ -1,4 +1,4 @@
-	.amdgcn_target "amdgcn-amd-amdhsa--gfx950"
+	.amdgcn_target "amdgcn-amd-amdhsa--gfx942"
 	.amdhsa_code_object_version 6
 	.text
 	.protected	batched_gemm            ; -- Begin function batched_gemm
@@ -30,9 +30,8 @@ batched_gemm:                           ; @batched_gemm
 	v_cmp_gt_i32_e64 s[0:1], s9, v0
 	s_cbranch_scc1 .LBB0_8
 ; %bb.2:                                ; %.lr.ph
-; @CAPTURE expr="s12:s13 + s16:s17*s4*4" dst=s12:s13 type=i64
-; @CAPTURE expr="s14:s15 + s18:s19*s4*4" dst=s14:s15 type=i64
-; @CAPTURE expr="s18:s19*s4*4" dst=s16:s17 type=i64
+; @CAPTURE f"{(s[12:13] + s[16:17]*s4*4):ld}" dst=s[12:13]
+; @CAPTURE f"{(s[14:15] + s[18:19]*s4*4):ld}" dst=s[14:15]
 	v_lshlrev_b32_e32 v4, 2, v2
 	v_lshlrev_b32_e32 v8, 6, v3
 	v_add_u32_e32 v9, v8, v4
@@ -239,17 +238,17 @@ batched_gemm:                           ; @batched_gemm
 	.set amdgpu.max_num_agpr, 0
 	.set amdgpu.max_num_sgpr, 0
 	.text
-	.type	__hip_cuid_11af655339320a6f,@object ; @__hip_cuid_11af655339320a6f
+	.type	__hip_cuid_1eb7a5f1b2586ff5,@object ; @__hip_cuid_1eb7a5f1b2586ff5
 	.section	.bss,"aw",@nobits
-	.globl	__hip_cuid_11af655339320a6f
-__hip_cuid_11af655339320a6f:
+	.globl	__hip_cuid_1eb7a5f1b2586ff5
+__hip_cuid_1eb7a5f1b2586ff5:
 	.byte	0                               ; 0x0
-	.size	__hip_cuid_11af655339320a6f, 1
+	.size	__hip_cuid_1eb7a5f1b2586ff5, 1
 
 	.ident	"AMD clang version 20.0.0git (https://github.com/RadeonOpenCompute/llvm-project roc-7.0.1 25314 f4087f6b428f0e6f575ebac8a8a724dab123d06e)"
 	.section	".note.GNU-stack","",@progbits
 	.addrsig
-	.addrsig_sym __hip_cuid_11af655339320a6f
+	.addrsig_sym __hip_cuid_1eb7a5f1b2586ff5
 	.amdgpu_metadata
 ---
 amdhsa.kernels:
@@ -315,7 +314,7 @@ amdhsa.kernels:
     .vgpr_count:     34
     .vgpr_spill_count: 0
     .wavefront_size: 64
-amdhsa.target:   amdgcn-amd-amdhsa--gfx950
+amdhsa.target:   amdgcn-amd-amdhsa--gfx942
 amdhsa.version:
   - 1
   - 2

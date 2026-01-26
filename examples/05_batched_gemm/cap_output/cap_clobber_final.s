@@ -1,12 +1,10 @@
-	.amdgcn_target "amdgcn-amd-amdhsa--gfx950"
+	.amdgcn_target "amdgcn-amd-amdhsa--gfx942"
 	.amdhsa_code_object_version 6
 	.text
 	.globl	batched_gemm
 	.p2align	8
 	.type	batched_gemm,@function
 batched_gemm:
-	;;#ASMSTART
-	;;#ASMEND
 	;;#ASMSTART
 	;;#ASMEND
 	;;#ASMSTART
@@ -159,33 +157,6 @@ batched_gemm:
 	;;#ASMEND
 	;;#ASMSTART
 		s_addc_u32 s15, s15, s45
-	;;#ASMEND
-	;;#ASMSTART
-		s_mul_i32 s56, s18, s4
-	;;#ASMEND
-	;;#ASMSTART
-		s_mul_hi_u32 s58, s18, s4
-	;;#ASMEND
-	;;#ASMSTART
-		s_mul_i32 s59, s19, s4
-	;;#ASMEND
-	;;#ASMSTART
-		s_add_i32 s57, s58, s59
-	;;#ASMEND
-	;;#ASMSTART
-		s_mov_b32 s60, 4
-	;;#ASMEND
-	;;#ASMSTART
-		s_mul_i32 s16, s56, s60
-	;;#ASMEND
-	;;#ASMSTART
-		s_mul_hi_u32 s62, s56, s60
-	;;#ASMEND
-	;;#ASMSTART
-		s_mul_i32 s63, s57, s60
-	;;#ASMEND
-	;;#ASMSTART
-		s_add_i32 s17, s62, s63
 	;;#ASMEND
 	;;#ASMSTART
 		v_lshlrev_b32_e32 v4, 2, v2
@@ -549,7 +520,7 @@ batched_gemm:
 		.amdhsa_system_sgpr_workgroup_info 0
 		.amdhsa_system_vgpr_workitem_id 1
 		.amdhsa_next_free_vgpr 34
-		.amdhsa_next_free_sgpr 68
+		.amdhsa_next_free_sgpr 56
 		.amdhsa_accum_offset 36
 		.amdhsa_reserve_vcc 1
 		.amdhsa_float_round_mode_32 0
@@ -574,7 +545,7 @@ batched_gemm:
 
 	.set batched_gemm.num_vgpr, 34
 	.set batched_gemm.num_agpr, 0
-	.set batched_gemm.numbered_sgpr, 68
+	.set batched_gemm.numbered_sgpr, 56
 	.set batched_gemm.num_named_barrier, 0
 	.set batched_gemm.private_seg_size, 0
 	.set batched_gemm.uses_vcc, 0
@@ -588,6 +559,7 @@ batched_gemm:
 	.set amdgpu.max_num_vgpr, 0
 	.set amdgpu.max_num_agpr, 0
 	.set amdgpu.max_num_sgpr, 0
+	.set amdgpu.max_num_named_barrier, 0
 	.text
 	.section	".note.GNU-stack","",@progbits
 	.amdgpu_metadata
@@ -643,7 +615,7 @@ amdhsa.kernels:
   .max_flat_workgroup_size: 1024
   .name: batched_gemm
   .private_segment_fixed_size: 0
-  .sgpr_count: 68
+  .sgpr_count: 56
   .sgpr_spill_count: 0
   .symbol: batched_gemm.kd
   .uniform_work_group_size: 1
@@ -655,7 +627,7 @@ amdhsa.kernels:
   .language_version:
   - 2
   - 0
-amdhsa.target: amdgcn-amd-amdhsa--gfx950
+amdhsa.target: amdgcn-amd-amdhsa--gfx942
 amdhsa.version:
 - 1
 - 2

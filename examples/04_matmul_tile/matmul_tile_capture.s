@@ -73,7 +73,7 @@ matmul_tile:                            ; @matmul_tile
 	ds_read2_b32 v[14:15], v10 offset0:192 offset1:208
 	s_waitcnt lgkmcnt(1)
 	v_pk_mul_f32 v[12:13], v[22:23], v[12:13]
-; @CAPTURE expr="s7+v6" dst=v6 type=i32
+; @CAPTURE f"{(s7+v6):d}" dst=v6
 	v_add_f32_e32 v5, v5, v12
 	v_add_f32_e32 v5, v5, v13
 	s_waitcnt lgkmcnt(0)
@@ -87,20 +87,20 @@ matmul_tile:                            ; @matmul_tile
 	v_add_f32_e32 v5, v5, v13
 	s_cbranch_scc1 .LBB0_8
 .LBB0_3:                                ; =>This Inner Loop Header: Depth=1
-; @CAPTURE expr="s14+v2" dst=v7 type=i32
+; @CAPTURE f"{(s14+v2):d}" dst=v7
 	v_cmp_gt_i32_e64 s[2:3], s6, v7
 	s_and_b64 s[16:17], vcc, s[2:3]
 	v_mov_b32_e32 v7, 0
 	s_and_saveexec_b64 s[2:3], s[16:17]
 	s_cbranch_execz .LBB0_5
 ; %bb.4:                                ;   in Loop: Header=BB0_3 Depth=1
-; @CAPTURE expr="s14+v4" dst=v12 type=i32
+; @CAPTURE f"{(s14+v4):d}" dst=v12
 	v_ashrrev_i32_e32 v13, 31, v12
 	v_lshl_add_u64 v[12:13], v[12:13], 2, s[8:9]
 	global_load_dword v7, v[12:13], off
 .LBB0_5:                                ;   in Loop: Header=BB0_3 Depth=1
 	s_or_b64 exec, exec, s[2:3]
-; @CAPTURE expr="s14+v3" dst=v12 type=i32
+; @CAPTURE f"{(s14+v3):d}" dst=v12
 	v_cmp_gt_i32_e64 s[2:3], s6, v12
 	s_waitcnt vmcnt(0)
 	ds_write_b32 v9, v7

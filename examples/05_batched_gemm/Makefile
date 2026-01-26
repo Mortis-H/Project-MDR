@@ -1,5 +1,5 @@
 HIPCC ?= hipcc
-ARCH ?= gfx950
+ARCH ?= gfx942
 OPT ?= -O3
 
 KERNEL_SRC = batched_gemm.hip
@@ -10,7 +10,7 @@ MODULE_TARGET = batched_gemm_module.out
 
 .PHONY: all clean asm module hsaco
 
-all: $(TARGET)
+all: $(TARGET) $(MODULE_TARGET) asm hsaco
 
 $(TARGET): $(KERNEL_SRC) $(HOST_SRC)
 	$(HIPCC) --offload-arch=$(ARCH) $(OPT) $(KERNEL_SRC) $(HOST_SRC) -o $@
