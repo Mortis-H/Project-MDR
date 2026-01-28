@@ -97,6 +97,36 @@ class PrintDirective:
         return f"@PRINT at line {self.line_number}: {self.format_string} ({self.registers}){cond_str}{builtin_str}"
 
 
+@dataclass
+class TimestampDirective:
+    """
+    代表一個 @TIMESTAMP_START 或 @TIMESTAMP_END 指令
+    
+    用於 kernel 內部時間測量。使用 s_memtime 指令記錄時間戳，
+    並通過快照機制保存到 VGPR，最後在 kernel 結束前計算並輸出經過時間。
+    
+    使用方式：
+    ; @TIMESTAMP_START [label="section_name"]
+    ; ... kernel code ...
+    ; @TIMESTAMP_END [label="section_name"]
+    
+    或簡單模式：
+    ; @TIMESTAMP_START
+    ; ... kernel code ...
+    ; @TIMESTAMP_END
+    """
+    line_number: int           # 在 .s 檔案中的行號（0-based）
+    directive_type: str        # "start" 或 "end"
+    label: Optional[str] = None  # 可選的標籤名稱
+    next_instruction: Optional[str] = None  # directive 之後的第一條 ISA 指令
+    condition: Optional[str] = None  # 條件式（如 "if $lane == 0:"）
+    
+    def __str__(self):
+        label_str = f" [{self.label}]" if self.label else ""
+        cond_str = f" [cond={self.condition}]" if self.condition else ""
+        return f"@TIMESTAMP_{self.directive_type.upper()} at line {self.line_number + 1}{label_str}{cond_str}"
+
+
 def validate_variable(var_name: str, line_number: int = None) -> bool:
     """
     驗證變數名稱是否合法
@@ -513,42 +543,113 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     )
 
 
-def parse_asm_file(asm_path: pathlib.Path) -> Tuple[List[str], List[PrintDirective], bool]:
+def parse_timestamp_directive(line: str, line_number: int) -> Optional[TimestampDirective]:
     """
-    解析 .s 檔案，提取 @PRINT 指令
+    解析 @TIMESTAMP_START 或 @TIMESTAMP_END 指令
     
-    對於每個 @PRINT，找到它之後的第一條非註解 ISA 指令，作為插入點的參考
+    語法：
+    ; @TIMESTAMP_START [label="section_name"] [if $lane == 0:]
+    ; @TIMESTAMP_END [label="section_name"] [if $lane == 0:]
+    
+    簡單模式：
+    ; @TIMESTAMP_START
+    ; @TIMESTAMP_END
+    """
+    # 匹配 @TIMESTAMP_START 或 @TIMESTAMP_END
+    start_match = re.search(r'[;#]\s*@TIMESTAMP_START\b(.*)$', line)
+    end_match = re.search(r'[;#]\s*@TIMESTAMP_END\b(.*)$', line)
+    
+    if not start_match and not end_match:
+        return None
+    
+    if start_match:
+        directive_type = "start"
+        args_str = start_match.group(1).strip()
+    else:
+        directive_type = "end"
+        args_str = end_match.group(1).strip()
+    
+    # 解析可選的 label
+    label = None
+    label_match = re.search(r'label\s*=\s*"([^"]*)"', args_str)
+    if label_match:
+        label = label_match.group(1)
+    
+    # 解析可選的條件式
+    condition = None
+    cond_match = re.search(r'(if\s+[^:]+:)', args_str)
+    if cond_match:
+        cond_str = cond_match.group(1)
+        condition = parse_condition_pythonic(cond_str, line_number)
+    
+    return TimestampDirective(
+        line_number=line_number,
+        directive_type=directive_type,
+        label=label,
+        condition=condition
+    )
+
+
+def parse_asm_file(asm_path: pathlib.Path) -> Tuple[List[str], List[PrintDirective], bool, List[TimestampDirective]]:
+    """
+    解析 .s 檔案，提取 @PRINT 和 @TIMESTAMP 指令
+    
+    對於每個 directive，找到它之後的第一條非註解 ISA 指令，作為插入點的參考
     
     Returns:
-        (lines, print_directives, has_barrier): 原始行列表、解析出的 @PRINT 指令、是否有 s_barrier
+        (lines, print_directives, has_barrier, timestamp_directives): 
+        原始行列表、解析出的 @PRINT 指令、是否有 s_barrier、解析出的 @TIMESTAMP 指令
     """
     lines = asm_path.read_text().split('\n')
-    directives = []
+    print_directives = []
+    timestamp_directives = []
     has_barrier = False
+    
+    def find_next_instruction(start_idx: int) -> Optional[str]:
+        """找到指定位置之後的第一條 ISA 指令"""
+        for j in range(start_idx + 1, min(start_idx + 10, len(lines))):
+            next_line = lines[j].strip()
+            # 跳過空行、註解、標籤
+            if next_line and not next_line.startswith(';') and not next_line.startswith('#'):
+                if not next_line.endswith(':'):  # 不是標籤
+                    return next_line
+        return None
     
     for i, line in enumerate(lines):
         # 檢測 s_barrier 指令
         if 's_barrier' in line and not line.strip().startswith(';'):
             has_barrier = True
         
-        if '@PRINT' in line:
+        # 解析 @PRINT directive
+        if '@PRINT' in line and '@TIMESTAMP' not in line:
             directive = parse_print_directive(line, i)
             if directive:
-                # 找到 @PRINT 之後的第一條 ISA 指令（用於精確定位插入點）
-                for j in range(i + 1, min(i + 10, len(lines))):
-                    next_line = lines[j].strip()
-                    # 跳過空行、註解、標籤
-                    if next_line and not next_line.startswith(';') and not next_line.startswith('#'):
-                        if not next_line.endswith(':'):  # 不是標籤
-                            directive.next_instruction = next_line
-                            break
-                directives.append(directive)
+                directive.next_instruction = find_next_instruction(i)
+                print_directives.append(directive)
                 print(f"[Info] Found: {directive}")
                 if directive.next_instruction:
                     instr_preview = directive.next_instruction[:50]
                     print(f"       After: {instr_preview}...")
+        
+        # 解析 @TIMESTAMP directive
+        if '@TIMESTAMP_START' in line or '@TIMESTAMP_END' in line:
+            ts_directive = parse_timestamp_directive(line, i)
+            if ts_directive:
+                ts_directive.next_instruction = find_next_instruction(i)
+                timestamp_directives.append(ts_directive)
+                print(f"[Info] Found: {ts_directive}")
+                if ts_directive.next_instruction:
+                    instr_preview = ts_directive.next_instruction[:50]
+                    print(f"       After: {instr_preview}...")
     
-    return lines, directives, has_barrier
+    # 驗證 timestamp directive 配對
+    starts = [d for d in timestamp_directives if d.directive_type == "start"]
+    ends = [d for d in timestamp_directives if d.directive_type == "end"]
+    
+    if len(starts) != len(ends):
+        print(f"[Warning] Mismatched @TIMESTAMP_START ({len(starts)}) and @TIMESTAMP_END ({len(ends)})")
+    
+    return lines, print_directives, has_barrier, timestamp_directives
 
 
 # ============================================================
@@ -1193,27 +1294,35 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
     return '\n'.join(lines)
 
 
-def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective], reg_info: Dict[str, int]) -> str:
+def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective], reg_info: Dict[str, int],
+                            timestamp_directives: List[TimestampDirective] = None) -> str:
     """
     將 printf 指令注入到 GPU MLIR 中
-    
+
     策略（快照版）：
     1. 在每個 @PRINT 的實際位置插入快照指令（v_mov_b32），保存當時的暫存器值
-    2. 在 .LBB0_2: 標籤之前或 s_endpgm 之前：
+    2. 在每個 @TIMESTAMP_START 位置插入 s_memtime 並備份到 VGPR
+    3. 在每個 @TIMESTAMP_END 位置插入 s_memtime 並計算差值
+    4. 在 .LBB0_2: 標籤之前或 s_endpgm 之前：
        - Restore kernarg pointer
        - 使用快照暫存器執行 printf
+       - 輸出 timestamp 結果
        - Register clobbering 結束
-    3. 這樣可以真正觀察到「當時」的暫存器值
-    
+    5. 這樣可以真正觀察到「當時」的暫存器值和時間
+
     Args:
         gpumlir_text: 原始 GPU MLIR 文字
         directives: @PRINT 指令列表
         reg_info: 暫存器使用量資訊
-    
+        timestamp_directives: @TIMESTAMP 指令列表
+
     Returns:
         修改後的 GPU MLIR 文字
     """
-    if not directives:
+    if timestamp_directives is None:
+        timestamp_directives = []
+    
+    if not directives and not timestamp_directives:
         return gpumlir_text
     
     # === 計算快照暫存器需求 ===
@@ -1426,6 +1535,14 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     uses_tid = any(d.uses_tid for d in directives)
     uses_lane = any(d.uses_lane for d in directives)
     
+    # 也檢查 timestamp directive 的條件是否使用了 $tid 或 $lane
+    for ts in timestamp_directives:
+        if ts.condition:
+            if '$tid' in ts.condition:
+                uses_tid = True
+            if '$lane' in ts.condition:
+                uses_lane = True
+    
     # 分配專用 VGPR 給內建變數（在 WORKITEM_ID_BACKUP 之後）
     next_builtin_vgpr = WORKITEM_ID_BACKUP_VGPR + (1 if has_conditional_printf else 0)
     
@@ -1450,6 +1567,48 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mbcnt_hi_u32_b32 v{LANE_BACKUP_VGPR}, -1, v{LANE_BACKUP_VGPR}", ""  : () -> ()')
         print(f"[Info] Built-in $lane: v_mbcnt -> v{LANE_BACKUP_VGPR}")
     
+    # === Timestamp Profiling 支援 ===
+    # 為每對 @TIMESTAMP_START/@TIMESTAMP_END 分配 VGPR
+    # - 2 個 VGPR 用於保存開始時間（低 32 位和高 32 位）
+    # - 結束時間和差值在 printf 時計算
+    timestamp_vgpr_map = {}  # {label: {'start_lo': vgpr, 'start_hi': vgpr}}
+    
+    # 匹配 start 和 end directive
+    ts_starts = [d for d in timestamp_directives if d.directive_type == "start"]
+    ts_ends = [d for d in timestamp_directives if d.directive_type == "end"]
+    
+    if ts_starts:
+        clobber_start_lines.append(f'              // === Timestamp Profiling Setup ===')
+        
+        for ts_idx, ts_start in enumerate(ts_starts):
+            label = ts_start.label or f"default_{ts_idx}"
+            
+            # 分配 2 個 VGPR 用於保存開始時間
+            start_lo_vgpr = next_builtin_vgpr
+            start_hi_vgpr = next_builtin_vgpr + 1
+            next_builtin_vgpr += 2
+            
+            timestamp_vgpr_map[label] = {
+                'start_lo': start_lo_vgpr,
+                'start_hi': start_hi_vgpr,
+                'ts_start': ts_start,
+                'ts_end': None  # 稍後匹配
+            }
+            
+            print(f"[Info] Timestamp [{label}]: start time -> v{start_lo_vgpr}:v{start_hi_vgpr}")
+        
+        # 匹配 end directive
+        for ts_end in ts_ends:
+            label = ts_end.label or "default_0"
+            if label in timestamp_vgpr_map:
+                timestamp_vgpr_map[label]['ts_end'] = ts_end
+            else:
+                # 嘗試匹配第一個沒有 label 的 start
+                for lbl, info in timestamp_vgpr_map.items():
+                    if info['ts_end'] is None:
+                        timestamp_vgpr_map[lbl]['ts_end'] = ts_end
+                        break
+    
     clobber_start_lines.append('              // === Kernarg Backup End ===')
     clobber_start = '\n'.join(clobber_start_lines) + '\n'
     
@@ -1470,6 +1629,74 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             'lane_vgpr': LANE_BACKUP_VGPR
         }
         printf_blocks.append(generate_printf_with_snapshot(directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap, expr_snap, builtin_vars))
+    
+    # === 生成 Timestamp 輸出 ===
+    # 在 printf section 的最後，記錄結束時間並計算經過時間
+    for label, ts_info in timestamp_vgpr_map.items():
+        ts_start = ts_info['ts_start']
+        ts_end = ts_info.get('ts_end')
+        start_lo = ts_info['start_lo']
+        start_hi = ts_info['start_hi']
+        
+        if ts_end is None:
+            print(f"[Warning] @TIMESTAMP_START [{label}] has no matching @TIMESTAMP_END")
+            continue
+        
+        printf_blocks.append(f'              // === Timestamp END [{label}] ===')
+        # 使用單一 inline_asm 塊完成：記錄結束時間 + 計算差值
+        # 這避免了 LLVM 暫存器分配導致的覆蓋問題
+        # 
+        # 策略：
+        # 1. s_memrealtime s[20:21] - 記錄結束時間
+        # 2. v_sub_co_u32 diff_lo, vcc, s20, v{start_lo} - 低 32 位減法
+        # 3. v_subb_co_u32 diff_hi, vcc, s21, v{start_hi}, vcc - 高 32 位減法（帶借位）
+        # 4. 輸出 diff_lo（對於短時間測量足夠）
+        #
+        # 注意：使用 v_sub_co_u32 而不是 v_sub_u32，因為需要處理借位
+        printf_blocks.append(f'              // Calculate elapsed time using GPU ISA directly')
+        printf_blocks.append(f'              // s_memtime -> v_sub_u32 (end_lo - start_lo)')
+        printf_blocks.append(f'              %ts_elapsed_{label} = llvm.inline_asm has_side_effects asm_dialect = att')
+        printf_blocks.append(f'                "s_memtime s[20:21]\\0As_waitcnt lgkmcnt(0)\\0Av_sub_u32 $0, s20, v{start_lo}", "=v": () -> i32')
+        
+        # 輸出結果
+        # 根據 ts_end 的 condition 決定是否有條件輸出
+        if ts_end.condition:
+            # 有條件輸出（例如 if $lane == 0:）
+            cond_match = re.match(r'(\$tid|\$lane)_(\w+)\((-?\d+)\)', ts_end.condition)
+            if cond_match:
+                builtin_var, cmp_op, cmp_value = cond_match.groups()
+                
+                if builtin_var == '$lane' and LANE_BACKUP_VGPR is not None:
+                    printf_blocks.append(f'              // Conditional timestamp output: {builtin_var} {cmp_op} {cmp_value}')
+                    printf_blocks.append(f'              %ts_lane_{label} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{LANE_BACKUP_VGPR}", "=v": () -> i32')
+                    cmp_ops = {'eq': 'eq', 'ne': 'ne', 'lt': 'slt', 'le': 'sle', 'gt': 'sgt', 'ge': 'sge'}
+                    mlir_cmp = cmp_ops.get(cmp_op, 'eq')
+                    printf_blocks.append(f'              %ts_cmp_val_{label} = arith.constant {cmp_value} : i32')
+                    printf_blocks.append(f'              %ts_cond_{label} = arith.cmpi {mlir_cmp}, %ts_lane_{label}, %ts_cmp_val_{label} : i32')
+                    printf_blocks.append(f'              scf.if %ts_cond_{label} {{')
+                    printf_blocks.append(f'                gpu.printf "[Timestamp {label}] elapsed = %u ticks\\0A", %ts_elapsed_{label} : i32')
+                    printf_blocks.append(f'              }}')
+                elif builtin_var == '$tid' and TID_BACKUP_VGPR is not None:
+                    printf_blocks.append(f'              // Conditional timestamp output: {builtin_var} {cmp_op} {cmp_value}')
+                    printf_blocks.append(f'              %ts_tid_{label} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{TID_BACKUP_VGPR}", "=v": () -> i32')
+                    cmp_ops = {'eq': 'eq', 'ne': 'ne', 'lt': 'slt', 'le': 'sle', 'gt': 'sgt', 'ge': 'sge'}
+                    mlir_cmp = cmp_ops.get(cmp_op, 'eq')
+                    printf_blocks.append(f'              %ts_cmp_val_{label} = arith.constant {cmp_value} : i32')
+                    printf_blocks.append(f'              %ts_cond_{label} = arith.cmpi {mlir_cmp}, %ts_tid_{label}, %ts_cmp_val_{label} : i32')
+                    printf_blocks.append(f'              scf.if %ts_cond_{label} {{')
+                    printf_blocks.append(f'                gpu.printf "[Timestamp {label}] elapsed = %u ticks\\0A", %ts_elapsed_{label} : i32')
+                    printf_blocks.append(f'              }}')
+                else:
+                    # Fallback: 無條件輸出
+                    printf_blocks.append(f'              gpu.printf "[Timestamp {label}] elapsed = %u ticks\\0A", %ts_elapsed_{label} : i32')
+            else:
+                # 無法解析條件，無條件輸出
+                printf_blocks.append(f'              gpu.printf "[Timestamp {label}] elapsed = %u ticks\\0A", %ts_elapsed_{label} : i32')
+        else:
+            # 無條件輸出（每個 thread 都輸出）
+            printf_blocks.append(f'              gpu.printf "[Timestamp {label}] elapsed = %u ticks\\0A", %ts_elapsed_{label} : i32')
+        
+        printf_blocks.append(f'              // === End Timestamp END ===')
     
     printf_section = '\n'.join(printf_blocks)
     
@@ -1533,6 +1760,34 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                 snapshot_insertions[clean_instr] = []
             snapshot_insertions[clean_instr].append('\n'.join(snap_lines))
             print(f"[Info] @PRINT #{d_idx+1} snapshot at: {clean_instr[:50]}...")
+    
+    # === 生成 @TIMESTAMP_START 的快照指令 ===
+    # 在 @TIMESTAMP_START 位置注入：s_memrealtime + 備份到 VGPR
+    for label, ts_info in timestamp_vgpr_map.items():
+        ts_start = ts_info['ts_start']
+        start_lo = ts_info['start_lo']
+        start_hi = ts_info['start_hi']
+        
+        if ts_start.next_instruction:
+            clean_instr = ts_start.next_instruction.strip()
+            if ';' in clean_instr:
+                clean_instr = clean_instr.split(';')[0].strip()
+            clean_instr = ' '.join(clean_instr.split())
+            
+            # 生成 timestamp start 指令
+            ts_lines = [f'              // === Timestamp START [{label}] at line {ts_start.line_number + 1} ===']
+            # 使用 s_memtime 記錄時間到 SGPR (使用 s20:s21 作為臨時暫存器)
+            # 需要 s_waitcnt lgkmcnt(0) 等待結果
+            ts_lines.append(f'              llvm.inline_asm has_side_effects "s_memtime s[20:21]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
+            # 備份到 VGPR
+            ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{start_lo}, s20", ""  : () -> ()')
+            ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{start_hi}, s21", ""  : () -> ()')
+            ts_lines.append(f'              // === End Timestamp START ===')
+            
+            if clean_instr not in snapshot_insertions:
+                snapshot_insertions[clean_instr] = []
+            snapshot_insertions[clean_instr].append('\n'.join(ts_lines))
+            print(f"[Info] Timestamp START [{label}] at: {clean_instr[:50]}...")
     
     # === 注入邏輯 ===
     lines = gpumlir_text.split('\n')
@@ -2591,25 +2846,28 @@ def main():
     if kernel_type:
         print(f"Kernel Type: {kernel_type}")
     
-    # 1. 解析 @PRINT 指令
-    print(f"\n=== Parsing @PRINT directives ===")
+    # 1. 解析 @PRINT 和 @TIMESTAMP 指令
+    print(f"\n=== Parsing @PRINT and @TIMESTAMP directives ===")
     try:
-        lines, directives, has_barrier = parse_asm_file(input_path)
+        lines, directives, has_barrier, timestamp_directives = parse_asm_file(input_path)
     except ValueError as e:
         print(f"\n❌ ERROR: {e}")
-        print(f"\n   Please check your @PRINT directive syntax.")
+        print(f"\n   Please check your directive syntax.")
         sys.exit(1)
     
-    if not directives:
+    if not directives and not timestamp_directives:
         if args.no_printf:
-            print("[Info] No @PRINT directives found (--no-printf mode)")
+            print("[Info] No @PRINT/@TIMESTAMP directives found (--no-printf mode)")
         else:
-            print("[Info] No @PRINT directives found. Will generate HSACO without printf.")
+            print("[Info] No @PRINT/@TIMESTAMP directives found. Will generate HSACO without printf.")
     else:
-        print(f"\nFound {len(directives)} @PRINT directive(s)")
+        if directives:
+            print(f"\nFound {len(directives)} @PRINT directive(s)")
+        if timestamp_directives:
+            print(f"Found {len(timestamp_directives)} @TIMESTAMP directive(s)")
     
     # 警告：s_barrier 與 printf 不兼容
-    if has_barrier and directives and not args.no_printf:
+    if has_barrier and (directives or timestamp_directives) and not args.no_printf:
         print("\n" + "=" * 60)
         print("⚠️  WARNING: Kernel contains s_barrier instruction!")
         print("   gpu.printf's hostcall mechanism may conflict with barrier")
@@ -2633,19 +2891,21 @@ def main():
     # 3. 轉換為 GPU MLIR
     gpumlir_path = translate_to_gpumlir(input_path, workdir)
     
-    # 4. 注入 printf 程式碼（如果有 @PRINT 且未禁用）
-    has_printf = bool(directives) and not args.no_printf
+    # 4. 注入 printf/timestamp 程式碼（如果有 @PRINT/@TIMESTAMP 且未禁用）
+    has_printf = (bool(directives) or bool(timestamp_directives)) and not args.no_printf
     
     required_vgpr = 0
     required_sgpr = 0
     
-    if not directives or args.no_printf:
+    if (not directives and not timestamp_directives) or args.no_printf:
         print(f"\nUsing original GPU MLIR (no printf injection)")
         modified_path = gpumlir_path
     else:
-        print(f"\n=== Injecting printf code ===")
+        print(f"\n=== Injecting printf/timestamp code ===")
         gpumlir_text = gpumlir_path.read_text()
-        modified_mlir, required_vgpr, required_sgpr = inject_printf_into_mlir(gpumlir_text, directives, reg_info)
+        modified_mlir, required_vgpr, required_sgpr = inject_printf_into_mlir(
+            gpumlir_text, directives, reg_info, timestamp_directives
+        )
         
         modified_path = workdir / f"{input_path.stem}_debug_injected.gpumlir"
         modified_path.write_text(modified_mlir)
