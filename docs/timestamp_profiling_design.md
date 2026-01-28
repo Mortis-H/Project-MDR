@@ -321,6 +321,117 @@ global_store_dwordx2 v[addr], v[time_lo:time_hi], off
 
 ---
 
+## 工具定位與價值分析（2026-01-28）
+
+### 核心問題：MDR @TIMESTAMP 與 rocprofv2 有什麼不同？
+
+**重要發現**：rocprofv2 的測量 overhead 極低（使用硬體時間戳），所以單純測量整個 kernel 時間時，MDR @TIMESTAMP 沒有明顯優勢。
+
+**但這兩者的定位完全不同！**
+
+### 測量範圍比較
+
+| 工具 | 測量範圍 | 比喻 |
+|------|---------|------|
+| **rocprofv2** | 整個 kernel（黑盒）| 測量「整趟火車旅程」 |
+| **MDR @TIMESTAMP** | kernel **內部任意區段**（白盒）| 測量「站與站之間」 |
+
+### rocprofv2 的能力
+
+```
+Kernel Start ──────────────────────────> Kernel End
+     │                                        │
+     └─────────── 1,681 ticks ────────────────┘
+                    ↑
+              rocprofv2 可以測這個
+```
+
+### MDR @TIMESTAMP 的能力
+
+```
+Kernel Start ──> 區段A ──> 區段B ──> 區段C ──> Kernel End
+     │              │         │         │          │
+     │   @TS_START  │  @TS_END│  @TS_END│          │
+     │      ↓       │    ↓    │    ↓    │          │
+     └──────┴───────┴────┴────┴────┴────┴──────────┘
+            500 ticks    800 ticks   381 ticks
+                  ↑
+       rocprofv2 無法做到這件事！
+```
+
+### 實際應用範例
+
+```asm
+; 複雜 kernel 範例：分析瓶頸在哪裡
+kernel_start:
+    ; @TIMESTAMP_START label="load"
+    ; ... 資料載入 ...
+    ; @TIMESTAMP_END label="load" if $lane == 0: f"Load: {$elapsed:d} ticks"
+    
+    ; @TIMESTAMP_START label="compute"
+    ; ... 計算迴圈 ...
+    ; @TIMESTAMP_END label="compute" if $lane == 0: f"Compute: {$elapsed:d} ticks"
+    
+    ; @TIMESTAMP_START label="store"
+    ; ... 資料寫回 ...
+    ; @TIMESTAMP_END label="store" if $lane == 0: f"Store: {$elapsed:d} ticks"
+kernel_end:
+```
+
+**rocprofv2 輸出**：整個 kernel 花了 3000 ticks（無法知道瓶頸在哪）
+
+**MDR @TIMESTAMP 輸出**：
+```
+[Timestamp load] elapsed = 500 ticks      (17%)
+[Timestamp compute] elapsed = 2000 ticks  (67%) ← 瓶頸在這裡！
+[Timestamp store] elapsed = 500 ticks     (17%)
+```
+
+### 為什麼 rocprofv2 的 Overhead 這麼低？
+
+根據 [AMD ROCProfiler Specification](https://rocm.docs.amd.com/projects/rocprofiler/en/latest/reference/rocprofiler_spec.html)：
+
+1. **硬體級別時間戳** - GPU 在 kernel dispatch/begin/end/complete 時自動記錄
+2. **基於 AQL Profile HSA Extension** - 不需要軟體插樁
+3. **User-Mode Queueing** - dispatch 不需要經過 OS kernel
+
+詳細分析見：[rocprofv2_low_overhead_analysis.md](./rocprofv2_low_overhead_analysis.md)
+
+### 工具選擇決策樹
+
+```
+需要測量什麼？
+    │
+    ├── 整個 kernel 的執行時間
+    │       │
+    │       └── 使用 rocprofv2 ✅（簡單、非侵入式）
+    │
+    ├── kernel 內部特定區段的時間
+    │       │
+    │       └── 使用 MDR @TIMESTAMP ✅（唯一選擇）
+    │
+    ├── 每條指令的 latency/stall
+    │       │
+    │       └── 使用 rocprofv3 --att (Thread Trace) ✅
+    │
+    └── 同時需要 debug + profiling
+            │
+            └── 使用 MDR @TIMESTAMP + @PRINT ✅（整合方案）
+```
+
+### 結論
+
+| 場景 | 推薦工具 | 原因 |
+|------|---------|------|
+| 比較不同 kernel 的整體效能 | **rocprofv2** | 非侵入式、低 overhead |
+| 找出 kernel **內部**的效能瓶頸 | **MDR @TIMESTAMP** | rocprofv2 做不到 |
+| Instruction-level 分析 | **rocprofv3 --att** | 最細粒度 |
+| 同時 debug + profiling | **MDR @TIMESTAMP + @PRINT** | 整合方案 |
+
+**MDR @TIMESTAMP 的價值不是「取代 rocprofv2」，而是提供 kernel 內部區段分析的能力。**
+
+---
+
 ## 問題狀態追蹤
 
 ### ✅ 已解決

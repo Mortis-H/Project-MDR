@@ -13,6 +13,7 @@ MDR（Memory Debug and Register）是專為 AMD GPU 開發者設計的 ISA 層�
 - ✅ **快照機制**：在 `@PRINT` 標記位置捕捉暫存器值，真正觀測該時間點的狀態
 - ✅ **表達式計算**：支援 `+`, `-`, `*`, `/` 四則運算，如 `{v6*v7:.2f}`
 - ✅ **VGPR/SGPR 支援**：同時支援向量暫存器和純量暫存器
+- ✅ **Timestamp Profiling**：測量 kernel 內部區段的執行時間（cycle 級精度）
 - ✅ **生成 HSACO**：產生可執行的 HSA Code Object
 - ✅ **自動測試**：內建 `--test` 選項快速驗證
 
@@ -128,6 +129,75 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 
 ---
 
+## @TIMESTAMP 指令語法（Kernel 內部 Profiling）
+
+> 📖 詳細設計文檔：[docs/timestamp_profiling_design.md](docs/timestamp_profiling_design.md)
+
+### 基本用法
+
+```asm
+; ===== Kernel 開始 =====
+; @TIMESTAMP_START                          ; 記錄開始時間
+; @TIMESTAMP_START label="my_section"       ; 自訂 label
+
+; ... kernel 主體執行 ...
+
+; ===== Kernel 結束前 =====
+; @TIMESTAMP_END                            ; 每個 thread 輸出
+; @TIMESTAMP_END if $lane == 0:             ; 只有 lane 0 輸出（推薦）
+; @TIMESTAMP_END label="my_section" if $tid == 0:  ; 指定 label + 條件
+```
+
+### 輸出範例
+
+```
+[Timestamp kernel_total] elapsed = 1768 ticks
+```
+
+### 與 rocprofv2 的差異
+
+| 工具 | 測量範圍 | 使用場景 |
+|------|---------|---------|
+| **rocprofv2** | 整個 kernel（黑盒）| 比較不同 kernel 的整體效能 |
+| **@TIMESTAMP** | kernel **內部任意區段**（白盒）| 找出 kernel 內部的效能瓶頸 |
+
+### 實際應用：分析 Kernel 內部瓶頸
+
+```asm
+; 複雜 kernel 範例
+kernel_start:
+    ; @TIMESTAMP_START label="load"
+    ; ... 資料載入 ...
+    ; @TIMESTAMP_END label="load" if $lane == 0:
+    
+    ; @TIMESTAMP_START label="compute"
+    ; ... 計算迴圈 ...
+    ; @TIMESTAMP_END label="compute" if $lane == 0:
+    
+    ; @TIMESTAMP_START label="store"
+    ; ... 資料寫回 ...
+    ; @TIMESTAMP_END label="store" if $lane == 0:
+kernel_end:
+```
+
+**輸出**：
+```
+[Timestamp load] elapsed = 500 ticks      (17%)
+[Timestamp compute] elapsed = 2000 ticks  (67%) ← 瓶頸在這裡！
+[Timestamp store] elapsed = 500 ticks     (17%)
+```
+
+> 💡 **rocprofv2 只能告訴你整個 kernel 花了 3000 ticks，無法區分內部瓶頸。**
+
+### 技術細節
+
+- 使用 `s_memtime` 指令讀取 GPU 時鐘計數器
+- 自動插入 `s_waitcnt lgkmcnt(0)` 確保時間戳準確
+- 快照機制使 printf 開銷不影響測量結果
+- 與 rocprofv2 測量精度一致（誤差 < 10%）
+
+---
+
 ## 功能支援
 
 ### ✅ 支援的功能
@@ -142,6 +212,7 @@ python3 mdr_printf.py input.s --output-dir output --test --test-size 64
 | **表達式計算** | 四則運算 + 括號 | `{v6*v7:.2f}`, `{(v6+v7)*2:.2f}` |
 | **內建變數 $tid** | Local Thread ID (workitem_id_x) | `{$tid}` |
 | **內建變數 $lane** | Wavefront Lane ID (0-63) | `{$lane}` |
+| **Timestamp Profiling** | 測量 kernel 內部區段執行時間 | `@TIMESTAMP_START` / `@TIMESTAMP_END` |
 | **自動測試** | `--test` 選項 | `--test --test-size 64` |
 
 ### 支援的暫存器類型
@@ -516,8 +587,13 @@ Project-MDR/
 │   ├── 01_vector_add/
 │   │   ├── original.s         # 原始程式碼
 │   │   └── with_debug.s       # 加入 @PRINT 後
-│   └── 02_expression_calc/
-│       └── with_expression.s  # 表達式計算範例
+│   ├── 02_expression_calc/
+│   │   └── with_expression.s  # 表達式計算範例
+│   └── 06_timestamp_profiling/
+│       └── vector_add_profiled.s  # @TIMESTAMP 範例
+├── docs/                       # 設計文檔
+│   ├── timestamp_profiling_design.md  # Timestamp Profiling 設計
+│   └── rocprofv2_low_overhead_analysis.md  # rocprofv2 機制分析
 ├── Track_B/                    # ISA 提升工具鏈
 │   ├── amdisa-toolkit/        # amdisa-translate
 │   └── kernel_testcases/      # 測試案例
@@ -527,6 +603,18 @@ Project-MDR/
 ---
 
 ## 更新日誌
+
+### v1.8 (2026-01-28)
+- ✅ **新增 Timestamp Profiling 功能**
+  - `@TIMESTAMP_START` / `@TIMESTAMP_END` 指令
+  - 測量 kernel 內部任意區段的執行時間
+  - 使用 `s_memtime` 指令，cycle 級精度
+  - 自動插入 `s_waitcnt lgkmcnt(0)` 確保準確性
+  - 支援條件式輸出：`if $lane == 0:`
+  - 快照機制使 printf 開銷不影響測量結果
+- ✅ **與 rocprofv2 精度驗證**：誤差 < 10%
+- 📖 新增文檔：`docs/timestamp_profiling_design.md`
+- 📖 新增文檔：`docs/rocprofv2_low_overhead_analysis.md`
 
 ### v1.7 (2026-01-22)
 - ✅ **新增內建變數 `{$tid}` 和 `{$lane}`**
