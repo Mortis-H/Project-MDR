@@ -1,5 +1,5 @@
 ---
-name: rocprofv3-thread-trace
+name: rocprofv3
 description: Instruction-level GPU profiling using rocprofv3 thread trace (ATT). Use when analyzing per-instruction latency, finding hotspots, debugging stalls, or when the user mentions rocprofv3, thread trace, instruction profiling, or ROCprof Compute Viewer.
 ---
 

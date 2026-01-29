@@ -1,5 +1,5 @@
 ---
-name: rocprofv2-kernel-profiling
+name: rocprofv2
 description: Profile AMD GPU kernel execution time using rocprofv2. Use when measuring kernel performance, comparing kernel execution times, or when the user mentions rocprofv2, kernel profiling, or GPU performance measurement.
 ---
 
