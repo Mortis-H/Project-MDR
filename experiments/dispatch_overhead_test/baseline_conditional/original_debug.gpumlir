@@ -1,0 +1,39 @@
+module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "amdgcn-amd-amdhsa--gfx950"} {
+  gpu.module @amdisa_kernels {
+    gpu.func @_Z17conditionalKernelPKiPii(%arg0: !llvm.ptr, %arg1: !llvm.ptr, %arg2: index, %arg3: index, %arg4: index, %arg5: index, %arg6: i16, %arg7: i16, %arg8: i16, %arg9: i16, %arg10: i16, %arg11: i16, %arg12: !llvm.ptr, %arg13: !llvm.ptr, %arg14: !llvm.ptr, %arg15: i16) kernel attributes {amdisa.agpr_count = 0 : i32, amdisa.kernarg_segment_size = 280 : i32, amdisa.sgpr_count = 12 : i32, amdisa.vgpr_count = 6 : i32} {
+      llvm.inline_asm has_side_effects "\09s_load_dword s3, s[0:1], 0x24", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_load_dword s4, s[0:1], 0x10", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_waitcnt lgkmcnt(0)", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_and_b32 s3, s3, 0xffff", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_mul_i32 s2, s2, s3", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_add_u32_e32 v0, s2, v0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_cmp_gt_i32_e32 vcc, s4, v0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_and_saveexec_b64 s[2:3], vcc", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_cbranch_execz .LBB0_6", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_load_dwordx4 s[0:3], s[0:1], 0x0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_ashrrev_i32_e32 v1, 31, v0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_waitcnt lgkmcnt(0)", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_mov_b32_e32 v2, s0", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_mov_b32_e32 v3, s1", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[2:3], v[0:1], 2, v[2:3]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09global_load_dword v3, v[2:3], off", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_waitcnt vmcnt(0)", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_and_b32_e32 v2, 1, v3", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_cmp_eq_u32_e32 vcc, 1, v2", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_and_saveexec_b64 s[0:1], vcc", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_xor_b64 s[0:1], exec, s[0:1]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_mad_u64_u32 v[2:3], s[4:5], v3, 3, 1", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_andn2_saveexec_b64 s[0:1], s[0:1]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_lshlrev_b32_e32 v2, 1, v3", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_or_b64 exec, exec, s[0:1]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_mov_b32_e32 v4, s2", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_mov_b32_e32 v5, s3", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09v_lshl_add_u64 v[0:1], v[0:1], 2, v[4:5]", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09global_store_dword v[0:1], v2, off", ""  : () -> ()
+      llvm.inline_asm has_side_effects ".LBB0_6:", ""  : () -> ()
+      llvm.inline_asm has_side_effects "\09s_endpgm", ""  : () -> ()
+      gpu.return
+    }
+  }
+}
+

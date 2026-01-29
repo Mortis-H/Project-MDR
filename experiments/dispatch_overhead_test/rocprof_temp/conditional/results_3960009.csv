@@ -1,0 +1,5 @@
+Dispatch_ID,GPU_ID,Queue_ID,PID,TID,Grid_Size,Workgroup_Size,LDS_Per_Workgroup,Scratch_Per_Workitem,Arch_VGPR,Accum_VGPR,SGPR,Wave_Size,Kernel_Name,Start_Timestamp,End_Timestamp,Correlation_ID
+0,2,1,3960009,3960009,512,512,0,0,8,0,32,64,"__amd_rocclr_copyBuffer.kd",122980840144896,122980840150376,0
+1,2,1,3960009,3960009,512,512,0,0,8,0,32,64,"__amd_rocclr_copyBuffer.kd",122980840179216,122980840184336,0
+2,2,1,3960009,3960009,256,256,0,0,4,0,16,64,"conditionalKernel(int const*, int*, int) (.kd)",122980840233097,122980840234897,0
+3,2,1,3960009,3960009,512,512,0,0,8,0,32,64,"__amd_rocclr_copyBuffer.kd",122980840282298,122980840287298,0
