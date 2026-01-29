@@ -14,6 +14,11 @@ RUNNER = "./Track_B/kernel_testcases/universal_hsaco_runner"
 
 # Kernel 配置
 KERNELS = {
+    "vectoradd": {
+        "hsaco": "experiments/dispatch_overhead_test/output_vectoradd/vectoradd_profiled_debug_injected.hsaco",
+        "name": "_Z9vectorAddPKfS0_Pfi",
+        "type": "float_add",
+    },
     "scalar_ops": {
         "hsaco": "experiments/dispatch_overhead_test/output_scalar/scalar_ops_profiled_debug_injected.hsaco",
         "name": "_Z9scalarOpsPii",

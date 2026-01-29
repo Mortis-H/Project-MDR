@@ -15,6 +15,12 @@ RUNNER = "./Track_B/kernel_testcases/universal_hsaco_runner"
 
 # Kernel 配置 (baseline, 無 printf)
 KERNELS = {
+    "vectoradd": {
+        "hsaco": "experiments/dispatch_overhead_test/baseline_vectoradd/original_debug.hsaco",
+        "name": "_Z9vectorAddPKfS0_Pfi",
+        "type": "float_add",
+        "kernel_match": "vectorAdd",
+    },
     "scalar_ops": {
         "hsaco": "experiments/dispatch_overhead_test/baseline_scalar/original_debug.hsaco",
         "name": "_Z9scalarOpsPii",

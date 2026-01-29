@@ -16,11 +16,17 @@ RUNNER = "./Track_B/kernel_testcases/universal_hsaco_runner"
 
 # Kernel 配置 (baseline, 無 printf)
 KERNELS = {
+    "vectoradd": {
+        "hsaco": "experiments/dispatch_overhead_test/baseline_vectoradd/original_debug.hsaco",
+        "name": "_Z9vectorAddPKfS0_Pfi",
+        "type": "float_add",
+        "workgroup_size": 256,  # 用來識別 kernel
+    },
     "scalar_ops": {
         "hsaco": "experiments/dispatch_overhead_test/baseline_scalar/original_debug.hsaco",
         "name": "_Z9scalarOpsPii",
         "type": "int_scalar",
-        "workgroup_size": 256,  # 用來識別 kernel
+        "workgroup_size": 256,
     },
     "memory_ops": {
         "hsaco": "experiments/dispatch_overhead_test/baseline_memory/original_debug.hsaco",
