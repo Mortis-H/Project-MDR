@@ -4,7 +4,7 @@
 
 - 測量次數: **100 次/kernel**
 - 統計方法: 去掉最大最小值後計算
-- GPU: AMD MI300 (gfx950)
+- GPU: AMD gfx950
 - 測試大小: 64 elements
 
 ---
