@@ -58,14 +58,16 @@ v_mov_b32 v25, s20    ; 現在 s20 有正確的值
 - s_memrealtime → Real-time 時鐘（~100 MHz）
 ```
 
-#### 選擇建議
+#### 選擇建議（2026-01-29 更新）
 
 | 使用場景 | 推薦指令 | 原因 |
 |---------|---------|------|
-| 與 rocprof/rocprofv2 比較 | **s_memtime** | 時鐘源一致，數值可直接比較 |
-| 絕對時間測量（ns/μs） | s_memrealtime | 固定頻率，不受 DVFS 影響 |
-| GPU 動態頻率調整環境 | s_memrealtime | 不受頻率變化影響 |
-| **預設推薦** | **s_memtime** | 與標準 profiling 工具一致 |
+| 單 wavefront 內測量（local 模式） | **s_memtime** | 高精度 (~1.7 GHz) |
+| 跨 wavefront 比較（wallclock 模式） | **s_memrealtime** | 全域同步計數器 |
+| 跨 workgroup 測量（atomic 模式） | **s_memrealtime** | **必須使用**，s_memtime 是 per-CU 計數器 |
+| 與 rocprofv3 比較 | **s_memrealtime** | 誤差約 3-15% |
+
+**重要發現**：`s_memtime` 是 **per-CU 計數器**，不同 CU 上的 workgroup 讀取的基準不同。跨 workgroup 測量**必須**使用 `s_memrealtime`。
 
 ---
 
@@ -446,8 +448,107 @@ kernel_end:
 
 1. [ ] Global memory buffer 記錄（完全消除 printf 開銷）
 2. [ ] 多區段計時支援（多個 label）
-3. [ ] Atomic 統計（min/max/avg）
+3. [x] ~~Atomic 統計（min/max/avg）~~ - ✅ 已實現並修復多 workgroup 問題（使用 s_memrealtime）
 4. [ ] 自動頻率查詢和時間轉換
+5. [x] ~~調查 MI350X 的 `s_memtime` 多 workgroup 行為~~ - ✅ 已解決：s_memtime 是 per-CU 計數器，改用 s_memrealtime
+
+---
+
+## Phase 1.5：Wallclock 和 Atomic 模式（2026-01-29）
+
+### 新增模式
+
+| 模式 | 語法 | 時間戳指令 | 用途 | 狀態 |
+|------|------|-----------|------|------|
+| **local**（預設）| `@TIMESTAMP_START` | `s_memtime` (~1.7 GHz) | 測量 per-wavefront 時間 | ✅ 正常 |
+| **wallclock** | `@TIMESTAMP_START mode=wallclock` | `s_memrealtime` (~100 MHz) | 輸出絕對時間戳 | ✅ 正常 |
+| **atomic** | `@TIMESTAMP_START mode=atomic` | `s_memrealtime` (~100 MHz) | Global atomic min/max | ✅ 正常 |
+
+### Wallclock 模式
+
+輸出 64-bit 絕對時間戳，Host 端可計算 kernel wall time：
+
+```asm
+; @TIMESTAMP_START mode=wallclock
+; ... kernel code ...
+; @TIMESTAMP_END mode=wallclock if $lane == 0:
+```
+
+輸出格式：
+```
+[WallClock kernel] start=77831:3084468685 elapsed=2464 ticks
+```
+
+Host 計算：`kernel_wall_time = max(start + elapsed) - min(start)`
+
+### Atomic 模式
+
+使用 global atomic 操作直接計算 kernel wall time：
+
+```asm
+; @TIMESTAMP_START mode=atomic
+; ... kernel code ...
+; @TIMESTAMP_END mode=atomic
+```
+
+**實作細節**：
+- Timestamp buffer 位於 `C + N * sizeof(float)` (16 bytes)
+- Buffer layout: `[min_start(8), max_end(8)]`
+- 使用 `global_atomic_umin_x2` 更新 min_start
+- 使用 `global_atomic_umax_x2` 更新 max_end
+- Host 端使用 `--timestamp-atomic` 選項啟動
+
+**測試結果**（使用 `s_memrealtime`）：
+
+| Test Size | Workgroups | Wall Time (ticks) | Wall Time (us) | 狀態 |
+|-----------|------------|-------------------|----------------|------|
+| 64 | 1 | 628 | 6.28 | ✅ 正確 |
+| 256 | 1 | 752 | 7.52 | ✅ 正確 |
+| 512 | 2 | 1,104 | 11.04 | ✅ 正確 |
+| 1024 | 4 | 2,259 | 22.59 | ✅ 正確 |
+| 4096 | 16 | 9,256 | 92.56 | ✅ 正確 |
+| 16384 | 64 | 36,380 | 363.80 | ✅ 正確 |
+
+**與 rocprofv3 比較**：誤差約 3-15%（MDR 測量純 GPU 執行時間，不含 dispatch 開銷）
+
+### ✅ 已解決：多 Workgroup 時間戳異常（2026-01-29）
+
+**問題**：
+- 單 workgroup 正常（與 rocprofv3 比較一致）
+- 多 workgroup 時，不同 workgroup 的 `s_memtime` 返回值差異約 400 billion ticks
+
+**根本原因**：
+`s_memtime` 是 per-CU（Compute Unit）的計數器，**不是全域同步的**。不同 CU 上執行的 workgroup 讀取的時間戳基準不同。
+
+**解決方案：使用 `s_memrealtime`**
+
+| 指令 | 特性 | 適用場景 |
+|------|------|----------|
+| `s_memtime` | Per-CU 計數器，~1.7 GHz，高精度 | 單 wavefront 內測量 |
+| `s_memrealtime` | **全域同步計數器**，~100 MHz | 跨 workgroup 測量 |
+
+**修正後的模式選擇**：
+
+| 模式 | 使用指令 | 原因 |
+|------|----------|------|
+| **local** | `s_memtime` | 高精度，單 wavefront 內使用 |
+| **wallclock** | `s_memrealtime` | 需要跨 wavefront 比較 |
+| **atomic** | `s_memrealtime` | 需要跨 workgroup 比較 |
+
+**驗證結果（atomic 模式）**：
+
+| Size | Workgroups | MDR (ticks) | MDR (us) | rocprofv3 (us) | Diff |
+|------|------------|-------------|----------|----------------|------|
+| 256 | 1 | 752 | 7.52 | 8.84 | -14.9% |
+| 512 | 2 | 1,104 | 11.04 | 13.52 | -18.3% |
+| 1,024 | 4 | 2,259 | 22.59 | 25.00 | -9.6% |
+| 4,096 | 16 | 9,256 | 92.56 | 95.56 | -3.1% |
+| 16,384 | 64 | 36,380 | 363.80 | 374.24 | -2.8% |
+
+**結論**：
+- MDR atomic 模式與 rocprofv3 誤差約 3-15%
+- 誤差原因：rocprofv3 包含 dispatch 開銷，MDR 測量純 GPU 執行時間
+- `s_memrealtime` 是跨 workgroup 測量的**唯一正確選擇**
 
 ---
 

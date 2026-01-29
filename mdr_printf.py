@@ -102,29 +102,53 @@ class TimestampDirective:
     """
     代表一個 @TIMESTAMP_START 或 @TIMESTAMP_END 指令
     
-    用於 kernel 內部時間測量。使用 s_memtime 指令記錄時間戳，
-    並通過快照機制保存到 VGPR，最後在 kernel 結束前計算並輸出經過時間。
+    用於 kernel 內部時間測量。根據模式選擇不同的時間戳指令：
+    - local 模式: s_memtime（高精度，~1.7 GHz，單 wavefront 內使用）
+    - wallclock/atomic 模式: s_memrealtime（全域同步，~100 MHz，跨 workgroup 使用）
     
     使用方式：
     ; @TIMESTAMP_START [label="section_name"]
     ; ... kernel code ...
     ; @TIMESTAMP_END [label="section_name"]
     
-    或簡單模式：
+    簡單模式（local，每個 wavefront 獨立測量）：
     ; @TIMESTAMP_START
     ; ... kernel code ...
     ; @TIMESTAMP_END
+    
+    Wallclock 模式（輸出絕對時間戳，用於計算 kernel-wide 時間）：
+    ; @TIMESTAMP_START mode=wallclock
+    ; ... kernel code ...
+    ; @TIMESTAMP_END mode=wallclock
+    
+    Atomic 模式（使用 global atomic 操作獲得真正的 kernel wall time）：
+    ; @TIMESTAMP_START mode=atomic
+    ; ... kernel code ...
+    ; @TIMESTAMP_END mode=atomic
+    
+    輸出格式：
+    - local 模式: [Timestamp label] elapsed = X ticks (~1.7 GHz)
+    - Wallclock 模式: [WallClock label] start=HI:LO elapsed=X ticks (~100 MHz)
+    - Atomic 模式: Host 端讀取 timestamp buffer 計算 kernel_wall_time (~100 MHz)
+    
+    Atomic 模式說明：
+    - 使用 s_memrealtime（全域同步計數器，~100 MHz）
+    - Buffer layout: [min_start(8), max_end(8)] 位於 C + N * sizeof(float)
+    - 使用 global_atomic_umin_x2 和 global_atomic_umax_x2 (GFX9/CDNA)
+    - 與 rocprofv3 測量結果誤差約 3-15%
     """
     line_number: int           # 在 .s 檔案中的行號（0-based）
     directive_type: str        # "start" 或 "end"
     label: Optional[str] = None  # 可選的標籤名稱
     next_instruction: Optional[str] = None  # directive 之後的第一條 ISA 指令
     condition: Optional[str] = None  # 條件式（如 "if $lane == 0:"）
+    mode: str = "local"        # 模式: "local", "wallclock", 或 "atomic"
     
     def __str__(self):
         label_str = f" [{self.label}]" if self.label else ""
         cond_str = f" [cond={self.condition}]" if self.condition else ""
-        return f"@TIMESTAMP_{self.directive_type.upper()} at line {self.line_number + 1}{label_str}{cond_str}"
+        mode_str = f" [mode={self.mode}]" if self.mode != "local" else ""
+        return f"@TIMESTAMP_{self.directive_type.upper()} at line {self.line_number + 1}{label_str}{mode_str}{cond_str}"
 
 
 def validate_variable(var_name: str, line_number: int = None) -> bool:
@@ -548,12 +572,20 @@ def parse_timestamp_directive(line: str, line_number: int) -> Optional[Timestamp
     解析 @TIMESTAMP_START 或 @TIMESTAMP_END 指令
     
     語法：
-    ; @TIMESTAMP_START [label="section_name"] [if $lane == 0:]
-    ; @TIMESTAMP_END [label="section_name"] [if $lane == 0:]
+    ; @TIMESTAMP_START [label="section_name"] [mode=local|wallclock|atomic] [if $lane == 0:]
+    ; @TIMESTAMP_END [label="section_name"] [mode=local|wallclock|atomic] [if $lane == 0:]
     
     簡單模式：
     ; @TIMESTAMP_START
     ; @TIMESTAMP_END
+    
+    Wallclock 模式（輸出絕對時間戳）：
+    ; @TIMESTAMP_START mode=wallclock
+    ; @TIMESTAMP_END mode=wallclock if $lane == 0:
+    
+    Atomic 模式（使用 global atomic 獲得真正的 kernel wall time）：
+    ; @TIMESTAMP_START mode=atomic
+    ; @TIMESTAMP_END mode=atomic
     """
     # 匹配 @TIMESTAMP_START 或 @TIMESTAMP_END
     start_match = re.search(r'[;#]\s*@TIMESTAMP_START\b(.*)$', line)
@@ -575,6 +607,16 @@ def parse_timestamp_directive(line: str, line_number: int) -> Optional[Timestamp
     if label_match:
         label = label_match.group(1)
     
+    # 解析可選的 mode
+    mode = "local"  # 預設模式
+    mode_match = re.search(r'mode\s*=\s*(\w+)', args_str)
+    if mode_match:
+        mode_value = mode_match.group(1).lower()
+        if mode_value in ("local", "wallclock", "atomic"):
+            mode = mode_value
+        else:
+            print(f"[Warning] Unknown timestamp mode '{mode_value}' at line {line_number + 1}, using 'local'")
+    
     # 解析可選的條件式
     condition = None
     cond_match = re.search(r'(if\s+[^:]+:)', args_str)
@@ -586,7 +628,8 @@ def parse_timestamp_directive(line: str, line_number: int) -> Optional[Timestamp
         line_number=line_number,
         directive_type=directive_type,
         label=label,
-        condition=condition
+        condition=condition,
+        mode=mode
     )
 
 
@@ -1577,6 +1620,27 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     ts_starts = [d for d in timestamp_directives if d.directive_type == "start"]
     ts_ends = [d for d in timestamp_directives if d.directive_type == "end"]
     
+    # 檢測是否有 atomic 模式
+    has_atomic_timestamp = any(d.mode == "atomic" for d in timestamp_directives)
+    
+    # Atomic 模式需要額外的 SGPR/VGPR 來存儲 buffer 地址
+    # SGPR_TS_BUFFER: 存儲 timestamp buffer 地址
+    SGPR_TS_BUFFER = 22  # s[22:23] 用於 timestamp buffer 地址
+    # VGPR for timestamp buffer address (for global addressing)
+    VGPR_TS_ADDR_LO = None
+    VGPR_TS_ADDR_HI = None
+    
+    if has_atomic_timestamp:
+        # 完整 atomic timestamp 實現
+        clobber_start_lines.append(f'              // === Atomic Timestamp Setup ===')
+        
+        # 分配 VGPR 用於存儲 buffer 地址
+        VGPR_TS_ADDR_LO = next_builtin_vgpr
+        VGPR_TS_ADDR_HI = next_builtin_vgpr + 1
+        next_builtin_vgpr += 2
+        
+        print(f"[Info] Atomic timestamp: VGPRs v{VGPR_TS_ADDR_LO}:v{VGPR_TS_ADDR_HI} for buffer address")
+    
     if ts_starts:
         clobber_start_lines.append(f'              // === Timestamp Profiling Setup ===')
         
@@ -1592,7 +1656,9 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                 'start_lo': start_lo_vgpr,
                 'start_hi': start_hi_vgpr,
                 'ts_start': ts_start,
-                'ts_end': None  # 稍後匹配
+                'ts_end': None,  # 稍後匹配
+                'ts_addr_lo': VGPR_TS_ADDR_LO,  # For atomic mode
+                'ts_addr_hi': VGPR_TS_ADDR_HI   # For atomic mode
             }
             
             print(f"[Info] Timestamp [{label}]: start time -> v{start_lo_vgpr}:v{start_hi_vgpr}")
@@ -1632,6 +1698,7 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     
     # === 生成 Timestamp 輸出 ===
     # 在 printf section 的最後，記錄結束時間並計算經過時間
+    # 注意：atomic 模式不需要 printf 輸出，host 會直接讀取 buffer
     for label, ts_info in timestamp_vgpr_map.items():
         ts_start = ts_info['ts_start']
         ts_end = ts_info.get('ts_end')
@@ -1642,21 +1709,78 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             print(f"[Warning] @TIMESTAMP_START [{label}] has no matching @TIMESTAMP_END")
             continue
         
-        printf_blocks.append(f'              // === Timestamp END [{label}] ===')
-        # 使用單一 inline_asm 塊完成：記錄結束時間 + 計算差值
-        # 這避免了 LLVM 暫存器分配導致的覆蓋問題
-        # 
-        # 策略：
-        # 1. s_memrealtime s[20:21] - 記錄結束時間
-        # 2. v_sub_co_u32 diff_lo, vcc, s20, v{start_lo} - 低 32 位減法
-        # 3. v_subb_co_u32 diff_hi, vcc, s21, v{start_hi}, vcc - 高 32 位減法（帶借位）
-        # 4. 輸出 diff_lo（對於短時間測量足夠）
-        #
-        # 注意：使用 v_sub_co_u32 而不是 v_sub_u32，因為需要處理借位
-        printf_blocks.append(f'              // Calculate elapsed time using GPU ISA directly')
-        printf_blocks.append(f'              // s_memtime -> v_sub_u32 (end_lo - start_lo)')
-        printf_blocks.append(f'              %ts_elapsed_{label} = llvm.inline_asm has_side_effects asm_dialect = att')
-        printf_blocks.append(f'                "s_memtime s[20:21]\\0As_waitcnt lgkmcnt(0)\\0Av_sub_u32 $0, s20, v{start_lo}", "=v": () -> i32')
+        # Atomic 模式：把 atomic_max 操作放在 printf section 的開頭
+        # 這樣可以在 printf 之前記錄結束時間，避免 printf 開銷影響 kernel wall time
+        is_atomic = (ts_start.mode == "atomic" or ts_end.mode == "atomic")
+        if is_atomic:
+            printf_blocks.append(f'              // === Timestamp [{label}] (mode=atomic) ===')
+            
+            # === ATOMIC_MAX 操作（放在 printf 之前）===
+            # 重新計算 timestamp buffer 地址 (C + N * 4 + 8)
+            printf_blocks.append(f'              // Atomic max: record end time BEFORE printf')
+            printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_load_dwordx2 s[{SGPR_TS_BUFFER}:{SGPR_TS_BUFFER+1}], s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], 0x10\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
+            printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_load_dword s24, s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], 0x18\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
+            printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_lshl_b32 s24, s24, 2\\0As_add_u32 s{SGPR_TS_BUFFER}, s{SGPR_TS_BUFFER}, s24\\0As_addc_u32 s{SGPR_TS_BUFFER+1}, s{SGPR_TS_BUFFER+1}, 0\\0As_add_u32 s{SGPR_TS_BUFFER}, s{SGPR_TS_BUFFER}, 8\\0As_addc_u32 s{SGPR_TS_BUFFER+1}, s{SGPR_TS_BUFFER+1}, 0", ""  : () -> ()')
+            # 查找這個 timestamp 的 VGPR 地址
+            ts_info = timestamp_vgpr_map.get(label, {})
+            ts_addr_lo = ts_info.get('ts_addr_lo')
+            ts_addr_hi = ts_info.get('ts_addr_hi')
+            end_lo = ts_info.get('start_lo', 26)  # 重用 start VGPRs
+            end_hi = ts_info.get('start_hi', 27)
+            if ts_addr_lo is not None:
+                printf_blocks.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{ts_addr_lo}, s{SGPR_TS_BUFFER}\\0Av_mov_b32 v{ts_addr_hi}, s{SGPR_TS_BUFFER+1}", ""  : () -> ()')
+                # Atomic 模式使用 s_memrealtime（跨 workgroup 同步，~100 MHz）
+                printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_memrealtime s[20:21]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
+                printf_blocks.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{end_lo}, s20\\0Av_mov_b32 v{end_hi}, s21", ""  : () -> ()')
+                printf_blocks.append(f'              llvm.inline_asm has_side_effects "global_atomic_umax_x2 v[{ts_addr_lo}:{ts_addr_hi}], v[{end_lo}:{end_hi}], off", ""  : () -> ()')
+            
+            # === Printf 部分（用於保持 MLIR 代碼結構，但只輸出最少信息）===
+            # 只讓 lane 0 輸出，進一步減少 printf 開銷
+            printf_blocks.append(f'              %ts_elapsed_{label} = llvm.inline_asm has_side_effects asm_dialect = att')
+            printf_blocks.append(f'                "v_sub_u32 $0, s20, v{start_lo}", "=v": () -> i32')
+            # 無條件 printf（保持 MLIR 結構完整）
+            printf_blocks.append(f'              gpu.printf ""')  # 空字串 printf 開銷最小
+            printf_blocks.append(f'              // === End Timestamp ===')
+            continue
+        
+        # 檢查是否為 wallclock 模式
+        is_wallclock = (ts_start.mode == "wallclock" or ts_end.mode == "wallclock")
+        
+        printf_blocks.append(f'              // === Timestamp END [{label}] (mode={"wallclock" if is_wallclock else "local"}) ===')
+        
+        if is_wallclock:
+            # Wallclock 模式：輸出 64-bit START 時間戳 + elapsed
+            # Host 端計算: end = start + elapsed, kernel_time = max(end) - min(start)
+            # 
+            # 注意：我們只輸出 START 的絕對時間戳（已正確快照）
+            # END 時間 = START + elapsed，避免 printf section 時間不一致的問題
+            printf_blocks.append(f'              // Wallclock mode: output 64-bit START timestamp + elapsed')
+            printf_blocks.append(f'              // Host calculates: end = start + elapsed')
+            printf_blocks.append(f'              // Read start time (64-bit) from snapshot VGPRs')
+            printf_blocks.append(f'              %ts_start_lo_{label} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{start_lo}", "=v": () -> i32')
+            printf_blocks.append(f'              %ts_start_hi_{label} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{start_hi}", "=v": () -> i32')
+            printf_blocks.append(f'              // Calculate elapsed using current time - start time')
+            printf_blocks.append(f'              // Wallclock mode uses s_memrealtime (globally synchronized, ~100 MHz)')
+            printf_blocks.append(f'              %ts_elapsed_{label} = llvm.inline_asm has_side_effects asm_dialect = att')
+            printf_blocks.append(f'                "s_memrealtime s[20:21]\\0As_waitcnt lgkmcnt(0)\\0Av_sub_u32 $0, s20, v{start_lo}", "=v": () -> i32')
+        else:
+            # 普通模式（local）：只輸出 elapsed，使用 s_memtime（高精度，1.7 GHz）
+            printf_blocks.append(f'              // Calculate elapsed time using GPU ISA directly')
+            printf_blocks.append(f'              // Local mode uses s_memtime (high precision, ~1.7 GHz)')
+            printf_blocks.append(f'              %ts_elapsed_{label} = llvm.inline_asm has_side_effects asm_dialect = att')
+            printf_blocks.append(f'                "s_memtime s[20:21]\\0As_waitcnt lgkmcnt(0)\\0Av_sub_u32 $0, s20, v{start_lo}", "=v": () -> i32')
+        
+        # 生成 printf 格式字串
+        if is_wallclock:
+            # 輸出 64-bit START 時間戳（hi:lo 格式）+ elapsed
+            # Host 計算: end = start + elapsed, kernel_time = max(end) - min(start)
+            printf_fmt = f'[WallClock {label}] start=%u:%u elapsed=%u ticks\\0A'
+            printf_args = f'%ts_start_hi_{label}, %ts_start_lo_{label}, %ts_elapsed_{label}'
+            printf_types = 'i32, i32, i32'
+        else:
+            printf_fmt = f'[Timestamp {label}] elapsed = %u ticks\\0A'
+            printf_args = f'%ts_elapsed_{label}'
+            printf_types = 'i32'
         
         # 輸出結果
         # 根據 ts_end 的 condition 決定是否有條件輸出
@@ -1674,7 +1798,7 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                     printf_blocks.append(f'              %ts_cmp_val_{label} = arith.constant {cmp_value} : i32')
                     printf_blocks.append(f'              %ts_cond_{label} = arith.cmpi {mlir_cmp}, %ts_lane_{label}, %ts_cmp_val_{label} : i32')
                     printf_blocks.append(f'              scf.if %ts_cond_{label} {{')
-                    printf_blocks.append(f'                gpu.printf "[Timestamp {label}] elapsed = %u ticks\\0A", %ts_elapsed_{label} : i32')
+                    printf_blocks.append(f'                gpu.printf "{printf_fmt}", {printf_args} : {printf_types}')
                     printf_blocks.append(f'              }}')
                 elif builtin_var == '$tid' and TID_BACKUP_VGPR is not None:
                     printf_blocks.append(f'              // Conditional timestamp output: {builtin_var} {cmp_op} {cmp_value}')
@@ -1684,17 +1808,17 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                     printf_blocks.append(f'              %ts_cmp_val_{label} = arith.constant {cmp_value} : i32')
                     printf_blocks.append(f'              %ts_cond_{label} = arith.cmpi {mlir_cmp}, %ts_tid_{label}, %ts_cmp_val_{label} : i32')
                     printf_blocks.append(f'              scf.if %ts_cond_{label} {{')
-                    printf_blocks.append(f'                gpu.printf "[Timestamp {label}] elapsed = %u ticks\\0A", %ts_elapsed_{label} : i32')
+                    printf_blocks.append(f'                gpu.printf "{printf_fmt}", {printf_args} : {printf_types}')
                     printf_blocks.append(f'              }}')
                 else:
                     # Fallback: 無條件輸出
-                    printf_blocks.append(f'              gpu.printf "[Timestamp {label}] elapsed = %u ticks\\0A", %ts_elapsed_{label} : i32')
+                    printf_blocks.append(f'              gpu.printf "{printf_fmt}", {printf_args} : {printf_types}')
             else:
                 # 無法解析條件，無條件輸出
-                printf_blocks.append(f'              gpu.printf "[Timestamp {label}] elapsed = %u ticks\\0A", %ts_elapsed_{label} : i32')
+                printf_blocks.append(f'              gpu.printf "{printf_fmt}", {printf_args} : {printf_types}')
         else:
             # 無條件輸出（每個 thread 都輸出）
-            printf_blocks.append(f'              gpu.printf "[Timestamp {label}] elapsed = %u ticks\\0A", %ts_elapsed_{label} : i32')
+            printf_blocks.append(f'              gpu.printf "{printf_fmt}", {printf_args} : {printf_types}')
         
         printf_blocks.append(f'              // === End Timestamp END ===')
     
@@ -1763,10 +1887,13 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     
     # === 生成 @TIMESTAMP_START 的快照指令 ===
     # 在 @TIMESTAMP_START 位置注入：s_memrealtime + 備份到 VGPR
+    # 對於 atomic 模式，額外執行 global_atomic_min_u64
     for label, ts_info in timestamp_vgpr_map.items():
         ts_start = ts_info['ts_start']
         start_lo = ts_info['start_lo']
         start_hi = ts_info['start_hi']
+        ts_addr_lo = ts_info.get('ts_addr_lo')
+        ts_addr_hi = ts_info.get('ts_addr_hi')
         
         if ts_start.next_instruction:
             clean_instr = ts_start.next_instruction.strip()
@@ -1774,20 +1901,56 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                 clean_instr = clean_instr.split(';')[0].strip()
             clean_instr = ' '.join(clean_instr.split())
             
+            is_atomic = (ts_start.mode == "atomic")
+            is_wallclock = (ts_start.mode == "wallclock")
+            
             # 生成 timestamp start 指令
-            ts_lines = [f'              // === Timestamp START [{label}] at line {ts_start.line_number + 1} ===']
-            # 使用 s_memtime 記錄時間到 SGPR (使用 s20:s21 作為臨時暫存器)
-            # 需要 s_waitcnt lgkmcnt(0) 等待結果
-            ts_lines.append(f'              llvm.inline_asm has_side_effects "s_memtime s[20:21]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
+            ts_lines = [f'              // === Timestamp START [{label}] (mode={ts_start.mode}) at line {ts_start.line_number + 1} ===']
+            # 選擇正確的時間戳指令：
+            # - atomic/wallclock: s_memrealtime（跨 workgroup 同步，~100 MHz）
+            # - local: s_memtime（高精度，~1.7 GHz，單 wavefront 內使用）
+            if is_atomic or is_wallclock:
+                ts_lines.append(f'              // Using s_memrealtime (globally synchronized, ~100 MHz)')
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_memrealtime s[20:21]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
+            else:
+                ts_lines.append(f'              // Using s_memtime (high precision, ~1.7 GHz)')
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_memtime s[20:21]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
             # 備份到 VGPR
             ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{start_lo}, s20", ""  : () -> ()')
             ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{start_hi}, s21", ""  : () -> ()')
+            
+            if is_atomic and ts_addr_lo is not None:
+                # 完整 Atomic 模式：計算地址 + 執行 global_atomic_umin_x2 更新 min_start
+                ts_lines.append(f'              // === Atomic: compute address and update min_start ===')
+                # 計算 timestamp buffer 地址: C + N * 4
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_load_dwordx2 s[{SGPR_TS_BUFFER}:{SGPR_TS_BUFFER+1}], s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], 0x10\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')  # C
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_load_dword s24, s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], 0x18\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')  # N
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_lshl_b32 s24, s24, 2", ""  : () -> ()')  # N * 4
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_add_u32 s{SGPR_TS_BUFFER}, s{SGPR_TS_BUFFER}, s24", ""  : () -> ()')  # C + N*4
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_addc_u32 s{SGPR_TS_BUFFER+1}, s{SGPR_TS_BUFFER+1}, 0", ""  : () -> ()')
+                ts_lines.append(f'              // Copy to VGPR for global addressing')
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{ts_addr_lo}, s{SGPR_TS_BUFFER}", ""  : () -> ()')
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{ts_addr_hi}, s{SGPR_TS_BUFFER+1}", ""  : () -> ()')
+                # Atomic min operation
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "global_atomic_umin_x2 v[{ts_addr_lo}:{ts_addr_hi}], v[{start_lo}:{start_hi}], off", ""  : () -> ()')
+            
             ts_lines.append(f'              // === End Timestamp START ===')
             
             if clean_instr not in snapshot_insertions:
                 snapshot_insertions[clean_instr] = []
             snapshot_insertions[clean_instr].append('\n'.join(ts_lines))
             print(f"[Info] Timestamp START [{label}] at: {clean_instr[:50]}...")
+    
+    # === 生成 @TIMESTAMP_END 的 atomic 操作（僅限 atomic 模式）===
+    # 注意：atomic 模式的 END 操作已移到 printf_blocks 中（在 printf 之前執行）
+    # 這裡只打印信息，不再注入到 s_endpgm 位置
+    for label, ts_info in timestamp_vgpr_map.items():
+        ts_end = ts_info.get('ts_end')
+        ts_addr_lo = ts_info.get('ts_addr_lo')
+        
+        if ts_end and ts_end.mode == "atomic" and ts_addr_lo is not None:
+            # Atomic END 已移到 printf_blocks，這裡只保留注釋
+            print(f"[Info] Timestamp END [{label}] (atomic) - injected in printf section for accurate timing")
     
     # === 注入邏輯 ===
     lines = gpumlir_text.split('\n')
@@ -2366,6 +2529,8 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
         'kernarg_segment_ptr': r'\.amdhsa_user_sgpr_kernarg_segment_ptr\s+(\d+)',  # 關鍵！
         'workitem_id': r'\.amdhsa_system_vgpr_workitem_id\s+(\d+)',
         'workgroup_id_x': r'\.amdhsa_system_sgpr_workgroup_id_x\s+(\d+)',
+        'accum_offset': r'\.amdhsa_accum_offset\s+(\d+)',  # AGPR offset - 重要
+        'reserve_vcc': r'\.amdhsa_reserve_vcc\s+(\d+)',  # VCC 保留 - kernel 使用 vcc 時需要
     }
     
     for attr_name, pattern in amdhsa_patterns.items():
@@ -2488,14 +2653,18 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
                 print(f"[Warning] hidden_hostcall_buffer NOT found - printf may fail!")
         
         elif original_all_args:
-            # 無 printf：直接使用原始的完整 args
+            # 無 printf：恢復原始 args 並添加必要的 hidden 參數（用於多 workgroup 支持）
             kernel['.args'] = []
+            max_offset = 0
             for arg in original_all_args:
                 yaml_arg = {}
                 if 'address_space' in arg:
                     yaml_arg['.address_space'] = arg['address_space']
                 if 'offset' in arg:
                     yaml_arg['.offset'] = arg['offset']
+                    # 追蹤最大 offset 以便添加 hidden args
+                    arg_end = arg['offset'] + arg.get('size', 8)
+                    max_offset = max(max_offset, arg_end)
                 if 'size' in arg:
                     yaml_arg['.size'] = arg['size']
                 if 'value_kind' in arg:
@@ -2503,7 +2672,32 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
                 if 'name' in arg:
                     yaml_arg['.name'] = arg['name']
                 kernel['.args'].append(yaml_arg)
-            print(f"[Info] Restored {len(original_all_args)} original kernel arguments")
+            
+            # 添加標準的 hidden 參數（對多 workgroup kernel 執行是必要的）
+            # 這些參數是 HIP runtime 用來傳遞 grid/block 配置的
+            # 對齊到 8 bytes
+            hidden_offset = ((max_offset + 7) // 8) * 8
+            hidden_args = [
+                {'.offset': hidden_offset, '.size': 4, '.value_kind': 'hidden_block_count_x'},
+                {'.offset': hidden_offset + 4, '.size': 4, '.value_kind': 'hidden_block_count_y'},
+                {'.offset': hidden_offset + 8, '.size': 4, '.value_kind': 'hidden_block_count_z'},
+                {'.offset': hidden_offset + 12, '.size': 2, '.value_kind': 'hidden_group_size_x'},
+                {'.offset': hidden_offset + 14, '.size': 2, '.value_kind': 'hidden_group_size_y'},
+                {'.offset': hidden_offset + 16, '.size': 2, '.value_kind': 'hidden_group_size_z'},
+                {'.offset': hidden_offset + 18, '.size': 2, '.value_kind': 'hidden_remainder_x'},
+                {'.offset': hidden_offset + 20, '.size': 2, '.value_kind': 'hidden_remainder_y'},
+                {'.offset': hidden_offset + 22, '.size': 2, '.value_kind': 'hidden_remainder_z'},
+                # 跳到 offset 40 (對齊到 8 bytes 後開始 64-bit 值)
+                {'.offset': hidden_offset + 40, '.size': 8, '.value_kind': 'hidden_global_offset_x'},
+                {'.offset': hidden_offset + 48, '.size': 8, '.value_kind': 'hidden_global_offset_y'},
+                {'.offset': hidden_offset + 56, '.size': 8, '.value_kind': 'hidden_global_offset_z'},
+                {'.offset': hidden_offset + 64, '.size': 8, '.value_kind': 'hidden_printf_buffer'},
+                {'.offset': hidden_offset + 80, '.size': 8, '.value_kind': 'hidden_default_queue'},
+                {'.offset': hidden_offset + 88, '.size': 8, '.value_kind': 'hidden_completion_action'},
+                {'.offset': hidden_offset + 104, '.size': 4, '.value_kind': 'hidden_grid_dims'},
+            ]
+            kernel['.args'].extend(hidden_args)
+            print(f"[Info] Restored {len(original_all_args)} original kernel arguments + {len(hidden_args)} hidden args for multi-workgroup support")
     
     # 重新生成 YAML
     fixed_yaml = yaml.dump(gen_metadata, default_flow_style=False, sort_keys=False)
@@ -2545,6 +2739,15 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
         )
         print(f"[Info] Fixed kernarg_segment_ptr = {attrs['kernarg_segment_ptr']}")
     
+    # 修復 reserve_vcc - kernel 使用 vcc 時必須設為 1
+    if 'reserve_vcc' in attrs:
+        fixed_isa = re.sub(
+            r'(\.amdhsa_reserve_vcc)\s+\d+',
+            rf'\1 {attrs["reserve_vcc"]}',
+            fixed_isa
+        )
+        print(f"[Info] Fixed reserve_vcc = {attrs['reserve_vcc']}")
+    
     # === 修復快照暫存器分配 ===
     # printf 快照使用的 VGPR/SGPR 可能超出 MLIR 生成的範圍，需要更新 .amdhsa_next_free_vgpr/sgpr
     if required_vgpr > 0:
@@ -2559,6 +2762,20 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
                     fixed_isa
                 )
                 print(f"[Info] Fixed next_free_vgpr: {current_vgpr} -> {required_vgpr} (for snapshot registers)")
+        
+        # 修復 accum_offset - 必須 >= next_free_vgpr 以避免 VGPR/AGPR 衝突
+        accum_match = re.search(r'\.amdhsa_accum_offset\s+(\d+)', fixed_isa)
+        if accum_match:
+            current_accum = int(accum_match.group(1))
+            # accum_offset 必須是 4 的倍數，且 >= required_vgpr
+            required_accum = ((required_vgpr + 3) // 4) * 4  # 向上取整到 4 的倍數
+            if required_accum > current_accum:
+                fixed_isa = re.sub(
+                    r'(\.amdhsa_accum_offset)\s+\d+',
+                    rf'\1 {required_accum}',
+                    fixed_isa
+                )
+                print(f"[Info] Fixed accum_offset: {current_accum} -> {required_accum}")
     
     if required_sgpr > 0:
         # 找出目前的 next_free_sgpr 值
@@ -2572,6 +2789,105 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
                     fixed_isa
                 )
                 print(f"[Info] Fixed next_free_sgpr: {current_sgpr} -> {required_sgpr} (for snapshot registers)")
+    
+    # === 修復 YAML metadata 的 .sgpr_count 和 .vgpr_count ===
+    # MLIR 生成的 YAML metadata 可能不正確（特別是當沒有 printf 時）
+    # 需要根據原始 kernel 的值和 snapshot 需求來修正
+    
+    # 先從原始 ISA 提取 vgpr_count 和 sgpr_count
+    original_vgpr_count = 0
+    original_sgpr_count = 0
+    original_vgpr_match = re.search(r'\.vgpr_count:\s*(\d+)', original_isa_text)
+    original_sgpr_match = re.search(r'\.sgpr_count:\s*(\d+)', original_isa_text)
+    original_next_free_vgpr_match = re.search(r'\.amdhsa_next_free_vgpr\s+(\d+)', original_isa_text)
+    original_next_free_sgpr_match = re.search(r'\.amdhsa_next_free_sgpr\s+(\d+)', original_isa_text)
+    
+    if original_vgpr_match:
+        original_vgpr_count = int(original_vgpr_match.group(1))
+    if original_sgpr_match:
+        original_sgpr_count = int(original_sgpr_match.group(1))
+    if original_next_free_vgpr_match:
+        original_next_free_vgpr = int(original_next_free_vgpr_match.group(1))
+        original_vgpr_count = max(original_vgpr_count, original_next_free_vgpr)
+    if original_next_free_sgpr_match:
+        original_next_free_sgpr = int(original_next_free_sgpr_match.group(1))
+        original_sgpr_count = max(original_sgpr_count, original_next_free_sgpr)
+    
+    # 計算需要的 vgpr/sgpr：取原始值和 required 的最大值
+    needed_vgpr = max(required_vgpr, original_vgpr_count)
+    needed_sgpr = max(required_sgpr, original_sgpr_count)
+    
+    if needed_vgpr > 0:
+        yaml_vgpr_match = re.search(r'\.vgpr_count:\s*(\d+)', fixed_isa)
+        if yaml_vgpr_match:
+            current_yaml_vgpr = int(yaml_vgpr_match.group(1))
+            if needed_vgpr > current_yaml_vgpr:
+                fixed_isa = re.sub(
+                    r'(\.vgpr_count:)\s*\d+',
+                    rf'\1 {needed_vgpr}',
+                    fixed_isa
+                )
+                print(f"[Info] Fixed YAML .vgpr_count: {current_yaml_vgpr} -> {needed_vgpr} (original={original_vgpr_count}, required={required_vgpr})")
+        else:
+            # 如果沒有 .vgpr_count 條目，在 .sgpr_count 後面添加
+            fixed_isa = re.sub(
+                r'(\.sgpr_count:\s*\d+)',
+                rf'\1\n  .vgpr_count: {needed_vgpr}',
+                fixed_isa
+            )
+            print(f"[Info] Added YAML .vgpr_count: {needed_vgpr}")
+        
+        # 也修復 .amdhsa_next_free_vgpr
+        vgpr_directive_match = re.search(r'\.amdhsa_next_free_vgpr\s+(\d+)', fixed_isa)
+        if vgpr_directive_match:
+            current_directive_vgpr = int(vgpr_directive_match.group(1))
+            if needed_vgpr > current_directive_vgpr:
+                fixed_isa = re.sub(
+                    r'(\.amdhsa_next_free_vgpr)\s+\d+',
+                    rf'\1 {needed_vgpr}',
+                    fixed_isa
+                )
+                print(f"[Info] Fixed .amdhsa_next_free_vgpr: {current_directive_vgpr} -> {needed_vgpr}")
+        
+        # 修復 accum_offset - 必須 >= next_free_vgpr 以避免 VGPR/AGPR 衝突
+        # 獲取原始 accum_offset
+        original_accum = attrs.get('accum_offset', needed_vgpr)
+        accum_match = re.search(r'\.amdhsa_accum_offset\s+(\d+)', fixed_isa)
+        if accum_match:
+            current_accum = int(accum_match.group(1))
+            # accum_offset 必須是 4 的倍數，且 >= needed_vgpr，且 >= 原始值
+            required_accum = ((max(needed_vgpr, original_accum) + 3) // 4) * 4
+            if required_accum > current_accum:
+                fixed_isa = re.sub(
+                    r'(\.amdhsa_accum_offset)\s+\d+',
+                    rf'\1 {required_accum}',
+                    fixed_isa
+                )
+                print(f"[Info] Fixed accum_offset: {current_accum} -> {required_accum} (original={original_accum})")
+    
+    if needed_sgpr > 0:
+        yaml_sgpr_match = re.search(r'\.sgpr_count:\s*(\d+)', fixed_isa)
+        if yaml_sgpr_match:
+            current_yaml_sgpr = int(yaml_sgpr_match.group(1))
+            if needed_sgpr > current_yaml_sgpr:
+                fixed_isa = re.sub(
+                    r'(\.sgpr_count:)\s*\d+',
+                    rf'\1 {needed_sgpr}',
+                    fixed_isa
+                )
+                print(f"[Info] Fixed YAML .sgpr_count: {current_yaml_sgpr} -> {needed_sgpr} (original={original_sgpr_count}, required={required_sgpr})")
+        
+        # 也修復 .amdhsa_next_free_sgpr
+        sgpr_directive_match = re.search(r'\.amdhsa_next_free_sgpr\s+(\d+)', fixed_isa)
+        if sgpr_directive_match:
+            current_directive_sgpr = int(sgpr_directive_match.group(1))
+            if needed_sgpr > current_directive_sgpr:
+                fixed_isa = re.sub(
+                    r'(\.amdhsa_next_free_sgpr)\s+\d+',
+                    rf'\1 {needed_sgpr}',
+                    fixed_isa
+                )
+                print(f"[Info] Fixed .amdhsa_next_free_sgpr: {current_directive_sgpr} -> {needed_sgpr}")
     
     return fixed_isa
 

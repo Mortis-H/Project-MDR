@@ -33,6 +33,7 @@
 #include <vector>             // 動態陣列
 #include <cmath>              // 數學函數 (fabs)
 #include <cstring>            // 字串操作 (strcmp)
+#include <cstdint>            // uint64_t
 
 // ============================================================================
 // HIP_CHECK 巨集 - 檢查 HIP API 呼叫是否成功
@@ -521,12 +522,164 @@ bool run_int_kernel_inout(hipFunction_t func, int N) {
     return true;
 }
 
+// ============================================================
+// Atomic Timestamp 測量 V2
+// 
+// 方法：使用標準 kernel 簽名 (A*, B*, C*, N)
+// Timestamp buffer 位於 C + N*sizeof(float)
+// Kernel 內部會計算這個地址並使用 global atomic 操作
+// 
+// C buffer 布局（Host 分配）：
+//   [0 ... N*sizeof(float)-1]: 實際輸出數據
+//   [N*sizeof(float) ... N*sizeof(float)+15]: timestamp buffer
+//     - Offset 0-7:  min_start (初始化為 MAX_U64)
+//     - Offset 8-15: max_end   (初始化為 0)
+// ============================================================
+
+// ============================================================================
+// run_float_vector_add_with_timestamp - 執行 Float 向量加法 kernel (帶 atomic timestamp)
+// ============================================================================
+bool run_float_vector_add_with_timestamp(hipFunction_t func, int N) {
+    // 分配額外的 16 bytes 在 C buffer 末尾用於 timestamp
+    const size_t bytes = N * sizeof(float);
+    const size_t bytes_with_timestamp = bytes + 16;  // 額外 16 bytes for timestamp
+    
+    std::vector<float> hA(N), hB(N);
+    std::vector<char> hC_raw(bytes_with_timestamp);  // 使用 char array 以便存放 timestamp
+    float* hC = reinterpret_cast<float*>(hC_raw.data());
+    uint64_t* hTimestamp = reinterpret_cast<uint64_t*>(hC_raw.data() + bytes);
+    
+    // 初始化測試資料：A[i] = i, B[i] = 2*i
+    for (int i = 0; i < N; ++i) {
+        hA[i] = static_cast<float>(i);
+        hB[i] = static_cast<float>(i * 2);
+        hC[i] = 0.0f;
+    }
+    
+    // 初始化 timestamp: min_start = MAX, max_end = 0
+    hTimestamp[0] = 0xFFFFFFFFFFFFFFFFULL;  // min_start = MAX
+    hTimestamp[1] = 0;                        // max_end = 0
+
+    float *dA = nullptr, *dB = nullptr;
+    char *dC_raw = nullptr;
+    HIP_CHECK(hipMalloc(&dA, bytes));
+    HIP_CHECK(hipMalloc(&dB, bytes));
+    HIP_CHECK(hipMalloc(&dC_raw, bytes_with_timestamp));
+
+    HIP_CHECK(hipMemcpy(dA, hA.data(), bytes, hipMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(dB, hB.data(), bytes, hipMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(dC_raw, hC_raw.data(), bytes_with_timestamp, hipMemcpyHostToDevice));
+    
+    float* dC = reinterpret_cast<float*>(dC_raw);
+    
+    std::cout << "✓ Timestamp buffer at C+" << bytes << " bytes (kernel computes address)\n";
+    std::cout << "  Initialized: min_start=0x" << std::hex << hTimestamp[0] 
+              << ", max_end=0x" << hTimestamp[1] << std::dec << "\n";
+
+    int blockSize = 256;
+    int gridSize = (N + blockSize - 1) / blockSize;
+
+    // 標準 kernel 參數：(A*, B*, C*, N)
+    // Kernel 會從 C 和 N 計算 timestamp buffer 地址
+    void* kernelArgs[] = {
+        (void*)&dA,
+        (void*)&dB,
+        (void*)&dC,
+        (void*)&N
+    };
+
+    HIP_CHECK(hipModuleLaunchKernel(func, gridSize, 1, 1, blockSize, 1, 1, 
+                                    0, nullptr, kernelArgs, nullptr));
+    std::cout << "✓ Kernel launched (grid=" << gridSize << ", block=" << blockSize << ")\n";
+
+    HIP_CHECK(hipDeviceSynchronize());
+    std::cout << "✓ Kernel execution completed\n";
+
+    // ============================================================
+    // 讀取結果
+    // ============================================================
+    HIP_CHECK(hipMemcpy(hC_raw.data(), dC_raw, bytes_with_timestamp, hipMemcpyDeviceToHost));
+    
+    uint64_t min_start = hTimestamp[0];
+    uint64_t max_end = hTimestamp[1];
+    
+    std::cout << "========================================\n";
+    std::cout << "[Atomic Timestamp Results]\n";
+    std::cout << "  min_start:       " << min_start << " ticks\n";
+    std::cout << "  max_end:         " << max_end << " ticks\n";
+    
+    // 檢查是否有有效的 atomic 更新
+    bool timestamp_valid = (min_start != 0xFFFFFFFFFFFFFFFFULL && max_end != 0);
+    
+    if (timestamp_valid) {
+        uint64_t kernel_wall_time = max_end - min_start;
+        std::cout << "  kernel_wall_time = max_end - min_start\n";
+        std::cout << "  ────────────────────────────────\n";
+        std::cout << "  KERNEL WALL TIME: " << kernel_wall_time << " ticks\n";
+        
+        // 假設 GPU 時鐘頻率約 1.7 GHz (可根據實際 GPU 調整)
+        // 1 tick ≈ 0.588 ns
+        double approx_ns = kernel_wall_time * 0.588;
+        double approx_us = approx_ns / 1000.0;
+        std::cout << "  (~" << std::fixed << std::setprecision(2) << approx_us << " us at 1.7 GHz)\n";
+    } else {
+        std::cout << "  ⚠️ Atomic timestamp not updated (kernel may not have atomic mode)\n";
+    }
+    std::cout << "========================================\n";
+
+    // 驗證結果
+    bool ok = true;
+    int error_count = 0;
+    for (int i = 0; i < N; ++i) {
+        float expected = hA[i] + hB[i];
+        if (std::fabs(hC[i] - expected) > 1e-5f) {
+            if (error_count < 5) {
+                std::cerr << "Mismatch at [" << i << "]: got " << hC[i] 
+                          << ", expected " << expected << "\n";
+            }
+            error_count++;
+            ok = false;
+        }
+    }
+
+    if (ok) {
+        std::cout << "✅ PASS: All " << N << " elements correct\n";
+    } else {
+        std::cout << "❌ FAIL: " << error_count << " errors found\n";
+    }
+
+    HIP_CHECK(hipFree(dA));
+    HIP_CHECK(hipFree(dB));
+    HIP_CHECK(hipFree(dC_raw));
+
+    return ok;
+}
+
 // ============================================================================
 // main - 主程式進入點
 // ============================================================================
 int main(int argc, char* argv[]) {
+    // 檢查 --timestamp-atomic 標誌
+    bool use_timestamp_atomic = false;
+    int arg_offset = 0;
+    
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--timestamp-atomic") == 0) {
+            use_timestamp_atomic = true;
+            arg_offset = 1;
+            // 移動後面的參數
+            for (int j = i; j < argc - 1; ++j) {
+                argv[j] = argv[j + 1];
+            }
+            argc--;
+            break;
+        }
+    }
+    
     if (argc < 5) {
         print_usage(argv[0]);
+        std::cerr << "\nOptions:\n";
+        std::cerr << "  --timestamp-atomic  Enable atomic timestamp profiling\n";
         return 1;
     }
 
@@ -569,37 +722,44 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n";
     
     bool result = false;
-    switch (kernel_type) {
-        case FLOAT_VECTOR_ADD:
-            result = run_float_vector_add(func, N);
-            break;
-            
-        case FLOAT_VECTOR_MUL:
-            result = run_float_vector_mul(func, N);
-            break;
-            
-        case FLOAT_VECTOR_DOT:
-            result = run_float_vector_dot(func, N);
-            break;
-            
-        case FLOAT_SAXPY:
-            result = run_float_saxpy(func, N);
-            break;
-            
-        case FLOAT_CONDITIONAL:
-            result = run_float_conditional(func, N);
-            break;
-            
-        case INT_SCALAR_OPS:
-        case INT_LOOP:
-            result = run_int_kernel_1out(func, N);
-            break;
-            
-        case INT_MEMORY_OPS:
-        case INT_CONDITIONAL:
-        case INT_SHARED_MEMORY:
-            result = run_int_kernel_inout(func, N);
-            break;
+    
+    // 如果啟用 atomic timestamp，使用特殊版本
+    if (use_timestamp_atomic && kernel_type == FLOAT_VECTOR_ADD) {
+        std::cout << "[Atomic Timestamp Mode Enabled]\n";
+        result = run_float_vector_add_with_timestamp(func, N);
+    } else {
+        switch (kernel_type) {
+            case FLOAT_VECTOR_ADD:
+                result = run_float_vector_add(func, N);
+                break;
+                
+            case FLOAT_VECTOR_MUL:
+                result = run_float_vector_mul(func, N);
+                break;
+                
+            case FLOAT_VECTOR_DOT:
+                result = run_float_vector_dot(func, N);
+                break;
+                
+            case FLOAT_SAXPY:
+                result = run_float_saxpy(func, N);
+                break;
+                
+            case FLOAT_CONDITIONAL:
+                result = run_float_conditional(func, N);
+                break;
+                
+            case INT_SCALAR_OPS:
+            case INT_LOOP:
+                result = run_int_kernel_1out(func, N);
+                break;
+                
+            case INT_MEMORY_OPS:
+            case INT_CONDITIONAL:
+            case INT_SHARED_MEMORY:
+                result = run_int_kernel_inout(func, N);
+                break;
+        }
     }
 
     std::cout << "========================================\n";
