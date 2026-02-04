@@ -656,7 +656,8 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
                 'args_list': [], 
                 'yaml_vgpr_count': None,  # 來自 YAML（始終是數字）
                 'yaml_agpr_count': None,  # 來自 YAML（始終是數字）
-                'yaml_sgpr_count': None   # 來自 YAML（始終是數字）
+                'yaml_sgpr_count': None,  # 來自 YAML（始終是數字）
+                'yaml_kernarg_segment_size': None,  # 來自 YAML（始終是數字）
             }
         
         # 從 YAML metadata 中提取 args 和其他信息
@@ -686,6 +687,10 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
                                 if '.sgpr_count' in kernel:
                                     kernel_metadata_map[kernel_name]['yaml_sgpr_count'] = kernel['.sgpr_count']
                                 
+                                # 保存 YAML 中的 kernarg_segment_size（當組譯指令缺失時作為回退）
+                                if '.kernarg_segment_size' in kernel:
+                                    kernel_metadata_map[kernel_name]['yaml_kernarg_segment_size'] = kernel['.kernarg_segment_size']
+                                
                                 # 提取 args
                                 if '.args' in kernel and isinstance(kernel['.args'], list):
                                     args_list = []
@@ -707,9 +712,10 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
                     amdhsa_sgpr = attrs.get('amdhsa_next_free_sgpr', '?')
                     yaml_vgpr = kdata['yaml_vgpr_count']
                     yaml_sgpr = kdata['yaml_sgpr_count']
+                    yaml_kernarg = kdata['yaml_kernarg_segment_size']
                     print(f"  - {kname}: amdhsa_vgpr={amdhsa_vgpr}, amdhsa_sgpr={amdhsa_sgpr}, "
                           f"yaml_vgpr={yaml_vgpr}, yaml_sgpr={yaml_sgpr}, "
-                          f"kernarg_size={attrs.get('kernarg_segment_size', '?')}, "
+                          f"kernarg_size={attrs.get('kernarg_segment_size', yaml_kernarg if yaml_kernarg is not None else '?')}, "
                           f"lds={attrs.get('group_segment_fixed_size', '?')}, args={len(args_list)}")
             
             except Exception as e:
@@ -758,6 +764,7 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
                     yaml_vgpr_count = kdata['yaml_vgpr_count']
                     yaml_agpr_count = kdata['yaml_agpr_count']
                     yaml_sgpr_count = kdata['yaml_sgpr_count']
+                    yaml_kernarg_segment_size = kdata['yaml_kernarg_segment_size']
                     
                     # 修復 GPR counts（使用 YAML 中的數值）
                     if yaml_vgpr_count is not None:
@@ -767,9 +774,11 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
                     if yaml_sgpr_count is not None:
                         kernel['.sgpr_count'] = yaml_sgpr_count
                     
-                    # 修復 kernarg_segment_size
+                    # 修復 kernarg_segment_size（優先使用組譯指令值，否則回退到原始 YAML）
                     if 'kernarg_segment_size' in attrs:
                         kernel['.kernarg_segment_size'] = attrs['kernarg_segment_size']
+                    elif yaml_kernarg_segment_size is not None:
+                        kernel['.kernarg_segment_size'] = yaml_kernarg_segment_size
                     
                     # 修復 group_segment_fixed_size (LDS / shared memory 大小)
                     if 'group_segment_fixed_size' in attrs:
@@ -808,6 +817,10 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
             continue
         
         attrs = kernel_metadata_map[kernel_name]['attrs']
+        yaml_kernarg_segment_size = kernel_metadata_map[kernel_name]['yaml_kernarg_segment_size']
+        if 'kernarg_segment_size' not in attrs and yaml_kernarg_segment_size is not None:
+            attrs = dict(attrs)
+            attrs['kernarg_segment_size'] = yaml_kernarg_segment_size
         
         # 找到這個 kernel 的 .amdhsa_kernel 到 .end_amdhsa_kernel 的範圍
         kernel_pattern = rf'\.amdhsa_kernel\s+{re.escape(kernel_name)}(.*?)\.end_amdhsa_kernel'
@@ -862,6 +875,18 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
                 modified_block
             )
         
+        # 若啟用 kernarg segment ptr，確保 user_sgpr_count 至少為 2（64-bit 指標）
+        if re.search(r'\.amdhsa_user_sgpr_kernarg_segment_ptr\s+1', modified_block):
+            user_sgpr_match = re.search(r'\.amdhsa_user_sgpr_count\s+(\d+)', modified_block)
+            if user_sgpr_match:
+                user_sgpr_count = int(user_sgpr_match.group(1))
+                if user_sgpr_count < 2:
+                    modified_block = re.sub(
+                        r'(\.amdhsa_user_sgpr_count)\s+\d+',
+                        r'\1 2',
+                        modified_block
+                    )
+        
         # 替換原始 ISA 中的這個 kernel block
         fixed_isa = fixed_isa[:kernel_block_start] + modified_block + fixed_isa[kernel_block_end:]
     
@@ -881,9 +906,6 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
         output_prefix: 輸出文件前綴（如果為 None，使用輸入文件名）
         original_isa_file: 原始 ISA 文件路徑（如果提供，用於提取 metadata）
     """
-    for tool in ["mlir-opt", "llvm-mc", "lld"]:
-        ensure_tool(tool)
-
     kernel_stem = output_prefix if output_prefix else kernel_mlir.stem
 
     kernel_binary_mlir = workdir / f"{kernel_stem}_binary_isa.mlir"
@@ -933,30 +955,32 @@ def build_isa_and_hsaco(kernel_mlir: pathlib.Path, chip: str, workdir: pathlib.P
     kernel_isa_s.write_text(isa)
     print(f"Wrote ISA assembly to {kernel_isa_s}")
 
+    # Derive the target triple from .amdgcn_target if present to avoid mismatch.
+    target_triple = "amdgcn--amdhsa"
+    target_match = re.search(r'\.amdgcn_target\s+"([^"]+)"', isa)
+    if target_match:
+        target_id = target_match.group(1)
+        target_triple = target_id.split("--", 1)[0]
+        print(f"[Info] Using target triple from .amdgcn_target: {target_triple}")
+
     print(f"\n=== Stage 4: Assembling ISA to object file ===")
-    llvm_mc_cmd = [
-        "llvm-mc",
-        "-triple", "amdgcn-amd-amdhsa",
-        f"-mcpu={chip}",
-        "-filetype=obj",
+    clang_cmd = [
+        "/opt/rocm/llvm/bin/clang++",
+        "-x", "assembler",
+        "-target", target_triple,
+        f"--offload-arch={chip}",
+        "-c",
         str(kernel_isa_s),
         "-o",
         str(kernel_o),
     ]
-    run_cmd(llvm_mc_cmd)
+    run_cmd(clang_cmd)
 
     print(f"\n=== Stage 5: Linking to HSACO ===")
     ld_cmd = [
-        "lld",
-        "-flavor", "gnu",
-        "-m", "elf64_amdgpu",
-        "--no-undefined",
+        "/opt/rocm/llvm/bin/ld.lld",
         "-shared",
-        "-plugin-opt=-amdgpu-internalize-symbols",
-        f"-plugin-opt=mcpu={chip}",
-        "--whole-archive",
         str(kernel_o),
-        "--no-whole-archive",
         "-o",
         str(kernel_hsaco),
     ]

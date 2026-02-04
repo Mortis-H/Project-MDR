@@ -25,3 +25,4 @@ Thumbs.db
 *.tmp
 *.bak
 
+!andy_moe/sp3_pipeline/*
