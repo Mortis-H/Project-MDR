@@ -6,10 +6,10 @@ AMD ISA Assembly Debug Tool
 在組合語言（.s 檔案）中插入 printf 除錯功能。
 
 使用方式：
-1. 在 .s 檔案中以註解形式標註要印出的內容：
-   ; @PRINT fmt="value: %f" reg=v6 type=f32
-   ; @PRINT fmt="idx: %d" reg=v0 type=i32
-   ; @PRINT fmt="regs: v4=%f, v5=%f" reg=v4,v5 type=f32,f32
+1. 在 .s 檔案中以註解形式標註要印出的內容（f-string 風格）：
+   ; @PRINT f"value: {v6:.3f}"
+   ; @PRINT f"idx: {v0:d}"
+   ; @PRINT f"regs: v4={v4:.3f}, v5={v5:.3f}"
 
 2. 執行此工具：
    # 基本用法（生成 HSACO）
@@ -357,9 +357,7 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     """
     解析 @PRINT 指令
     
-    支援兩種語法：
-    
-    === 新語法（Python f-string 風格，推薦）===
+    支援語法（Python f-string 風格）：
     ; @PRINT f"Before: A={v6:.3f}, B={v7:.2f}"
     ; @PRINT if v6 > 2.0: f"A={v6:.3f}, B={v7:.2f}"
     
@@ -374,9 +372,7 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     - if s4 == 64:
     - 支援 ==, !=, <, <=, >, >=
     
-    === 舊語法（向後相容）===
-    ; @PRINT fmt="value: %f" reg=v6 type=f32
-    ; @PRINT cond=v6_gt(2.0) fmt="A=%f" reg=v6 type=f32
+    注意：僅支援 f-string 風格，舊語法不再解析。
     """
     # 匹配 @PRINT 指令（支援 ; 或 # 作為註解前綴）
     match = re.search(r'[;#]\s*@PRINT\s+(.+)', line)
@@ -494,77 +490,10 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
             all_placeholders=all_placeholders
         )
     
-    # ========== 舊語法（向後相容）==========
-    fmt_match = re.search(r'fmt\s*=\s*"([^"]*)"', directive_content)
-    reg_match = re.search(r'(?<![_\w])reg\s*=\s*([\w,\[\]:\s]+?)(?:\s+(?:type|cond|expr|$))', directive_content)
-    type_match = re.search(r'(?<![_\w])type\s*=\s*([\w,\s]+?)(?:\s+(?:reg|cond|fmt|expr|$)|$)', directive_content)
-    cond_match = re.search(r'(?<![_\w])cond\s*=\s*(\w+\([^)]+\))', directive_content)
-    expr_match = re.search(r'expr\s*=\s*"([^"]+)"', directive_content)
-    
-    if not fmt_match or not type_match:
-        print(f"[Warning] Incomplete @PRINT at line {line_number + 1}: {line.strip()}")
-        return None
-    
-    format_string = fmt_match.group(1)
-    
-    # 解析類型列表
-    type_str = type_match.group(1).strip().rstrip(',')
-    types = [t.strip() for t in type_str.split(',')]
-    
-    # 解析暫存器列表（可選）
-    registers = []
-    if reg_match:
-        reg_str = reg_match.group(1).strip().rstrip(',')
-        registers = [r.strip() for r in reg_str.split(',')]
-    
-    # 解析表達式（可選）
-    expressions = []
-    if expr_match:
-        expr_str = expr_match.group(1).strip()
-        expressions = [e.strip() for e in expr_str.split(';')]
-    
-    # 條件（可選）
-    condition = cond_match.group(1) if cond_match else None
-    
-    # 從 condition 自動提取條件暫存器和類型
-    condition_register = None
-    condition_type = None
-    
-    if condition:
-        cond_parse = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', condition)
-        if cond_parse:
-            cond_reg, cond_op, cond_value = cond_parse.groups()
-            if '.' in cond_value:
-                condition_type = 'f32'
-            else:
-                condition_type = 'i32'
-            if cond_reg not in registers:
-                condition_register = cond_reg
-                print(f"[Info] Condition register {cond_reg} (type={condition_type}) needs separate snapshot")
-    
-    # 驗證：必須有 reg 或 expr
-    if not registers and not expressions:
-        print(f"[Warning] @PRINT must have 'reg' or 'expr' at line {line_number + 1}")
-        return None
-    
-    # 驗證數量匹配
-    total_values = len(registers) + len(expressions)
-    if total_values != len(types):
-        print(f"[Warning] Value/type count mismatch at line {line_number + 1}")
-        print(f"  Registers: {registers}, Expressions: {expressions}")
-        print(f"  Types: {types}")
-        return None
-    
-    return PrintDirective(
-        line_number=line_number,
-        format_string=format_string,
-        registers=registers,
-        types=types,
-        condition=condition,
-        condition_register=condition_register,
-        condition_type=condition_type,
-        expressions=expressions if expressions else None
-    )
+    # 僅支援 f-string，其他格式直接忽略
+    print(f"[Warning] Invalid @PRINT format at line {line_number + 1}: {line.strip()}")
+    print("         Use f-string format, e.g. ; @PRINT f\"v0={v0:d}\"")
+    return None
 
 
 def parse_timestamp_directive(line: str, line_number: int) -> Optional[TimestampDirective]:
@@ -1509,7 +1438,9 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     
     # === 動態計算 clobber 範圍 ===
     MAX_VECTOR_SIZE = 32      # LLVM inline_asm vector 類型限制
-    SGPR_KERNARG_BACKUP = 18  # 保存 kernarg pointer 到 s[18:19]
+    SGPR_KERNARG_BACKUP = snapshot_sgpr_start + total_snapshot_sgprs
+    if SGPR_KERNARG_BACKUP < SGPR_SNAPSHOT_START_MIN:
+        SGPR_KERNARG_BACKUP = SGPR_SNAPSHOT_START_MIN
     SGPR_RESERVED_START = 4   # s[0:3] 是系統保留的，從 s4 開始保護
     
     original_agpr = reg_info.get('agpr', 0)
@@ -1536,7 +1467,8 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     # SGPR 快照從 snapshot_sgpr_start 開始
     # 需要保護的範圍：s[4] 到 s[snapshot_sgpr_start + total_snapshot_sgprs - 1]
     sgpr_start = SGPR_RESERVED_START
-    sgpr_end_needed = snapshot_sgpr_start + total_snapshot_sgprs if total_snapshot_sgprs > 0 else max(original_sgpr, 20)
+    sgpr_end_needed = snapshot_sgpr_start + total_snapshot_sgprs if total_snapshot_sgprs > 0 else max(original_sgpr, SGPR_SNAPSHOT_START_MIN)
+    sgpr_end_needed = max(sgpr_end_needed, SGPR_KERNARG_BACKUP + 2)
     sgpr_count_needed = sgpr_end_needed - sgpr_start
     
     total_sgpr = next_power_of_2(sgpr_count_needed) if sgpr_count_needed > 0 else 0
@@ -2022,7 +1954,7 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     # 需要包含：快照 VGPR + workitem_id backup VGPR + 內建變數 VGPR
     # next_builtin_vgpr 已經計算了所有需要的 VGPR（包括 conditional、$tid、$lane）
     required_vgpr = next_builtin_vgpr
-    required_sgpr = snapshot_sgpr_start + total_snapshot_sgprs
+    required_sgpr = max(snapshot_sgpr_start + total_snapshot_sgprs, SGPR_KERNARG_BACKUP + 2)
     
     return '\n'.join(modified_lines), required_vgpr, required_sgpr
 
@@ -2518,6 +2450,39 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
     attrs = {}
     original_non_hidden_args = []  # 只保存非 hidden 參數
     original_all_args = []  # 保存所有參數（用於無 printf 情況）
+    computed_kernarg_size = None
+
+    def compute_kernarg_size(arg_list):
+        max_end = 0
+        for arg in arg_list:
+            offset = arg.get('.offset', arg.get('offset'))
+            size = arg.get('.size', arg.get('size', 0))
+            if offset is None:
+                continue
+            try:
+                end = int(offset) + int(size)
+            except Exception:
+                continue
+            if end > max_end:
+                max_end = end
+        # Align to 8 bytes for kernarg segment
+        if max_end % 8 != 0:
+            max_end = ((max_end + 7) // 8) * 8
+        return max_end
+
+    def compute_user_sgpr_count(attr_map):
+        count = 0
+        if attr_map.get('dispatch_ptr', 0):
+            count += 2
+        if attr_map.get('queue_ptr', 0):
+            count += 2
+        if attr_map.get('kernarg_segment_ptr', 0):
+            count += 2
+        if attr_map.get('dispatch_id', 0):
+            count += 2
+        if attr_map.get('private_segment_size', 0):
+            count += 1
+        return count
     
     # 提取 .amdhsa_* directives
     amdhsa_patterns = {
@@ -2527,6 +2492,7 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
         'dispatch_ptr': r'\.amdhsa_user_sgpr_dispatch_ptr\s+(\d+)',
         'queue_ptr': r'\.amdhsa_user_sgpr_queue_ptr\s+(\d+)',
         'kernarg_segment_ptr': r'\.amdhsa_user_sgpr_kernarg_segment_ptr\s+(\d+)',  # 關鍵！
+        'private_segment_size': r'\.amdhsa_user_sgpr_private_segment_size\s+(\d+)',
         'workitem_id': r'\.amdhsa_system_vgpr_workitem_id\s+(\d+)',
         'workgroup_id_x': r'\.amdhsa_system_sgpr_workgroup_id_x\s+(\d+)',
         'accum_offset': r'\.amdhsa_accum_offset\s+(\d+)',  # AGPR offset - 重要
@@ -2640,9 +2606,24 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
                 new_args.append(yaml_arg)
             
             # 添加生成的 hidden 參數（包含 hidden_hostcall_buffer）
-            new_args.extend(gen_args[hidden_start_idx:])
+            hidden_args = gen_args[hidden_start_idx:]
+            if hidden_args:
+                base_offset = compute_kernarg_size(original_non_hidden_args)
+                hidden_offsets = [arg.get('.offset') for arg in hidden_args if arg.get('.offset') is not None]
+                if hidden_offsets:
+                    shift = base_offset - min(hidden_offsets)
+                    if shift:
+                        for arg in hidden_args:
+                            if arg.get('.offset') is not None:
+                                arg['.offset'] = int(arg['.offset']) + shift
+                        print(f"[Info] Shifted hidden args by {shift} (base_offset={base_offset})")
+            new_args.extend(hidden_args)
             
             kernel['.args'] = new_args
+            computed_kernarg_size = compute_kernarg_size(new_args)
+            if computed_kernarg_size:
+                kernel['.kernarg_segment_size'] = computed_kernarg_size
+                print(f"[Info] Recomputed kernarg_segment_size: {computed_kernarg_size}")
             
             # 檢查是否有 hidden_hostcall_buffer
             has_hostcall = any(arg.get('.value_kind') == 'hidden_hostcall_buffer' for arg in new_args)
@@ -2697,6 +2678,10 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
                 {'.offset': hidden_offset + 104, '.size': 4, '.value_kind': 'hidden_grid_dims'},
             ]
             kernel['.args'].extend(hidden_args)
+            computed_kernarg_size = compute_kernarg_size(kernel['.args'])
+            if computed_kernarg_size:
+                kernel['.kernarg_segment_size'] = computed_kernarg_size
+                print(f"[Info] Recomputed kernarg_segment_size: {computed_kernarg_size}")
             print(f"[Info] Restored {len(original_all_args)} original kernel arguments + {len(hidden_args)} hidden args for multi-workgroup support")
     
     # 重新生成 YAML
@@ -2709,7 +2694,24 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
     fixed_isa = before_metadata + "---\n" + fixed_yaml + "...\n" + after_metadata
     
     # 同時修復 .amdhsa_* 指令
-    if 'kernarg_segment_size' in attrs:
+    if computed_kernarg_size:
+        if re.search(r'\.amdhsa_kernarg_size\s+\d+', fixed_isa):
+            fixed_isa = re.sub(
+                r'(\.amdhsa_kernarg_size)\s+\d+',
+                rf'\1 {computed_kernarg_size}',
+                fixed_isa
+            )
+            print(f"[Info] Fixed .amdhsa_kernarg_size: {computed_kernarg_size}")
+        else:
+            fixed_isa = re.sub(
+                r'(\.amdhsa_private_segment_fixed_size\s+\d+)',
+                rf'\1\n\t\t.amdhsa_kernarg_size {computed_kernarg_size}',
+                fixed_isa,
+                count=1
+            )
+            print(f"[Info] Inserted .amdhsa_kernarg_size: {computed_kernarg_size}")
+
+    if computed_kernarg_size is None and 'kernarg_segment_size' in attrs:
         fixed_isa = re.sub(
             r'(\.amdhsa_kernarg_size)\s+\d+',
             rf'\1 {attrs["kernarg_segment_size"]}',
@@ -2723,10 +2725,13 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
             fixed_isa
         )
     
-    if 'user_sgpr_count' in attrs and attrs['user_sgpr_count'] > 0:
+    user_sgpr_count = attrs.get('user_sgpr_count', 0)
+    if user_sgpr_count <= 0:
+        user_sgpr_count = compute_user_sgpr_count(attrs)
+    if user_sgpr_count > 0:
         fixed_isa = re.sub(
             r'(\.amdhsa_user_sgpr_count)\s+\d+',
-            rf'\1 {attrs["user_sgpr_count"]}',
+            rf'\1 {user_sgpr_count}',
             fixed_isa
         )
     
@@ -2769,6 +2774,8 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
             current_accum = int(accum_match.group(1))
             # accum_offset 必須是 4 的倍數，且 >= required_vgpr
             required_accum = ((required_vgpr + 3) // 4) * 4  # 向上取整到 4 的倍數
+            if required_accum > 256:
+                required_accum = 256
             if required_accum > current_accum:
                 fixed_isa = re.sub(
                     r'(\.amdhsa_accum_offset)\s+\d+',
@@ -2857,6 +2864,8 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
             current_accum = int(accum_match.group(1))
             # accum_offset 必須是 4 的倍數，且 >= needed_vgpr，且 >= 原始值
             required_accum = ((max(needed_vgpr, original_accum) + 3) // 4) * 4
+            if required_accum > 256:
+                required_accum = 256
             if required_accum > current_accum:
                 fixed_isa = re.sub(
                     r'(\.amdhsa_accum_offset)\s+\d+',
@@ -3064,8 +3073,8 @@ def main():
         epilog="""
 使用範例：
   1. 在 .s 檔案中標註：
-     ; @PRINT fmt="v6=%f" reg=v6 type=f32
-     ; @PRINT cond=v6_eq(0.0) fmt="A=%f, B=%f" reg=v6,v7 type=f32,f32
+     ; @PRINT f"v6={v6:.3f}"
+     ; @PRINT if v6 == 0.0: f"A={v6:.3f}, B={v7:.3f}"
 
   2. 執行工具：
      python3 asm_debug.py input.s --output-dir debug_output
