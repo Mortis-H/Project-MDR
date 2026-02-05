@@ -71,6 +71,107 @@ BITCODE_ATTR_RE = re.compile(
     re.DOTALL,
 )
 
+COMMENT_SPLIT_MARKERS = ("//", ";", "#")
+
+
+def _strip_asm_comment(line: str) -> str:
+    for marker in COMMENT_SPLIT_MARKERS:
+        if marker in line:
+            line = line.split(marker, 1)[0]
+    return line
+
+
+def _add_reg_range(reg_set: set[int], start: int, end: int | None):
+    if end is None:
+        reg_set.add(start)
+        return
+    for idx in range(start, end + 1):
+        reg_set.add(idx)
+
+
+def _parse_register_usage(asm_text: str) -> dict:
+    """
+    Heuristically parse SGPR/VGPR/ACC usage from ISA text.
+    """
+    s_regs: set[int] = set()
+    v_regs: set[int] = set()
+    acc_regs: set[int] = set()
+
+    for raw_line in asm_text.splitlines():
+        line = _strip_asm_comment(raw_line)
+        if not line.strip():
+            continue
+
+        for m in re.finditer(r'\bs(\d+)\b', line):
+            s_regs.add(int(m.group(1)))
+        for m in re.finditer(r'\bv(\d+)\b', line):
+            v_regs.add(int(m.group(1)))
+        for m in re.finditer(r'\bacc(\d+)\b', line):
+            acc_regs.add(int(m.group(1)))
+
+        for m in re.finditer(r'\bs\[(\d+)(?::(\d+))?\]', line):
+            _add_reg_range(s_regs, int(m.group(1)), int(m.group(2)) if m.group(2) else None)
+        for m in re.finditer(r'\bv\[(\d+)(?::(\d+))?\]', line):
+            _add_reg_range(v_regs, int(m.group(1)), int(m.group(2)) if m.group(2) else None)
+        for m in re.finditer(r'\bacc\[(\d+)(?::(\d+))?\]', line):
+            _add_reg_range(acc_regs, int(m.group(1)), int(m.group(2)) if m.group(2) else None)
+
+    def _count(regs: set[int]) -> int:
+        return max(regs) + 1 if regs else 0
+
+    return {
+        "sgpr_count": _count(s_regs),
+        "vgpr_count": _count(v_regs),
+        "agpr_count": _count(acc_regs),
+        "sgpr_max": max(s_regs) if s_regs else None,
+        "vgpr_max": max(v_regs) if v_regs else None,
+        "agpr_max": max(acc_regs) if acc_regs else None,
+    }
+
+
+def _extract_function_body(isa_text: str, func_name: str) -> str | None:
+    lines = isa_text.splitlines()
+    label_re = re.compile(rf'^\s*{re.escape(func_name)}:\s*$')
+    start = None
+    for i, line in enumerate(lines):
+        if label_re.match(line):
+            start = i + 1
+            break
+    if start is None:
+        return None
+
+    size_re = re.compile(rf'^\s*\.size\s+{re.escape(func_name)}\b')
+    for i in range(start, len(lines)):
+        if size_re.match(lines[i]):
+            return "\n".join(lines[start:i])
+        if re.match(r'^\s*\.type\s+[\w.$]+,@function', lines[i]) and not re.search(
+            rf'\.type\s+{re.escape(func_name)},@function', lines[i]
+        ):
+            return "\n".join(lines[start:i])
+        if re.match(r'^\s*\.amdgpu_metadata\b', lines[i]):
+            return "\n".join(lines[start:i])
+
+    return "\n".join(lines[start:])
+
+
+def compute_gpr_usage_map(isa_text: str, kernel_names: list[str]) -> dict:
+    """
+    Compute SGPR/VGPR/ACC usage for each kernel by parsing its function body.
+    """
+    usage_map = {}
+    for name in kernel_names:
+        func_body = _extract_function_body(isa_text, name)
+        if func_body is None:
+            if len(kernel_names) == 1:
+                func_body = isa_text
+            else:
+                print(f"[Warning] Could not find function body for kernel: {name}")
+                continue
+
+        usage = _parse_register_usage(func_body)
+        usage_map[name] = usage
+    return usage_map
+
 
 def decode_mlir_bytes(raw: str) -> bytes:
     """
@@ -720,6 +821,34 @@ def fix_isa_metadata(isa_text: str, gpumlir_file: pathlib.Path, original_isa_fil
             
             except Exception as e:
                 print(f"[Warning] Failed to parse original ISA YAML metadata: {e}")
+
+        # 從原始 ISA 指令中解析實際 GPR 用量，覆蓋 metadata 中的數值
+        gpr_usage_map = compute_gpr_usage_map(original_isa_text, list(kernel_metadata_map.keys()))
+        for kname, usage in gpr_usage_map.items():
+            if usage["sgpr_count"] == 0 and usage["vgpr_count"] == 0 and usage["agpr_count"] == 0:
+                print(f"[Warning] GPR usage parse returned 0 for kernel: {kname}")
+                continue
+
+            kdata = kernel_metadata_map[kname]
+            attrs = kdata["attrs"]
+
+            final_vgpr = usage["vgpr_count"]
+            accum_offset = attrs.get("accum_offset")
+            if usage["agpr_count"] > 0 and isinstance(accum_offset, int):
+                final_vgpr = max(final_vgpr, accum_offset + usage["agpr_count"])
+
+            kdata["attrs"]["vgpr_count"] = final_vgpr
+            kdata["attrs"]["amdhsa_next_free_sgpr"] = usage["sgpr_count"]
+            kdata["yaml_vgpr_count"] = final_vgpr
+            kdata["yaml_sgpr_count"] = usage["sgpr_count"]
+            if usage["agpr_count"] > 0:
+                kdata["yaml_agpr_count"] = usage["agpr_count"]
+
+            print(
+                f"[Info] {kname}: gpr_usage sgpr={usage['sgpr_count']}, "
+                f"vgpr={usage['vgpr_count']}, agpr={usage['agpr_count']}, "
+                f"final_vgpr={final_vgpr}"
+            )
     
     # 如果沒有從原始 ISA 提取到 metadata，嘗試從 GPU MLIR 提取（向後兼容）
     if not kernel_metadata_map:
@@ -1072,7 +1201,7 @@ def main():
     )
     ap.add_argument(
         "--chip",
-        default="gfx950",
+        default="gfx942",
         help="AMDGPU chip (for rocdl-attach-target & llvm-mc -mcpu) [default: gfx950]",
     )
     ap.add_argument(
