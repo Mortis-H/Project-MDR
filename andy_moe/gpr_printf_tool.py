@@ -9,7 +9,7 @@ import re
 import yaml
 import sys
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
 # mdr_printf.py
 sys.path.append(str(PROJECT_ROOT))
 # pipeline.py (amdisa-toolkit examples)
@@ -214,6 +214,8 @@ def build_hsaco_with_pipeline(
         f"gpu-kernel-outlining,"
         f"rocdl-attach-target{{chip={chip}}},"
         f"gpu.module(convert-gpu-to-rocdl{{index-bitwidth=32 runtime=HIP}}),"
+        f"convert-scf-to-cf,"
+        f"convert-cf-to-llvm,"
         f"gpu-to-llvm,"
         f"gpu-module-to-binary{{format=isa}}"
         f")"
