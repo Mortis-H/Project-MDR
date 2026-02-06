@@ -47,6 +47,34 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Tuple
 
 
+BUILTIN_VARS = {
+    '$tid',
+    '$lane',
+    '$tgid_x',
+    '$tgid_y',
+    '$tgid_z',
+    '$block_x',
+    '$block_y',
+    '$block_z',
+    '$blockidx_x',
+    '$blockidx_y',
+    '$blockidx_z',
+}
+
+BUILTIN_ALIASES = {
+    '$block_x': '$tgid_x',
+    '$block_y': '$tgid_y',
+    '$block_z': '$tgid_z',
+    '$blockidx_x': '$tgid_x',
+    '$blockidx_y': '$tgid_y',
+    '$blockidx_z': '$tgid_z',
+}
+
+
+def normalize_builtin(var_name: str) -> str:
+    return BUILTIN_ALIASES.get(var_name, var_name)
+
+
 # ============================================================
 # @PRINT 標記解析
 # ============================================================
@@ -68,6 +96,10 @@ class PrintDirective:
     內建變數：
     - {$tid} - Local Thread ID (workitem_id_x, 0 ~ workgroup_size-1)
     - {$lane} - Wavefront Lane ID (0-63)
+    - {$tgid_x/$tgid_y/$tgid_z} - Workgroup ID (block index)
+      (aliases: {$block_x/$block_y/$block_z}, {$blockidx_x/$blockidx_y/$blockidx_z})
+    - {$tgid_x/$tgid_y/$tgid_z} - Workgroup ID (block index)
+      (aliases: {$block_x/$block_y/$block_z}, {$blockidx_x/$blockidx_y/$blockidx_z})
     """
     line_number: int           # 在 .s 檔案中的行號（0-based）
     format_string: str         # printf 格式字串
@@ -171,7 +203,7 @@ def validate_variable(var_name: str, line_number: int = None) -> bool:
     var_name = var_name.strip()
     
     # 內建變數
-    if var_name in ('$tid', '$lane'):
+    if var_name in BUILTIN_VARS:
         return True
     
     # 簡單暫存器 v\d+ 或 s\d+
@@ -184,9 +216,13 @@ def validate_variable(var_name: str, line_number: int = None) -> bool:
         tokens = re.findall(r'[vs]\d+|\$\w+', var_name)
         for token in tokens:
             if token.startswith('$'):
-                if token not in ('$tid', '$lane'):
+                if token not in BUILTIN_VARS:
                     line_info = f" (line {line_number + 1})" if line_number is not None else ""
-                    raise ValueError(f"Unknown built-in variable '{token}'{line_info}. Valid built-in variables are: $tid, $lane")
+                    raise ValueError(
+                        f"Unknown built-in variable '{token}'{line_info}. "
+                        "Valid built-in variables are: $tid, $lane, $tgid_x/$tgid_y/$tgid_z "
+                        "(aliases: $block_x/$block_y/$block_z, $blockidx_x/$blockidx_y/$blockidx_z)"
+                    )
             elif not re.match(r'^[vs]\d+$', token):
                 line_info = f" (line {line_number + 1})" if line_number is not None else ""
                 raise ValueError(f"Invalid register '{token}'{line_info}. Expected format: v<N> or s<N>")
@@ -195,7 +231,11 @@ def validate_variable(var_name: str, line_number: int = None) -> bool:
     # 如果以 $ 開頭但不是已知的內建變數
     if var_name.startswith('$'):
         line_info = f" (line {line_number + 1})" if line_number is not None else ""
-        raise ValueError(f"Unknown built-in variable '{var_name}'{line_info}. Valid built-in variables are: $tid, $lane")
+        raise ValueError(
+            f"Unknown built-in variable '{var_name}'{line_info}. "
+            "Valid built-in variables are: $tid, $lane, $tgid_x/$tgid_y/$tgid_z "
+            "(aliases: $block_x/$block_y/$block_z, $blockidx_x/$blockidx_y/$blockidx_z)"
+        )
     
     # 不是暫存器也不是表達式
     line_info = f" (line {line_number + 1})" if line_number is not None else ""
@@ -245,7 +285,8 @@ def parse_fstring_format(fstring: str, line_number: int = None) -> Tuple[str, Li
         validate_variable(reg_or_expr, line_number)
         
         # 檢查是否是內建變數
-        if reg_or_expr == '$tid' or reg_or_expr == '$lane':
+        reg_or_expr = normalize_builtin(reg_or_expr)
+        if reg_or_expr in ('$tid', '$lane', '$tgid_x', '$tgid_y', '$tgid_z'):
             # 內建變數：$tid (local thread ID) 或 $lane (wavefront lane ID)
             registers.append(reg_or_expr)
             types.append('i32')  # thread ID 總是 i32
@@ -319,18 +360,35 @@ def parse_condition_pythonic(cond_str: str, line_number: int = None) -> Optional
     - [vs]\\d+ (暫存器，如 v6, s4)
     - $tid (local thread ID)
     - $lane (wavefront lane ID)
+    - $tgid_x/$tgid_y/$tgid_z (workgroup ID)
+    
+    支援 AND：
+    - if $tid == 0 && $tgid_x == 0:
+    - if $tid == 0 and $tgid_x == 0:
     """
-    # 移除 "if " 前綴和 ":" 後綴
     cond_str = cond_str.strip()
     if cond_str.startswith('if '):
         cond_str = cond_str[3:]
     if cond_str.endswith(':'):
         cond_str = cond_str[:-1]
     cond_str = cond_str.strip()
-    
-    # 解析條件式
-    # 支援: v6 > 2.0, v6 >= 2.0, v6 == 0, v6 != 0, v6 < 10, v6 <= 10
-    # 支援: $tid < 10, $tid == 0, $lane < 32, $lane == 0
+
+    parts = [p.strip() for p in re.split(r'\s*(?:&&|\band\b)\s*', cond_str) if p.strip()]
+    if not parts:
+        return None
+    if len(parts) > 1:
+        parsed_parts = []
+        for part in parts:
+            parsed = _parse_condition_single(part, line_number)
+            if not parsed:
+                return None
+            parsed_parts.append(parsed)
+        return "&&".join(parsed_parts)
+
+    return _parse_condition_single(parts[0], line_number)
+
+
+def _parse_condition_single(cond_str: str, line_number: int = None) -> Optional[str]:
     op_map = {
         '==': 'eq',
         '!=': 'ne',
@@ -339,17 +397,16 @@ def parse_condition_pythonic(cond_str: str, line_number: int = None) -> Optional
         '<': 'lt',
         '>': 'gt'
     }
-    
+
     for op_symbol, op_name in sorted(op_map.items(), key=lambda x: -len(x[0])):
         if op_symbol in cond_str:
             parts = cond_str.split(op_symbol, 1)
             if len(parts) == 2:
                 reg = parts[0].strip()
                 value = parts[1].strip()
-                # 驗證條件式中的變數（傳入 line_number 以便顯示錯誤位置）
+                reg = normalize_builtin(reg)
                 validate_variable(reg, line_number)
                 return f"{reg}_{op_name}({value})"
-    
     return None
 
 
@@ -370,7 +427,8 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     條件式：
     - if v6 > 2.0:
     - if s4 == 64:
-    - 支援 ==, !=, <, <=, >, >=
+    - if $tid == 0 && $tgid_x == 0:
+    - 支援 ==, !=, <, <=, >, >= 與 AND (&& / and)
     
     注意：僅支援 f-string 風格，舊語法不再解析。
     """
@@ -416,8 +474,10 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
         all_placeholders = []  # 保存原始順序 [(value, type), ...]
         uses_tid = False
         uses_lane = False
+        uses_tgid = False
         
         for reg_or_expr, typ in zip(parsed_regs, parsed_types):
+            reg_or_expr = normalize_builtin(reg_or_expr)
             # 保存原始順序
             all_placeholders.append((reg_or_expr, typ))
             
@@ -428,6 +488,10 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
                 expr_types.append(typ)
             elif reg_or_expr == '$lane':
                 uses_lane = True
+                expressions.append(reg_or_expr)
+                expr_types.append(typ)
+            elif reg_or_expr in ('$tgid_x', '$tgid_y', '$tgid_z'):
+                uses_tgid = True
                 expressions.append(reg_or_expr)
                 expr_types.append(typ)
             # 判斷是暫存器還是表達式
@@ -446,31 +510,46 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
             print(f"[Info] Using $tid (local thread ID) at line {line_number + 1}")
         if uses_lane:
             print(f"[Info] Using $lane (wavefront lane ID) at line {line_number + 1}")
+        if uses_tgid:
+            print(f"[Info] Using $tgid_x/$tgid_y/$tgid_z (workgroup ID) at line {line_number + 1}")
         
         # 處理條件暫存器
         if condition:
-            # 先檢查是否是內建變數條件
-            builtin_cond_parse = re.match(r'(\$tid|\$lane)_(\w+)\((-?\d+(?:\.\d+)?)\)', condition)
-            if builtin_cond_parse:
-                builtin_var, cond_op, cond_value = builtin_cond_parse.groups()
-                if builtin_var == '$tid':
-                    uses_tid = True
-                    print(f"[Info] Condition uses $tid at line {line_number + 1}")
-                elif builtin_var == '$lane':
-                    uses_lane = True
-                    print(f"[Info] Condition uses $lane at line {line_number + 1}")
-            else:
-                # 檢查是否是暫存器條件
-                cond_parse = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', condition)
-                if cond_parse:
-                    cond_reg, cond_op, cond_value = cond_parse.groups()
-                    if '.' in cond_value:
-                        condition_type = 'f32'
+            cond_parts = [p.strip() for p in condition.split('&&') if p.strip()]
+            for cond_part in cond_parts:
+                # 先檢查是否是內建變數條件
+                builtin_cond_parse = re.match(r'(\$tid|\$lane|\$tgid_x|\$tgid_y|\$tgid_z)_(\w+)\((-?\d+(?:\.\d+)?)\)', cond_part)
+                if builtin_cond_parse:
+                    builtin_var, _, _ = builtin_cond_parse.groups()
+                    if builtin_var == '$tid':
+                        uses_tid = True
+                        print(f"[Info] Condition uses $tid at line {line_number + 1}")
+                    elif builtin_var == '$lane':
+                        uses_lane = True
+                        print(f"[Info] Condition uses $lane at line {line_number + 1}")
                     else:
-                        condition_type = 'i32'
+                        uses_tgid = True
+                        print(f"[Info] Condition uses {builtin_var} at line {line_number + 1}")
+                    continue
+
+                # 檢查是否是暫存器條件
+                cond_parse = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', cond_part)
+                if cond_parse:
+                    cond_reg, _, cond_value = cond_parse.groups()
+                    if '.' in cond_value:
+                        cond_type = 'f32'
+                    else:
+                        cond_type = 'i32'
                     if cond_reg not in registers:
-                        condition_register = cond_reg
-                        print(f"[Info] Condition register {cond_reg} (type={condition_type}) needs separate snapshot")
+                        if not condition_register:
+                            condition_register = cond_reg
+                            condition_type = cond_type
+                            print(f"[Info] Condition register {cond_reg} (type={cond_type}) needs separate snapshot")
+                        elif condition_register != cond_reg:
+                            print(
+                                f"[Warning] Multiple condition registers detected ({condition_register}, {cond_reg}); "
+                                "only the first will be snapshotted."
+                            )
         
         if not registers and not expressions:
             print(f"[Warning] @PRINT f-string has no placeholders at line {line_number + 1}")
@@ -1017,6 +1096,25 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
                     lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_hi_u32_b32 $0, -1, $1", "=v,v": (%{var_name}_lo) -> i32')
                 var_names.append(var_name)
             
+            elif value in ('$tgid_x', '$tgid_y', '$tgid_z'):
+                # $tgid_x/y/z: Workgroup ID (block index)
+                tgid_map = {
+                    '$tgid_x': 'tgid_x_sgpr',
+                    '$tgid_y': 'tgid_y_sgpr',
+                    '$tgid_z': 'tgid_z_sgpr',
+                }
+                sgpr_idx = None
+                if builtin_vars:
+                    sgpr_idx = builtin_vars.get(tgid_map[value])
+                if sgpr_idx is None:
+                    sgpr_idx = 2 if value == '$tgid_x' else 3 if value == '$tgid_y' else 4
+                lines.append(f'              // Built-in {value}: read from s{sgpr_idx}')
+                lines.append(
+                    f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
+                    f'"v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32'
+                )
+                var_names.append(var_name)
+            
             elif re.match(r'^[vs]\d+$', value):
                 # 簡單暫存器
                 if value in reg_snapshot_map:
@@ -1075,6 +1173,22 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
                         lines.append(f'              %{var_name}_lo = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_lo_u32_b32 $0, -1, 0", "=v": () -> i32')
                         lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_hi_u32_b32 $0, -1, $1", "=v,v": (%{var_name}_lo) -> i32')
                     var_names.append(var_name)
+                elif expr in ('$tgid_x', '$tgid_y', '$tgid_z'):
+                    tgid_map = {
+                        '$tgid_x': 'tgid_x_sgpr',
+                        '$tgid_y': 'tgid_y_sgpr',
+                        '$tgid_z': 'tgid_z_sgpr',
+                    }
+                    sgpr_idx = None
+                    if builtin_vars:
+                        sgpr_idx = builtin_vars.get(tgid_map[expr])
+                    if sgpr_idx is None:
+                        sgpr_idx = 2 if expr == '$tgid_x' else 3 if expr == '$tgid_y' else 4
+                    lines.append(
+                        f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
+                        f'"v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32'
+                    )
+                    var_names.append(var_name)
                 else:
                     try:
                         expr_code, result_var = compile_expression_to_mlir(expr, typ, unique_id, i, full_expr_snapshot)
@@ -1110,151 +1224,145 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
     # 注意：條件暫存器必須在 reg= 中列出，才能使用快照值
     
     if directive.condition:
-        # 嘗試匹配內建變數條件：$tid_eq(0), $lane_lt(32) 等
-        builtin_cond_match = re.match(r'(\$tid|\$lane)_(\w+)\((-?\d+(?:\.\d+)?)\)', directive.condition)
-        
-        if builtin_cond_match:
-            builtin_var, cmp_op, cmp_value = builtin_cond_match.groups()
-            
-            # 使用對應的備份 VGPR
-            if builtin_var == '$tid' and builtin_vars and builtin_vars.get('tid_vgpr') is not None:
-                tid_vgpr = builtin_vars['tid_vgpr']
-                snapshot_var = f'%cond_tid_{unique_id}'
-                lines.append(f'              // Conditional printf: read $tid from v{tid_vgpr}')
-                lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{tid_vgpr}", "=v": () -> i32')
-            elif builtin_var == '$lane' and builtin_vars and builtin_vars.get('lane_vgpr') is not None:
-                lane_vgpr = builtin_vars['lane_vgpr']
-                snapshot_var = f'%cond_lane_{unique_id}'
-                lines.append(f'              // Conditional printf: read $lane from v{lane_vgpr}')
-                lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{lane_vgpr}", "=v": () -> i32')
-            else:
-                # Fallback: 直接讀取 v0 或計算 lane
-                if builtin_var == '$tid':
-                    snapshot_var = f'%cond_tid_{unique_id}'
-                    lines.append(f'              // Conditional printf: read $tid from v0 (WARNING: may be modified)')
-                    lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v0", "=v": () -> i32')
-                else:
-                    snapshot_var = f'%cond_lane_{unique_id}'
-                    lines.append(f'              // Conditional printf: calculate $lane on the fly')
-                    lines.append(f'              %cond_lane_lo_{unique_id} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_lo_u32_b32 $0, -1, 0", "=v": () -> i32')
-                    lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_hi_u32_b32 $0, -1, $1", "=v,v": (%cond_lane_lo_{unique_id}) -> i32')
-            
-            # 整數比較
-            cmp_ops = {'eq': 'eq', 'ne': 'ne', 'lt': 'slt', 'le': 'sle', 'gt': 'sgt', 'ge': 'sge'}
-            mlir_cmp = cmp_ops.get(cmp_op, 'eq')
-            cmp_value_int = int(float(cmp_value))
-            
-            lines.append(f'              %cmp_val_{unique_id} = arith.constant {cmp_value_int} : i32')
-            lines.append(f'              %cond_{unique_id} = arith.cmpi {mlir_cmp}, {snapshot_var}, %cmp_val_{unique_id} : i32')
-            lines.append(f'              scf.if %cond_{unique_id} {{')
-            lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
-            lines.append(f'              }}')
-            
-            print(f"[Info] Conditional printf (builtin): {builtin_var} {cmp_op} {cmp_value}")
-        
-        # 嘗試匹配暫存器值條件：v0_eq(1), s4_gt(0) 等
-        elif reg_cond_match := re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', directive.condition):
-            cond_reg, cmp_op, cmp_value = reg_cond_match.groups()
-            
-            # 找出這個暫存器對應的快照
-            # 首先檢查是否在 @PRINT 的暫存器列表中
-            snapshot_var = None
-            snapshot_type = None
-            
-            # 檢查 VGPR 快照
-            if vgpr_snapshots:
-                for r_idx, orig_reg, snap_num in vgpr_snapshots:
-                    if orig_reg == cond_reg:
-                        snapshot_var = f'%print_val_{unique_id}_{r_idx}'
-                        # 從 types 中找出對應的類型
-                        if r_idx < len(directive.types):
-                            snapshot_type = directive.types[r_idx]
-                        break
-            
-            # 檢查 SGPR 快照
-            if not snapshot_var and sgpr_snapshots:
-                for r_idx, orig_reg, snap_num in sgpr_snapshots:
-                    if orig_reg == cond_reg:
-                        snapshot_var = f'%print_val_{unique_id}_{r_idx}'
-                        if r_idx < len(directive.types):
-                            snapshot_type = directive.types[r_idx]
-                        break
-            
-            # 檢查是否有獨立的條件暫存器快照
-            if not snapshot_var and cond_snapshot:
-                cond_snap_reg, snap_num, is_vgpr, cond_type = cond_snapshot
-                if cond_snap_reg == cond_reg:
-                    # 使用條件暫存器快照
-                    snapshot_type = cond_type
-                    snapshot_reg = f'v{snap_num}' if is_vgpr else f's{snap_num}'
-                    # 讀取快照值
-                    mlir_type = map_type_to_mlir(cond_type)
-                    snapshot_var = f'%cond_snap_val_{unique_id}'
-                    lines.append(f'              // Using condition register snapshot: {cond_reg} -> {snapshot_reg}')
-                    lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {snapshot_reg}", "=v": () -> {mlir_type}')
-            
-            if snapshot_var and snapshot_type:
-                # 使用快照值來做條件判斷（安全，不會破壞 SGPR）
-                cmp_ops = {
-                    'eq': 'eq', 'ne': 'ne',
-                    'lt': 'slt', 'le': 'sle',
-                    'gt': 'sgt', 'ge': 'sge'
-                }
-                mlir_cmp = cmp_ops.get(cmp_op, 'eq')
-                
-                # 根據類型生成比較代碼
-                if snapshot_type in ['f32', 'f64']:
-                    # 浮點數比較
-                    float_cmp_ops = {
-                        'eq': 'oeq', 'ne': 'one',
-                        'lt': 'olt', 'le': 'ole',
-                        'gt': 'ogt', 'ge': 'oge'
+        cond_parts = [p.strip() for p in directive.condition.split('&&') if p.strip()]
+        cond_vars: List[str] = []
+        cond_supported = True
+
+        for cond_idx, cond_part in enumerate(cond_parts):
+            cond_tag = f"{unique_id}_{cond_idx}"
+            builtin_cond_match = re.match(
+                r'(\$tid|\$lane|\$tgid_x|\$tgid_y|\$tgid_z)_(\w+)\((-?\d+(?:\.\d+)?)\)',
+                cond_part,
+            )
+            if builtin_cond_match:
+                builtin_var, cmp_op, cmp_value = builtin_cond_match.groups()
+                snapshot_var = f'%cond_builtin_{cond_tag}'
+                if builtin_var == '$tid' and builtin_vars and builtin_vars.get('tid_vgpr') is not None:
+                    tid_vgpr = builtin_vars['tid_vgpr']
+                    lines.append(f'              // Conditional printf: read $tid from v{tid_vgpr}')
+                    lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{tid_vgpr}", "=v": () -> i32')
+                elif builtin_var == '$lane' and builtin_vars and builtin_vars.get('lane_vgpr') is not None:
+                    lane_vgpr = builtin_vars['lane_vgpr']
+                    lines.append(f'              // Conditional printf: read $lane from v{lane_vgpr}')
+                    lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{lane_vgpr}", "=v": () -> i32')
+                elif builtin_var in ('$tgid_x', '$tgid_y', '$tgid_z'):
+                    key_map = {
+                        '$tgid_x': 'tgid_x_sgpr',
+                        '$tgid_y': 'tgid_y_sgpr',
+                        '$tgid_z': 'tgid_z_sgpr',
                     }
-                    mlir_cmp = float_cmp_ops.get(cmp_op, 'oeq')
-                    mlir_type = 'f32' if snapshot_type == 'f32' else 'f64'
-                    lines.append(f'              // Conditional printf: {cond_reg} {cmp_op} {cmp_value}')
-                    lines.append(f'              %cmp_val_{unique_id} = arith.constant {cmp_value} : {mlir_type}')
-                    lines.append(f'              %cond_{unique_id} = arith.cmpf {mlir_cmp}, {snapshot_var}, %cmp_val_{unique_id} : {mlir_type}')
+                    sgpr_idx = None
+                    if builtin_vars:
+                        sgpr_idx = builtin_vars.get(key_map[builtin_var])
+                    if sgpr_idx is None:
+                        sgpr_idx = 2 if builtin_var == '$tgid_x' else 3 if builtin_var == '$tgid_y' else 4
+                    lines.append(f'              // Conditional printf: read {builtin_var} from s{sgpr_idx}')
+                    lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32')
                 else:
-                    # 整數比較
-                    mlir_type = 'i32' if snapshot_type == 'i32' else 'i64'
-                    cmp_value_int = int(float(cmp_value))
-                    lines.append(f'              // Conditional printf: {cond_reg} {cmp_op} {cmp_value_int}')
-                    lines.append(f'              %cmp_val_{unique_id} = arith.constant {cmp_value_int} : {mlir_type}')
-                    lines.append(f'              %cond_{unique_id} = arith.cmpi {mlir_cmp}, {snapshot_var}, %cmp_val_{unique_id} : {mlir_type}')
-                
-                lines.append(f'              scf.if %cond_{unique_id} {{')
-                lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
-                lines.append(f'              }}')
-                
-                print(f"[Info] Conditional printf (snapshot): {cond_reg} {cmp_op} {cmp_value}")
-            else:
-                # 找不到快照，需要新增一個臨時讀取
-                print(f"[Warning] Register {cond_reg} not in snapshot, using direct read (value at printf time, not @PRINT time)")
-                
-                # 判斷是 VGPR 還是 SGPR
-                is_vgpr = cond_reg.startswith('v')
-                
-                # 讀取暫存器值
-                if is_vgpr:
-                    lines.append(f'              // Conditional printf: read {cond_reg} for condition (direct read)')
-                    lines.append(f'              %cond_reg_val_{unique_id} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {cond_reg}", "=v": () -> i32')
-                else:
-                    lines.append(f'              // Conditional printf: read {cond_reg} for condition (direct read)')
-                    lines.append(f'              %cond_reg_val_{unique_id} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {cond_reg}", "=v": () -> i32')
-                
+                    if builtin_var == '$tid':
+                        lines.append(f'              // Conditional printf: read $tid from v0 (WARNING: may be modified)')
+                        lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v0", "=v": () -> i32')
+                    else:
+                        lines.append(f'              // Conditional printf: calculate $lane on the fly')
+                        lines.append(f'              %cond_lane_lo_{cond_tag} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_lo_u32_b32 $0, -1, 0", "=v": () -> i32')
+                        lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_hi_u32_b32 $0, -1, $1", "=v,v": (%cond_lane_lo_{cond_tag}) -> i32')
+
                 cmp_ops = {'eq': 'eq', 'ne': 'ne', 'lt': 'slt', 'le': 'sle', 'gt': 'sgt', 'ge': 'sge'}
                 mlir_cmp = cmp_ops.get(cmp_op, 'eq')
                 cmp_value_int = int(float(cmp_value))
-                
-                lines.append(f'              %cmp_val_{unique_id} = arith.constant {cmp_value_int} : i32')
-                lines.append(f'              %cond_{unique_id} = arith.cmpi {mlir_cmp}, %cond_reg_val_{unique_id}, %cmp_val_{unique_id} : i32')
-                lines.append(f'              scf.if %cond_{unique_id} {{')
-                lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
-                lines.append(f'              }}')
-                
-                print(f"[Info] Conditional printf (direct read): {cond_reg} {cmp_op} {cmp_value}")
-        
+                cmp_const = f'%cmp_val_{cond_tag}'
+                cond_var = f'%cond_{cond_tag}'
+                lines.append(f'              {cmp_const} = arith.constant {cmp_value_int} : i32')
+                lines.append(f'              {cond_var} = arith.cmpi {mlir_cmp}, {snapshot_var}, {cmp_const} : i32')
+                cond_vars.append(cond_var)
+                print(f"[Info] Conditional printf (builtin): {builtin_var} {cmp_op} {cmp_value}")
+                continue
+
+            reg_cond_match = re.match(r'([vs]\d+)_(\w+)\((-?\d+(?:\.\d+)?)\)', cond_part)
+            if reg_cond_match:
+                cond_reg, cmp_op, cmp_value = reg_cond_match.groups()
+                snapshot_var = None
+                snapshot_type = None
+
+                if vgpr_snapshots:
+                    for r_idx, orig_reg, _ in vgpr_snapshots:
+                        if orig_reg == cond_reg:
+                            snapshot_var = f'%print_val_{unique_id}_{r_idx}'
+                            if r_idx < len(directive.types):
+                                snapshot_type = directive.types[r_idx]
+                            break
+
+                if not snapshot_var and sgpr_snapshots:
+                    for r_idx, orig_reg, _ in sgpr_snapshots:
+                        if orig_reg == cond_reg:
+                            snapshot_var = f'%print_val_{unique_id}_{r_idx}'
+                            if r_idx < len(directive.types):
+                                snapshot_type = directive.types[r_idx]
+                            break
+
+                if not snapshot_var and cond_snapshot:
+                    cond_snap_reg, snap_num, is_vgpr, cond_type = cond_snapshot
+                    if cond_snap_reg == cond_reg:
+                        snapshot_type = cond_type
+                        snapshot_reg = f'v{snap_num}' if is_vgpr else f's{snap_num}'
+                        mlir_type = map_type_to_mlir(cond_type)
+                        snapshot_var = f'%cond_snap_val_{cond_tag}'
+                        lines.append(f'              // Using condition register snapshot: {cond_reg} -> {snapshot_reg}')
+                        lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {snapshot_reg}", "=v": () -> {mlir_type}')
+
+                cond_var = f'%cond_{cond_tag}'
+                cmp_const = f'%cmp_val_{cond_tag}'
+                if snapshot_var and snapshot_type:
+                    cmp_ops = {
+                        'eq': 'eq', 'ne': 'ne',
+                        'lt': 'slt', 'le': 'sle',
+                        'gt': 'sgt', 'ge': 'sge'
+                    }
+                    mlir_cmp = cmp_ops.get(cmp_op, 'eq')
+                    if snapshot_type in ['f32', 'f64']:
+                        float_cmp_ops = {
+                            'eq': 'oeq', 'ne': 'one',
+                            'lt': 'olt', 'le': 'ole',
+                            'gt': 'ogt', 'ge': 'oge'
+                        }
+                        mlir_cmp = float_cmp_ops.get(cmp_op, 'oeq')
+                        mlir_type = 'f32' if snapshot_type == 'f32' else 'f64'
+                        lines.append(f'              // Conditional printf: {cond_reg} {cmp_op} {cmp_value}')
+                        lines.append(f'              {cmp_const} = arith.constant {cmp_value} : {mlir_type}')
+                        lines.append(f'              {cond_var} = arith.cmpf {mlir_cmp}, {snapshot_var}, {cmp_const} : {mlir_type}')
+                    else:
+                        mlir_type = 'i32' if snapshot_type == 'i32' else 'i64'
+                        cmp_value_int = int(float(cmp_value))
+                        lines.append(f'              // Conditional printf: {cond_reg} {cmp_op} {cmp_value_int}')
+                        lines.append(f'              {cmp_const} = arith.constant {cmp_value_int} : {mlir_type}')
+                        lines.append(f'              {cond_var} = arith.cmpi {mlir_cmp}, {snapshot_var}, {cmp_const} : {mlir_type}')
+                    print(f"[Info] Conditional printf (snapshot): {cond_reg} {cmp_op} {cmp_value}")
+                else:
+                    print(f"[Warning] Register {cond_reg} not in snapshot, using direct read (value at printf time, not @PRINT time)")
+                    lines.append(f'              // Conditional printf: read {cond_reg} for condition (direct read)')
+                    lines.append(f'              %cond_reg_val_{cond_tag} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, {cond_reg}", "=v": () -> i32')
+                    cmp_ops = {'eq': 'eq', 'ne': 'ne', 'lt': 'slt', 'le': 'sle', 'gt': 'sgt', 'ge': 'sge'}
+                    mlir_cmp = cmp_ops.get(cmp_op, 'eq')
+                    cmp_value_int = int(float(cmp_value))
+                    lines.append(f'              {cmp_const} = arith.constant {cmp_value_int} : i32')
+                    lines.append(f'              {cond_var} = arith.cmpi {mlir_cmp}, %cond_reg_val_{cond_tag}, {cmp_const} : i32')
+                    print(f"[Info] Conditional printf (direct read): {cond_reg} {cmp_op} {cmp_value}")
+
+                cond_vars.append(cond_var)
+                continue
+
+            cond_supported = False
+            break
+
+        if cond_supported and cond_vars:
+            cond_final = cond_vars[0]
+            for idx in range(1, len(cond_vars)):
+                merged = f'%cond_and_{unique_id}_{idx}'
+                lines.append(f'              {merged} = arith.andi {cond_final}, {cond_vars[idx]} : i1')
+                cond_final = merged
+            lines.append(f'              scf.if {cond_final} {{')
+            lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
+            lines.append(f'              }}')
         else:
             print(f"[Warning] Unknown condition format: {directive.condition}, printing unconditionally")
             lines.append(f'              gpu.printf "{escaped_format}", {args} : {types}')
@@ -1624,7 +1732,10 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         # 傳入內建變數備份暫存器
         builtin_vars = {
             'tid_vgpr': TID_BACKUP_VGPR,
-            'lane_vgpr': LANE_BACKUP_VGPR
+            'lane_vgpr': LANE_BACKUP_VGPR,
+            'tgid_x_sgpr': 2,
+            'tgid_y_sgpr': 3,
+            'tgid_z_sgpr': 4,
         }
         printf_blocks.append(generate_printf_with_snapshot(directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap, expr_snap, builtin_vars))
     

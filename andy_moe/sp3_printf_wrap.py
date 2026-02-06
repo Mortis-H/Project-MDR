@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import hashlib
 import os
 import pathlib
 import re
@@ -25,6 +26,16 @@ DEFAULT_KERNEL_SYMBOL = "_ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x19
 DEFAULT_GPR_TOOL = str(PROJECT_ROOT / "gpr_printf_tool.py")
 
 DIRECTIVE_RE = re.compile(r"@PRINT\b|@TIMESTAMP_START\b|@TIMESTAMP_END\b")
+LABEL_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_\.\[\]]*):")
+REGISTER_RANGE_RE = re.compile(r"^([sv])\[\d+:\d+\]$")
+REGISTER_RE = re.compile(r"^([sv])\d+$")
+ACC_RE = re.compile(r"^acc\d+$")
+AREG_RE = re.compile(r"^a\d+$")
+IMM_RE = re.compile(r"^-?(0x[0-9a-fA-F]+|\d+)$")
+FLOAT_RE = re.compile(r"^-?\d*\.\d+([eE][-+]?\d+)?$")
+FUNC_CALL_RE = re.compile(r"^([A-Za-z_]\w*)\((.*)\)$")
+LABEL_TOKEN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_\.\[\]]*$")
+IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 @dataclass
@@ -93,6 +104,172 @@ def extract_opcode(line: str) -> Optional[str]:
     return stripped.split()[0]
 
 
+def extract_label(line: str) -> Optional[str]:
+    no_comment = strip_inline_comment(line)
+    match = LABEL_RE.match(no_comment)
+    if not match:
+        return None
+    return match.group(1)
+
+
+def normalize_operand(token: str) -> Optional[str]:
+    tok = token.strip()
+    if not tok:
+        return None
+    tok = tok.replace(" ", "")
+    lower_tok = tok.lower()
+    if lower_tok.startswith(("row_", "bank_", "format:", "cbid:", "dmask:", "swz:")):
+        return None
+    range_match = REGISTER_RANGE_RE.match(tok)
+    if range_match:
+        return f"{range_match.group(1)}[]"
+    reg_match = REGISTER_RE.match(tok)
+    if reg_match:
+        return reg_match.group(1)
+    if ACC_RE.match(tok):
+        return "acc"
+    if AREG_RE.match(tok):
+        return "a"
+    if IMM_RE.match(tok) or FLOAT_RE.match(tok):
+        return "imm"
+    if tok.startswith("inst_offset:"):
+        return "inst_offset"
+    if tok.startswith("offset:"):
+        return "offset"
+    call_match = FUNC_CALL_RE.match(tok)
+    if call_match:
+        func = call_match.group(1).lower()
+        if func in ("v_regs", "v_reg", "vreg"):
+            return "v"
+        if func in ("s_regs", "s_reg", "sreg"):
+            return "s"
+        if func in ("acc_regs", "acc_reg", "accreg"):
+            return "acc"
+        if func in ("a_regs", "a_reg", "areg"):
+            return "a"
+        inner = call_match.group(2)
+        inner_norm = normalize_operand(inner) if inner else ""
+        return f"{func}({inner_norm})" if inner_norm else func
+    if LABEL_TOKEN_RE.match(tok):
+        if tok.startswith(("s_", "S_")):
+            return "s"
+        if tok.startswith(("v_", "V_")):
+            return "v"
+        if tok.startswith(("acc_", "ACC_")):
+            return "acc"
+        if tok.startswith(("a_", "A_")):
+            return "a"
+        if tok.startswith(("Vsrc", "vsrc")):
+            return "imm"
+        if tok.isupper():
+            return "imm"
+        if tok.startswith(("label", "lbl", "L")):
+            return "label"
+        if IDENT_RE.match(tok):
+            return "imm"
+    return tok.lower()
+
+
+def split_operands(text: str) -> List[str]:
+    parts: List[str] = []
+    buf: List[str] = []
+    depth = 0
+    for ch in text:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth = max(depth - 1, 0)
+        if ch == "," and depth == 0:
+            part = "".join(buf).strip()
+            if part:
+                parts.append(strip_operand_modifier(part))
+            buf = []
+            continue
+        buf.append(ch)
+    if buf:
+        part = "".join(buf).strip()
+        if part:
+            parts.append(strip_operand_modifier(part))
+    return parts
+
+
+def strip_operand_modifier(text: str) -> str:
+    depth = 0
+    for idx, ch in enumerate(text):
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth = max(depth - 1, 0)
+        elif ch.isspace() and depth == 0:
+            return text[:idx].strip()
+    return text.strip()
+
+
+def tokenize_instruction(line: str) -> Optional[str]:
+    no_comment = strip_inline_comment(line)
+    stripped = no_comment.strip()
+    if not stripped or stripped.endswith(":"):
+        return None
+    parts = stripped.split(None, 1)
+    if not parts:
+        return None
+    opcode = parts[0].lower()
+    if "(" in opcode:
+        return None
+    operands_part = parts[1] if len(parts) > 1 else ""
+    if not operands_part:
+        return opcode
+    modifiers = re.findall(r"\b(row_[A-Za-z0-9_]+):", operands_part)
+    modifiers += re.findall(r"\b(bank_[A-Za-z0-9_]+):", operands_part)
+    operands = []
+    for raw in split_operands(operands_part):
+        norm = normalize_operand(raw)
+        if norm:
+            operands.append(norm)
+    if not operands:
+        return opcode
+    token = f"{opcode} " + ",".join(operands)
+    if modifiers:
+        unique_mods = "+".join(sorted(set(modifiers)))
+        token = f"{token}|{unique_mods}"
+    return token
+
+
+def hash_tokens(tokens: List[str]) -> str:
+    data = "\n".join(tokens).encode("utf-8")
+    return hashlib.sha1(data).hexdigest()[:12]
+
+
+def build_block_meta(
+    tokens: List[str],
+    labels: List[Optional[str]],
+) -> Tuple[List[str], List[int], List[int]]:
+    block_ids: List[str] = []
+    current = "__entry__"
+    for label in labels:
+        if label:
+            current = label
+        block_ids.append(current)
+
+    block_tokens: Dict[str, List[str]] = {}
+    for tok, bid in zip(tokens, block_ids):
+        block_tokens.setdefault(bid, []).append(tok)
+
+    block_hash = {bid: hash_tokens(seq) for bid, seq in block_tokens.items()}
+
+    block_pos: List[int] = []
+    block_len: List[int] = []
+    pos_counter: Dict[str, int] = {}
+    for bid in block_ids:
+        pos = pos_counter.get(bid, 0)
+        block_pos.append(pos)
+        pos_counter[bid] = pos + 1
+        block_len.append(len(block_tokens[bid]))
+
+    block_hashes = [block_hash[bid] for bid in block_ids]
+    return block_hashes, block_pos, block_len
+
+
 def current_function(stack: List[Tuple[str, str]]) -> Optional[str]:
     for block_type, name in reversed(stack):
         if block_type in ("function", "shader"):
@@ -100,12 +277,21 @@ def current_function(stack: List[Tuple[str, str]]) -> Optional[str]:
     return None
 
 
-def parse_sp3_source(path: pathlib.Path) -> Tuple[List[str], List[LineInfo], Dict[str, List[str]]]:
+def parse_sp3_source(
+    path: pathlib.Path,
+) -> Tuple[
+    List[str],
+    List[LineInfo],
+    Dict[str, List[str]],
+    Dict[str, Dict[str, List]],
+]:
     lines = path.read_text().splitlines()
     stack: List[Tuple[str, str]] = []
-    func_ops: Dict[str, List[str]] = {}
+    func_tokens: Dict[str, List[str]] = {}
+    func_labels: Dict[str, List[Optional[str]]] = {}
     func_instr_counts: Dict[str, int] = {}
     line_infos: List[LineInfo] = []
+    current_label_by_func: Dict[str, Optional[str]] = {}
 
     func_start_re = re.compile(r"^\s*function\s+([A-Za-z0-9_]+)")
 
@@ -116,11 +302,13 @@ def parse_sp3_source(path: pathlib.Path) -> Tuple[List[str], List[LineInfo], Dic
         if func_match:
             func_name = func_match.group(1)
             stack.append(("function", func_name))
+            current_label_by_func[func_name] = None
             line_infos.append(LineInfo(current_function(stack), None, None))
             continue
 
         if stripped.startswith("shader main"):
             stack.append(("shader", "__shader_main__"))
+            current_label_by_func["__shader_main__"] = None
             line_infos.append(LineInfo(current_function(stack), None, None))
             continue
 
@@ -128,14 +316,21 @@ def parse_sp3_source(path: pathlib.Path) -> Tuple[List[str], List[LineInfo], Dic
             stack.append(("block", ""))
 
         func = current_function(stack)
+        label = extract_label(line)
+        if label and func:
+            current_label_by_func[func] = label
+
         opcode = extract_opcode(line)
         instr_index = None
-        if opcode and func:
-            func_ops.setdefault(func, [])
+        token = tokenize_instruction(line) if opcode else None
+        if opcode and func and token:
+            func_tokens.setdefault(func, [])
+            func_labels.setdefault(func, [])
             func_instr_counts.setdefault(func, 0)
             instr_index = func_instr_counts[func]
             func_instr_counts[func] += 1
-            func_ops[func].append(opcode)
+            func_tokens[func].append(token)
+            func_labels[func].append(current_label_by_func.get(func))
 
         line_infos.append(LineInfo(func, opcode, instr_index))
 
@@ -143,7 +338,18 @@ def parse_sp3_source(path: pathlib.Path) -> Tuple[List[str], List[LineInfo], Dic
             if stack:
                 stack.pop()
 
-    return lines, line_infos, func_ops
+    func_meta: Dict[str, Dict[str, List]] = {}
+    for func, tokens in func_tokens.items():
+        labels = func_labels.get(func, [None] * len(tokens))
+        block_hashes, block_pos, block_len = build_block_meta(tokens, labels)
+        func_meta[func] = {
+            "labels": labels,
+            "block_hashes": block_hashes,
+            "block_pos": block_pos,
+            "block_len": block_len,
+        }
+
+    return lines, line_infos, func_tokens, func_meta
 
 
 def extract_directive_text(line: str) -> Optional[str]:
@@ -191,19 +397,42 @@ def collect_directives(
     return directives
 
 
-def parse_disasm(path: pathlib.Path) -> Tuple[List[str], List[str], Dict[int, int], Dict[int, int]]:
+def parse_disasm(
+    path: pathlib.Path,
+) -> Tuple[
+    List[str],
+    List[str],
+    Dict[int, int],
+    Dict[int, int],
+    Dict[str, List],
+]:
     lines = path.read_text().splitlines()
-    opcodes: List[str] = []
+    tokens: List[str] = []
+    labels: List[Optional[str]] = []
     op_index_to_line: Dict[int, int] = {}
     line_to_op_index: Dict[int, int] = {}
+    current_label: Optional[str] = None
     for idx, line in enumerate(lines):
-        opcode = extract_opcode(line)
-        if opcode:
-            op_index = len(opcodes)
-            opcodes.append(opcode)
+        label = extract_label(line)
+        if label:
+            current_label = label
+            continue
+        token = tokenize_instruction(line)
+        if token:
+            op_index = len(tokens)
+            tokens.append(token)
+            labels.append(current_label)
             op_index_to_line[op_index] = idx
             line_to_op_index[idx] = op_index
-    return lines, opcodes, op_index_to_line, line_to_op_index
+
+    block_hashes, block_pos, block_len = build_block_meta(tokens, labels)
+    dis_meta = {
+        "labels": labels,
+        "block_hashes": block_hashes,
+        "block_pos": block_pos,
+        "block_len": block_len,
+    }
+    return lines, tokens, op_index_to_line, line_to_op_index, dis_meta
 
 
 def build_index_map(src_ops: List[str], dst_ops: List[str]) -> Dict[int, int]:
@@ -215,66 +444,238 @@ def build_index_map(src_ops: List[str], dst_ops: List[str]) -> Dict[int, int]:
     return mapping
 
 
-def find_pattern_matches(dis_ops: List[str], pattern: List[str]) -> List[int]:
+def find_pattern_matches(dis_tokens: List[str], pattern: List[str]) -> List[int]:
     if not pattern:
         return []
     matches: List[int] = []
     plen = len(pattern)
-    for i in range(len(dis_ops) - plen + 1):
-        if dis_ops[i : i + plen] == pattern:
+    for i in range(len(dis_tokens) - plen + 1):
+        if dis_tokens[i : i + plen] == pattern:
             matches.append(i)
     return matches
 
 
-def build_pattern(func_ops: List[str], idx: int, window: int) -> Tuple[List[str], int]:
+def build_pattern(func_tokens: List[str], idx: int, window: int) -> Tuple[List[str], int]:
     start = max(0, idx - window)
-    end = min(len(func_ops), idx + window + 1)
-    return func_ops[start:end], idx - start
+    end = min(len(func_tokens), idx + window + 1)
+    return func_tokens[start:end], idx - start
+
+
+def collect_candidates(
+    func_tokens: List[str],
+    func_meta: Dict[str, List],
+    dis_tokens: List[str],
+    dis_meta: Dict[str, List],
+    anchor_index: int,
+    windows: Tuple[int, ...] = (5, 4, 3, 2, 1, 0),
+    anchor_scan: int = 12,
+) -> Dict[int, int]:
+    if anchor_index < 0 or anchor_index >= len(func_tokens):
+        return {}
+
+    cand_scores: Dict[int, int] = {}
+    func_labels = func_meta.get("labels", [])
+    func_block_hashes = func_meta.get("block_hashes", [])
+    func_block_pos = func_meta.get("block_pos", [])
+    func_block_len = func_meta.get("block_len", [])
+
+    dis_labels = dis_meta.get("labels", [])
+    dis_block_hashes = dis_meta.get("block_hashes", [])
+    dis_block_pos = dis_meta.get("block_pos", [])
+    dis_block_len = dis_meta.get("block_len", [])
+
+    for shift in range(anchor_scan + 1):
+        idx = anchor_index + shift
+        if idx >= len(func_tokens):
+            break
+        for window in windows:
+            pattern, offset = build_pattern(func_tokens, idx, window)
+            if not pattern:
+                continue
+            match_starts = find_pattern_matches(dis_tokens, pattern)
+            if not match_starts:
+                continue
+            for start in match_starts:
+                dis_idx = start + offset
+                score = window * 5 - shift * 2
+                if (
+                    func_block_hashes
+                    and dis_block_hashes
+                    and func_block_hashes[idx] == dis_block_hashes[dis_idx]
+                ):
+                    score += 4
+                if (
+                    func_labels
+                    and dis_labels
+                    and func_labels[idx]
+                    and func_labels[idx] == dis_labels[dis_idx]
+                ):
+                    score += 2
+                if (
+                    func_block_len
+                    and dis_block_len
+                    and func_block_len[idx] == dis_block_len[dis_idx]
+                    and func_block_pos
+                    and dis_block_pos
+                    and abs(func_block_pos[idx] - dis_block_pos[dis_idx]) <= 1
+                ):
+                    score += 1
+                prev = cand_scores.get(dis_idx)
+                if prev is None or score > prev:
+                    cand_scores[dis_idx] = score
+    return cand_scores
+
+
+def select_positions(
+    directives: List[Directive],
+    candidates: List[Dict[int, int]],
+    max_candidates: int = 200,
+) -> List[Optional[int]]:
+    if not directives:
+        return []
+
+    cand_lists: List[List[Tuple[int, int]]] = []
+    for cand in candidates:
+        if not cand:
+            cand_lists.append([])
+            continue
+        ranked = sorted(cand.items(), key=lambda x: (-x[1], x[0]))[:max_candidates]
+        cand_lists.append(sorted(ranked, key=lambda x: x[0]))
+
+    # DP for monotonic increasing positions
+    trace_list: List[Dict[int, Optional[int]]] = []
+    prev_scores: Dict[int, int] = {}
+    success = True
+    for i, cand_list in enumerate(cand_lists):
+        curr_scores: Dict[int, int] = {}
+        curr_trace: Dict[int, Optional[int]] = {}
+        if not cand_list:
+            trace_list.append(curr_trace)
+            prev_scores = {}
+            success = False
+            continue
+        if i == 0 or not prev_scores:
+            for pos, score in cand_list:
+                curr_scores[pos] = score
+                curr_trace[pos] = None
+        else:
+            prev_items = sorted(prev_scores.items(), key=lambda x: x[0])
+            best_score = None
+            best_pos = None
+            idx_prev = 0
+            for pos, score in cand_list:
+                while idx_prev < len(prev_items) and prev_items[idx_prev][0] < pos:
+                    ppos, pscore = prev_items[idx_prev]
+                    if best_score is None or pscore > best_score:
+                        best_score = pscore
+                        best_pos = ppos
+                    idx_prev += 1
+                if best_score is None:
+                    continue
+                curr_scores[pos] = best_score + score
+                curr_trace[pos] = best_pos
+            if not curr_scores:
+                success = False
+                for pos, score in cand_list:
+                    curr_scores[pos] = score
+                    curr_trace[pos] = None
+        trace_list.append(curr_trace)
+        prev_scores = curr_scores
+
+    if not prev_scores:
+        return [None for _ in directives]
+
+    if not success:
+        result: List[Optional[int]] = []
+        for cand_list in cand_lists:
+            if not cand_list:
+                result.append(None)
+            else:
+                result.append(max(cand_list, key=lambda x: x[1])[0])
+        return result
+
+    best_end = max(prev_scores.items(), key=lambda x: x[1])[0]
+    positions: List[Optional[int]] = [None for _ in directives]
+    for i in range(len(directives) - 1, -1, -1):
+        positions[i] = best_end
+        best_end = trace_list[i].get(best_end)
+        if best_end is None and i > 0:
+            break
+    return positions
 
 
 def insert_directives_into_disasm(
     disasm_lines: List[str],
-    dis_ops: List[str],
+    dis_tokens: List[str],
+    dis_meta: Dict[str, List],
     line_to_op_index: Dict[int, int],
     directives: List[Directive],
-    func_ops: Dict[str, List[str]],
+    func_tokens: Dict[str, List[str]],
+    func_meta: Dict[str, Dict[str, List]],
 ) -> List[str]:
     insertions: Dict[int, List[str]] = {}
+    if not directives:
+        return disasm_lines
 
-    main_ops = func_ops.get("__shader_main__")
-    main_map = build_index_map(main_ops, dis_ops) if main_ops else {}
-
+    directives_by_func: Dict[str, List[Directive]] = {}
     for d in directives:
-        if d.func == "__shader_main__":
-            dis_idx = main_map.get(d.anchor_index)
+        directives_by_func.setdefault(d.func, []).append(d)
+
+    main_tokens = func_tokens.get("__shader_main__")
+    main_map = build_index_map(main_tokens, dis_tokens) if main_tokens else {}
+
+    for func, dirs in directives_by_func.items():
+        tokens = func_tokens.get(func)
+        if not tokens:
+            print(f"[Warn] Missing function token list for {func}, skip directives.")
+            continue
+        meta = func_meta.get(func, {})
+        func_map = build_index_map(tokens, dis_tokens)
+
+        dir_entries = list(enumerate(dirs))
+        dir_entries.sort(key=lambda x: (x[1].anchor_index, x[1].line_no))
+        sorted_dirs = [d for _, d in dir_entries]
+
+        cand_scores_list: List[Dict[int, int]] = []
+        for d in sorted_dirs:
+            cand_scores = collect_candidates(
+                tokens, meta, dis_tokens, dis_meta, d.anchor_index
+            )
+            if func_map:
+                for shift in range(13):
+                    idx = d.anchor_index + shift
+                    if idx >= len(tokens):
+                        break
+                    mapped = func_map.get(idx)
+                    if mapped is not None:
+                        cand_scores[mapped] = max(cand_scores.get(mapped, 0), 30 - shift)
+            if func == "__shader_main__":
+                mapped = main_map.get(d.anchor_index)
+                if mapped is not None:
+                    cand_scores[mapped] = max(cand_scores.get(mapped, 0), 40)
+            if cand_scores:
+                max_score = max(cand_scores.values())
+                if max_score >= 28:
+                    cand_scores = {
+                        idx: score
+                        for idx, score in cand_scores.items()
+                        if score >= max_score - 2
+                    }
+            cand_scores_list.append(cand_scores)
+            if not cand_scores:
+                print(f"[Warn] Cannot map directive (line {d.line_no}) from {d.func}.")
+            elif len(cand_scores) > 200:
+                print(
+                    f"[Warn] Directive at line {d.line_no} matched {len(cand_scores)} candidates; "
+                    "placement may be ambiguous."
+                )
+
+        positions = select_positions(sorted_dirs, cand_scores_list)
+        for d, dis_idx in zip(sorted_dirs, positions):
             if dis_idx is None:
-                print(f"[Warn] Cannot map main directive (line {d.line_no}) to disasm.")
+                print(f"[Warn] Cannot resolve directive (line {d.line_no}) from {d.func}.")
                 continue
             insertions.setdefault(dis_idx, []).append(d.text)
-            continue
-
-        func_list = func_ops.get(d.func)
-        if not func_list:
-            print(f"[Warn] Missing function op list for {d.func}, skip directive at line {d.line_no}.")
-            continue
-
-        matched = False
-        for window in (3, 2, 1, 0):
-            pattern, offset = build_pattern(func_list, d.anchor_index, window)
-            match_starts = find_pattern_matches(dis_ops, pattern)
-            if match_starts:
-                matched = True
-                for start in match_starts:
-                    dis_idx = start + offset
-                    insertions.setdefault(dis_idx, []).append(d.text)
-                if len(match_starts) > 20:
-                    print(
-                        f"[Warn] Directive at line {d.line_no} matched {len(match_starts)} times; "
-                        "please verify placement."
-                    )
-                break
-        if not matched:
-            print(f"[Warn] Cannot map directive (line {d.line_no}) from function {d.func} to disasm.")
 
     new_lines: List[str] = []
     for line_idx, line in enumerate(disasm_lines):
@@ -363,7 +764,7 @@ def main() -> int:
     fixed_print_s_path = output_dir / f"{prefix}_fixed_print.s"
 
     print("=== Parse SP3 directives ===")
-    src_lines, line_infos, func_ops = parse_sp3_source(input_sp3)
+    src_lines, line_infos, func_tokens, func_meta = parse_sp3_source(input_sp3)
     directives = collect_directives(src_lines, line_infos)
     print(f"Found {len(directives)} directive(s)")
 
@@ -386,10 +787,16 @@ def main() -> int:
     ], env=env)
 
     print("\n=== Step 3: Inject directives into disasm ===")
-    disasm_lines, dis_ops, _, line_to_op_index = parse_disasm(disasm_path)
+    disasm_lines, dis_tokens, _, line_to_op_index, dis_meta = parse_disasm(disasm_path)
     if directives:
         disasm_with_print = insert_directives_into_disasm(
-            disasm_lines, dis_ops, line_to_op_index, directives, func_ops
+            disasm_lines,
+            dis_tokens,
+            dis_meta,
+            line_to_op_index,
+            directives,
+            func_tokens,
+            func_meta,
         )
         disasm_print_path.write_text("\n".join(disasm_with_print) + "\n")
     else:
