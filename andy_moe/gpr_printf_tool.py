@@ -296,6 +296,12 @@ def main() -> int:
         help='禁用 printf 注入（用於純功能驗證）',
     )
     ap.add_argument(
+        '--print-mode',
+        choices=['defer', 'inline'],
+        default='defer',
+        help='printf 注入模式：defer（預設，延後到結尾）或 inline（插入原位置）',
+    )
+    ap.add_argument(
         '--test',
         action='store_true',
         help='使用 universal_hsaco_runner 執行測試',
@@ -392,6 +398,10 @@ def main() -> int:
         print('   3. Place @PRINT only after all barriers complete')
         print('=' * 60 + '\n')
 
+        if args.print_mode == 'inline':
+            print('[Info] Inline printf disabled due to s_barrier; falling back to defer mode.')
+            args.print_mode = 'defer'
+
     if args.dry_run:
         print('\n[Dry Run] Stopping here.')
         return 0
@@ -419,7 +429,7 @@ def main() -> int:
             print('[Info] Padding kernarg segment to {} bytes for hidden args'.format(kernarg_size))
             gpumlir_text = inject_kernarg_padding_arg(gpumlir_text, kernarg_size)
         modified_mlir, required_vgpr, required_sgpr = mdr_printf.inject_printf_into_mlir(
-            gpumlir_text, directives, reg_info, timestamp_directives
+            gpumlir_text, directives, reg_info, timestamp_directives, print_mode=args.print_mode
         )
         modified_path = workdir / '{}_debug_injected.gpumlir'.format(input_path.stem)
         modified_path.write_text(modified_mlir)

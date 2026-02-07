@@ -112,21 +112,26 @@ class PrintDirective:
     expressions: Optional[List[str]] = None  # 計算表達式列表（如 ["v6 * v7"]）
     uses_tid: bool = False     # 是否使用了 $tid 內建變數
     uses_lane: bool = False    # 是否使用了 $lane 內建變數
+    uses_tgid: bool = False    # 是否使用了 $tgid_x/$tgid_y/$tgid_z 內建變數
     all_placeholders: Optional[List[Tuple[str, str]]] = None  # 所有 placeholder 的原始順序 [(value, type), ...]
+    trace_max: Optional[int] = None  # 最大 trace 次數（使用 VGPR 快照多次）
     
     def __str__(self):
         cond_str = f" [cond={self.condition}]" if self.condition else ""
         builtin_str = ""
-        if self.uses_tid or self.uses_lane:
+        if self.uses_tid or self.uses_lane or self.uses_tgid:
             builtins = []
             if self.uses_tid:
                 builtins.append("$tid")
             if self.uses_lane:
                 builtins.append("$lane")
+            if self.uses_tgid:
+                builtins.append("$tgid_*")
             builtin_str = f" [builtins={','.join(builtins)}]"
+        trace_str = f" [max={self.trace_max}]" if self.trace_max else ""
         if self.expressions:
-            return f"@PRINT at line {self.line_number}: {self.format_string} (expr={self.expressions}){cond_str}{builtin_str}"
-        return f"@PRINT at line {self.line_number}: {self.format_string} ({self.registers}){cond_str}{builtin_str}"
+            return f"@PRINT at line {self.line_number}: {self.format_string} (expr={self.expressions}){cond_str}{builtin_str}{trace_str}"
+        return f"@PRINT at line {self.line_number}: {self.format_string} ({self.registers}){cond_str}{builtin_str}{trace_str}"
 
 
 @dataclass
@@ -445,6 +450,16 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
     
     if fstring_match:
         fstring_content = fstring_match.group(1)
+
+        # 解析 trace 上限（例如 max=16）
+        trace_max = None
+        max_match = re.search(r'\bmax\s*=\s*(\d+)\b', directive_content)
+        if max_match:
+            trace_max = int(max_match.group(1))
+            if trace_max <= 0:
+                trace_max = None
+            else:
+                print(f"[Info] Trace max set to {trace_max} at line {line_number + 1}")
         
         # 檢查是否有條件式 (if ... :)
         condition = None
@@ -460,6 +475,11 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
             if internal_cond:
                 condition = internal_cond
                 print(f"[Info] Parsed condition: '{cond_str}' -> {condition}")
+
+        # 如果啟用 trace 且沒有條件，預設只在單一 thread 打印，避免 hostcall buffer 爆量
+        if trace_max and condition is None:
+            condition = "$tgid_x_eq(0)&&$tgid_y_eq(0)&&$tgid_z_eq(0)&&$tid_eq(0)"
+            print(f"[Info] Trace max without condition at line {line_number + 1}; defaulting to {condition}")
         
         # 解析 f-string
         printf_format, parsed_regs, parsed_types = parse_fstring_format(fstring_content, line_number)
@@ -566,7 +586,9 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
             expressions=expressions if expressions else None,
             uses_tid=uses_tid,
             uses_lane=uses_lane,
-            all_placeholders=all_placeholders
+            uses_tgid=uses_tgid,
+            all_placeholders=all_placeholders,
+            trace_max=trace_max
         )
     
     # 僅支援 f-string，其他格式直接忽略
@@ -1098,21 +1120,35 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
             
             elif value in ('$tgid_x', '$tgid_y', '$tgid_z'):
                 # $tgid_x/y/z: Workgroup ID (block index)
-                tgid_map = {
+                tgid_vgpr_map = {
+                    '$tgid_x': 'tgid_x_vgpr',
+                    '$tgid_y': 'tgid_y_vgpr',
+                    '$tgid_z': 'tgid_z_vgpr',
+                }
+                tgid_sgpr_map = {
                     '$tgid_x': 'tgid_x_sgpr',
                     '$tgid_y': 'tgid_y_sgpr',
                     '$tgid_z': 'tgid_z_sgpr',
                 }
+                tgid_vgpr = None
                 sgpr_idx = None
                 if builtin_vars:
-                    sgpr_idx = builtin_vars.get(tgid_map[value])
-                if sgpr_idx is None:
-                    sgpr_idx = 2 if value == '$tgid_x' else 3 if value == '$tgid_y' else 4
-                lines.append(f'              // Built-in {value}: read from s{sgpr_idx}')
-                lines.append(
-                    f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
-                    f'"v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32'
-                )
+                    tgid_vgpr = builtin_vars.get(tgid_vgpr_map[value])
+                    sgpr_idx = builtin_vars.get(tgid_sgpr_map[value])
+                if tgid_vgpr is not None:
+                    lines.append(f'              // Built-in {value}: read from v{tgid_vgpr}')
+                    lines.append(
+                        f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
+                        f'"v_mov_b32 $0, v{tgid_vgpr}", "=v": () -> i32'
+                    )
+                else:
+                    if sgpr_idx is None:
+                        sgpr_idx = 2 if value == '$tgid_x' else 3 if value == '$tgid_y' else 4
+                    lines.append(f'              // Built-in {value}: read from s{sgpr_idx}')
+                    lines.append(
+                        f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
+                        f'"v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32'
+                    )
                 var_names.append(var_name)
             
             elif re.match(r'^[vs]\d+$', value):
@@ -1174,20 +1210,33 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
                         lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_hi_u32_b32 $0, -1, $1", "=v,v": (%{var_name}_lo) -> i32')
                     var_names.append(var_name)
                 elif expr in ('$tgid_x', '$tgid_y', '$tgid_z'):
-                    tgid_map = {
+                    tgid_vgpr_map = {
+                        '$tgid_x': 'tgid_x_vgpr',
+                        '$tgid_y': 'tgid_y_vgpr',
+                        '$tgid_z': 'tgid_z_vgpr',
+                    }
+                    tgid_sgpr_map = {
                         '$tgid_x': 'tgid_x_sgpr',
                         '$tgid_y': 'tgid_y_sgpr',
                         '$tgid_z': 'tgid_z_sgpr',
                     }
+                    tgid_vgpr = None
                     sgpr_idx = None
                     if builtin_vars:
-                        sgpr_idx = builtin_vars.get(tgid_map[expr])
-                    if sgpr_idx is None:
-                        sgpr_idx = 2 if expr == '$tgid_x' else 3 if expr == '$tgid_y' else 4
-                    lines.append(
-                        f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
-                        f'"v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32'
-                    )
+                        tgid_vgpr = builtin_vars.get(tgid_vgpr_map[expr])
+                        sgpr_idx = builtin_vars.get(tgid_sgpr_map[expr])
+                    if tgid_vgpr is not None:
+                        lines.append(
+                            f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
+                            f'"v_mov_b32 $0, v{tgid_vgpr}", "=v": () -> i32'
+                        )
+                    else:
+                        if sgpr_idx is None:
+                            sgpr_idx = 2 if expr == '$tgid_x' else 3 if expr == '$tgid_y' else 4
+                        lines.append(
+                            f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
+                            f'"v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32'
+                        )
                     var_names.append(var_name)
                 else:
                     try:
@@ -1246,18 +1295,35 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
                     lines.append(f'              // Conditional printf: read $lane from v{lane_vgpr}')
                     lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{lane_vgpr}", "=v": () -> i32')
                 elif builtin_var in ('$tgid_x', '$tgid_y', '$tgid_z'):
-                    key_map = {
+                    key_map_vgpr = {
+                        '$tgid_x': 'tgid_x_vgpr',
+                        '$tgid_y': 'tgid_y_vgpr',
+                        '$tgid_z': 'tgid_z_vgpr',
+                    }
+                    key_map_sgpr = {
                         '$tgid_x': 'tgid_x_sgpr',
                         '$tgid_y': 'tgid_y_sgpr',
                         '$tgid_z': 'tgid_z_sgpr',
                     }
+                    tgid_vgpr = None
                     sgpr_idx = None
                     if builtin_vars:
-                        sgpr_idx = builtin_vars.get(key_map[builtin_var])
-                    if sgpr_idx is None:
-                        sgpr_idx = 2 if builtin_var == '$tgid_x' else 3 if builtin_var == '$tgid_y' else 4
-                    lines.append(f'              // Conditional printf: read {builtin_var} from s{sgpr_idx}')
-                    lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32')
+                        tgid_vgpr = builtin_vars.get(key_map_vgpr[builtin_var])
+                        sgpr_idx = builtin_vars.get(key_map_sgpr[builtin_var])
+                    if tgid_vgpr is not None:
+                        lines.append(f'              // Conditional printf: read {builtin_var} from v{tgid_vgpr}')
+                        lines.append(
+                            f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att '
+                            f'"v_mov_b32 $0, v{tgid_vgpr}", "=v": () -> i32'
+                        )
+                    else:
+                        if sgpr_idx is None:
+                            sgpr_idx = 2 if builtin_var == '$tgid_x' else 3 if builtin_var == '$tgid_y' else 4
+                        lines.append(f'              // Conditional printf: read {builtin_var} from s{sgpr_idx}')
+                        lines.append(
+                            f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att '
+                            f'"v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32'
+                        )
                 else:
                     if builtin_var == '$tid':
                         lines.append(f'              // Conditional printf: read $tid from v0 (WARNING: may be modified)')
@@ -1375,7 +1441,8 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
 
 
 def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective], reg_info: Dict[str, int],
-                            timestamp_directives: List[TimestampDirective] = None) -> str:
+                            timestamp_directives: List[TimestampDirective] = None,
+                            print_mode: str = "defer") -> str:
     """
     將 printf 指令注入到 GPU MLIR 中
 
@@ -1383,7 +1450,7 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     1. 在每個 @PRINT 的實際位置插入快照指令（v_mov_b32），保存當時的暫存器值
     2. 在每個 @TIMESTAMP_START 位置插入 s_memtime 並備份到 VGPR
     3. 在每個 @TIMESTAMP_END 位置插入 s_memtime 並計算差值
-    4. 在 .LBB0_2: 標籤之前或 s_endpgm 之前：
+    4. 在 .LBB0_2: 標籤之前或 s_endpgm 之前（defer 模式）：
        - Restore kernarg pointer
        - 使用快照暫存器執行 printf
        - 輸出 timestamp 結果
@@ -1404,6 +1471,8 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     
     if not directives and not timestamp_directives:
         return gpumlir_text
+
+    inline_mode = (print_mode == "inline")
     
     # === 計算快照暫存器需求 ===
     # 每個 @PRINT 的每個 VGPR/SGPR 都需要一個快照暫存器
@@ -1601,9 +1670,7 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     # 改為只保存 kernarg pointer，快照機制會在適當位置保存暫存器值
     clobber_start_lines = ['              // === Kernarg Backup Start ===']
     
-    # 保存 kernarg pointer (s[0:1]) 到 s[SGPR_KERNARG_BACKUP:SGPR_KERNARG_BACKUP+1]
-    clobber_start_lines.append('              // Save kernarg pointer for printf (to s[18:19])')
-    clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b64 s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], s[0:1]", ""  : () -> ()')
+    kernarg_backup_in_vgpr = any(d.trace_max for d in directives)
     
     # 檢查是否有條件式 printf，如果有則保存 workitem_id (v0)
     # 使用在快照暫存器之後的 VGPR
@@ -1613,21 +1680,44 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         clobber_start_lines.append(f'              // Save workitem_id (v0) to v{WORKITEM_ID_BACKUP_VGPR} for conditional printf')
         clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{WORKITEM_ID_BACKUP_VGPR}, v0", ""  : () -> ()')
     
-    # === 內建變數支援：$tid 和 $lane ===
+    # === 內建變數支援：$tid / $lane / $tgid_* ===
     # 檢查是否有任何 directive 使用了內建變數
     uses_tid = any(d.uses_tid for d in directives)
     uses_lane = any(d.uses_lane for d in directives)
+    uses_tgid = any(getattr(d, 'uses_tgid', False) for d in directives)
     
-    # 也檢查 timestamp directive 的條件是否使用了 $tid 或 $lane
+    # 也檢查 timestamp directive 的條件是否使用了 $tid / $lane / $tgid_*
     for ts in timestamp_directives:
         if ts.condition:
             if '$tid' in ts.condition:
                 uses_tid = True
             if '$lane' in ts.condition:
                 uses_lane = True
+            if '$tgid_x' in ts.condition or '$tgid_y' in ts.condition or '$tgid_z' in ts.condition:
+                uses_tgid = True
     
     # 分配專用 VGPR 給內建變數（在 WORKITEM_ID_BACKUP 之後）
     next_builtin_vgpr = WORKITEM_ID_BACKUP_VGPR + (1 if has_conditional_printf else 0)
+
+    # 保存 kernarg pointer（trace 模式用 VGPR 備份，避免佔用 SGPR）
+    VGPR_KERNARG_BACKUP_LO = None
+    VGPR_KERNARG_BACKUP_HI = None
+    if kernarg_backup_in_vgpr:
+        VGPR_KERNARG_BACKUP_LO = next_builtin_vgpr
+        VGPR_KERNARG_BACKUP_HI = next_builtin_vgpr + 1
+        next_builtin_vgpr += 2
+        clobber_start_lines.append('              // Save kernarg pointer for printf (to VGPRs)')
+        clobber_start_lines.append(
+            f'              llvm.inline_asm has_side_effects "v_mov_b32 v{VGPR_KERNARG_BACKUP_LO}, s0", ""  : () -> ()'
+        )
+        clobber_start_lines.append(
+            f'              llvm.inline_asm has_side_effects "v_mov_b32 v{VGPR_KERNARG_BACKUP_HI}, s1", ""  : () -> ()'
+        )
+    else:
+        clobber_start_lines.append('              // Save kernarg pointer for printf (to s[18:19])')
+        clobber_start_lines.append(
+            f'              llvm.inline_asm has_side_effects "s_mov_b64 s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], s[0:1]", ""  : () -> ()'
+        )
     
     # $tid: Local Thread ID (workitem_id_x) - 備份 v0
     TID_BACKUP_VGPR = None
@@ -1649,6 +1739,95 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mbcnt_lo_u32_b32 v{LANE_BACKUP_VGPR}, -1, 0", ""  : () -> ()')
         clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mbcnt_hi_u32_b32 v{LANE_BACKUP_VGPR}, -1, v{LANE_BACKUP_VGPR}", ""  : () -> ()')
         print(f"[Info] Built-in $lane: v_mbcnt -> v{LANE_BACKUP_VGPR}")
+
+    # $tgid_x/$tgid_y/$tgid_z: Workgroup ID - 備份 s2/s3/s4，避免後續被覆寫
+    TGID_X_BACKUP_VGPR = None
+    TGID_Y_BACKUP_VGPR = None
+    TGID_Z_BACKUP_VGPR = None
+    if uses_tgid:
+        TGID_X_BACKUP_VGPR = next_builtin_vgpr
+        TGID_Y_BACKUP_VGPR = next_builtin_vgpr + 1
+        TGID_Z_BACKUP_VGPR = next_builtin_vgpr + 2
+        next_builtin_vgpr += 3
+        clobber_start_lines.append('              // === Built-in variable: $tgid_x/$tgid_y/$tgid_z (workgroup ID) ===')
+        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TGID_X_BACKUP_VGPR}, s2", ""  : () -> ()')
+        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TGID_Y_BACKUP_VGPR}, s3", ""  : () -> ()')
+        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TGID_Z_BACKUP_VGPR}, s4", ""  : () -> ()')
+        print(f"[Info] Built-in $tgid_x/y/z: s2/s3/s4 -> v{TGID_X_BACKUP_VGPR}/v{TGID_Y_BACKUP_VGPR}/v{TGID_Z_BACKUP_VGPR}")
+
+    # Inline printf 需要備份 s0/s1，使用 VGPR 避免超出 SGPR 上限
+    VGPR_INLINE_S0_SAVE_LO = None
+    VGPR_INLINE_S0_SAVE_HI = None
+    if inline_mode:
+        VGPR_INLINE_S0_SAVE_LO = next_builtin_vgpr
+        VGPR_INLINE_S0_SAVE_HI = next_builtin_vgpr + 1
+        next_builtin_vgpr += 2
+        print(f"[Info] Inline printf: s0/s1 backup -> v{VGPR_INLINE_S0_SAVE_LO}:v{VGPR_INLINE_S0_SAVE_HI}")
+
+    # === Trace buffer (VGPR) ===
+    # 依據 max= 配置，為每個 @PRINT 分配 VGPR trace buffer
+    trace_buffers = {}  # d_idx -> {'max': int, 'counter': v, 'regs': [r...], 'slots': {reg: [v...]}, 'tmp': {reg: v}, 'vcc_save': (v_lo, v_hi)}
+    VGPR_LIMIT = 256  # v0 ~ v255
+    for d_idx, directive in enumerate(directives):
+        if not directive.trace_max:
+            continue
+        trace_max = directive.trace_max
+        # 僅支援 32-bit 值
+        if directive.all_placeholders:
+            unsupported = [t for _, t in directive.all_placeholders if t in ("i64", "f64", "ptr")]
+            if unsupported:
+                print(f"[Warning] Trace max for @PRINT #{d_idx+1} skipped (unsupported types: {unsupported})")
+                continue
+        # trace 需要保存寄存器（包含 expressions 內的寄存器）
+        trace_regs = set(directive.registers)
+        if directive.expressions:
+            for expr in directive.expressions:
+                for reg in reg_pattern.findall(expr):
+                    trace_regs.add(reg)
+        if not trace_regs:
+            print(f"[Warning] Trace max for @PRINT #{d_idx+1} skipped (no registers to trace)")
+            continue
+        if trace_max > 64:
+            print(f"[Warning] Trace max {trace_max} may consume many VGPRs; consider smaller max.")
+        # 對 VGPR 上限進行保護
+        ordered_regs = sorted(trace_regs)
+        reg_count = len(ordered_regs)
+        base_need = 3 + reg_count  # counter + vcc_save(lo/hi) + tmp per reg
+        avail = VGPR_LIMIT - next_builtin_vgpr
+        max_possible = 0
+        if avail > base_need and reg_count > 0:
+            max_possible = (avail - base_need) // reg_count
+        if max_possible <= 0:
+            print(f"[Warning] Trace max for @PRINT #{d_idx+1} disabled (insufficient VGPRs)")
+            continue
+        if trace_max > max_possible:
+            print(f"[Warning] Trace max {trace_max} capped to {max_possible} due to VGPR limit")
+            trace_max = max_possible
+        counter_vgpr = next_builtin_vgpr
+        next_builtin_vgpr += 1
+        vcc_save_lo = next_builtin_vgpr
+        vcc_save_hi = next_builtin_vgpr + 1
+        next_builtin_vgpr += 2
+        tmp_regs = {}
+        slots = {}
+        for reg in ordered_regs:
+            tmp_regs[reg] = next_builtin_vgpr
+            next_builtin_vgpr += 1
+            slots[reg] = []
+            for _ in range(trace_max):
+                slots[reg].append(next_builtin_vgpr)
+                next_builtin_vgpr += 1
+        trace_buffers[d_idx] = {
+            'max': trace_max,
+            'counter': counter_vgpr,
+            'regs': ordered_regs,
+            'slots': slots,
+            'tmp': tmp_regs,
+            'vcc_save': (vcc_save_lo, vcc_save_hi),
+        }
+        clobber_start_lines.append(f'              // Trace counter for @PRINT #{d_idx+1}')
+        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{counter_vgpr}, 0", ""  : () -> ()')
+        print(f"[Info] Trace buffer for @PRINT #{d_idx+1}: max={trace_max}, counter=v{counter_vgpr}, regs={ordered_regs}")
     
     # === Timestamp Profiling 支援 ===
     # 為每對 @TIMESTAMP_START/@TIMESTAMP_END 分配 VGPR
@@ -1719,25 +1898,78 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     clobber_start = '\n'.join(clobber_start_lines) + '\n'
     
     # 生成 printf 區塊（使用快照暫存器）- 包含 kernarg restore
-    printf_blocks = ['              // Restore kernarg pointer for printf (from s[18:19])']
-    printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_mov_b64 s[0:1], s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}]", ""  : () -> ()')
-    for i, directive in enumerate(directives):
-        # 使用 VGPR 和 SGPR 快照暫存器生成 printf
-        vgpr_snaps = directive_vgpr_snapshots.get(i, [])
-        sgpr_snaps = directive_sgpr_snapshots.get(i, [])
-        cond_snap = directive_cond_snapshots.get(i, None)
-        expr_snap = directive_expr_snapshots.get(i, None)
-        # 如果有條件式 printf，傳入 workitem_id 備份暫存器
-        tid_backup = WORKITEM_ID_BACKUP_VGPR if has_conditional_printf else None
-        # 傳入內建變數備份暫存器
-        builtin_vars = {
-            'tid_vgpr': TID_BACKUP_VGPR,
-            'lane_vgpr': LANE_BACKUP_VGPR,
-            'tgid_x_sgpr': 2,
-            'tgid_y_sgpr': 3,
-            'tgid_z_sgpr': 4,
-        }
-        printf_blocks.append(generate_printf_with_snapshot(directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap, expr_snap, builtin_vars))
+    need_deferred_printf_section = (not inline_mode) or bool(timestamp_directives)
+    printf_blocks = []
+    if need_deferred_printf_section:
+        if kernarg_backup_in_vgpr:
+            printf_blocks.append('              // Restore kernarg pointer for printf (from VGPRs)')
+            printf_blocks.append(
+                f'              llvm.inline_asm has_side_effects "v_readfirstlane_b32 s0, v{VGPR_KERNARG_BACKUP_LO}", ""  : () -> ()'
+            )
+            printf_blocks.append(
+                f'              llvm.inline_asm has_side_effects "v_readfirstlane_b32 s1, v{VGPR_KERNARG_BACKUP_HI}", ""  : () -> ()'
+            )
+        else:
+            printf_blocks.append('              // Restore kernarg pointer for printf (from s[18:19])')
+            printf_blocks.append(
+                f'              llvm.inline_asm has_side_effects "s_mov_b64 s[0:1], s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}]", ""  : () -> ()'
+            )
+        if not inline_mode:
+            def _indent_block(block: str, prefix: str = "  ") -> str:
+                return "\n".join(prefix + ln if ln.strip() else ln for ln in block.split("\n"))
+
+            for i, directive in enumerate(directives):
+                # 使用 VGPR 和 SGPR 快照暫存器生成 printf
+                vgpr_snaps = directive_vgpr_snapshots.get(i, [])
+                sgpr_snaps = directive_sgpr_snapshots.get(i, [])
+                cond_snap = directive_cond_snapshots.get(i, None)
+                expr_snap = directive_expr_snapshots.get(i, None)
+                # 如果有條件式 printf，傳入 workitem_id 備份暫存器
+                tid_backup = WORKITEM_ID_BACKUP_VGPR if has_conditional_printf else None
+                # 傳入內建變數備份暫存器
+                builtin_vars = {
+                    'tid_vgpr': TID_BACKUP_VGPR,
+                    'lane_vgpr': LANE_BACKUP_VGPR,
+                    'tgid_x_vgpr': TGID_X_BACKUP_VGPR,
+                    'tgid_y_vgpr': TGID_Y_BACKUP_VGPR,
+                    'tgid_z_vgpr': TGID_Z_BACKUP_VGPR,
+                    'tgid_x_sgpr': 2,
+                    'tgid_y_sgpr': 3,
+                    'tgid_z_sgpr': 4,
+                }
+
+                if i in trace_buffers:
+                    trace_cfg = trace_buffers[i]
+                    trace_max = trace_cfg['max']
+                    trace_counter = trace_cfg['counter']
+                    trace_regs = trace_cfg['regs']
+                    trace_slots = trace_cfg['slots']
+
+                    printf_blocks.append(f'              // === Trace printf for @PRINT #{i+1} (max={trace_max}) ===')
+                    printf_blocks.append(
+                        f'              %trace_count_{i} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{trace_counter}", "=v": () -> i32'
+                    )
+                    for idx in range(trace_max):
+                        printf_blocks.append(
+                            f'              %trace_idx_const_{i}_{idx} = arith.constant {idx} : i32'
+                        )
+                        printf_blocks.append(
+                            f'              %trace_idx_cmp_{i}_{idx} = arith.cmpi ult, %trace_idx_const_{i}_{idx}, %trace_count_{i} : i32'
+                        )
+                        printf_blocks.append(f'              scf.if %trace_idx_cmp_{i}_{idx} {{')
+                        iter_vgpr_snaps = [(0, reg, trace_slots[reg][idx]) for reg in trace_regs]
+                        block = generate_printf_with_snapshot(
+                            directive, i, iter_vgpr_snaps, [], tid_backup, cond_snap, expr_snap, builtin_vars
+                        )
+                        printf_blocks.append(_indent_block(block))
+                        printf_blocks.append(f'              }}')
+                    printf_blocks.append(f'              // === End Trace printf ===')
+                else:
+                    printf_blocks.append(
+                        generate_printf_with_snapshot(
+                            directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap, expr_snap, builtin_vars
+                        )
+                    )
     
     # === 生成 Timestamp 輸出 ===
     # 在 printf section 的最後，記錄結束時間並計算經過時間
@@ -1865,7 +2097,7 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         
         printf_blocks.append(f'              // === End Timestamp END ===')
     
-    printf_section = '\n'.join(printf_blocks)
+    printf_section = '\n'.join(printf_blocks) if need_deferred_printf_section else ''
     
     # 移除了有問題的 clobber end 代碼（會導致 LLVM 生成 spill 代碼）
     # 快照機制已經保存了需要的暫存器值，不需要額外的 clobber/restore
@@ -1921,6 +2153,106 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                     snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 s{snap_num}, {cond_reg}", ""  : () -> ()')
             
             snap_lines.append(f'              // === End Snapshot ===')
+
+            # Trace capture: save per-iteration values into VGPR slots
+            if d_idx in trace_buffers:
+                trace_cfg = trace_buffers[d_idx]
+                trace_max = trace_cfg['max']
+                trace_counter = trace_cfg['counter']
+                trace_regs = trace_cfg['regs']
+                trace_slots = trace_cfg['slots']
+                trace_tmps = trace_cfg['tmp']
+                vcc_save_lo, vcc_save_hi = trace_cfg['vcc_save']
+
+                # Build reg -> snapshot reg mapping for capture
+                reg_snapshot_map = {}
+                for _, orig_reg, snap_vgpr in directive_vgpr_snapshots.get(d_idx, []):
+                    reg_snapshot_map[orig_reg] = f'v{snap_vgpr}'
+                for _, orig_reg, snap_sgpr in directive_sgpr_snapshots.get(d_idx, []):
+                    reg_snapshot_map[orig_reg] = f's{snap_sgpr}'
+                if d_idx in directive_expr_snapshots:
+                    for orig_reg, snap_reg in directive_expr_snapshots[d_idx].items():
+                        reg_snapshot_map[orig_reg] = snap_reg
+
+                snap_lines.append(f'              // === Trace capture for @PRINT #{d_idx+1} (max={trace_max}) ===')
+                # Save vcc
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "v_mov_b32 v{vcc_save_lo}, vcc_lo", ""  : () -> ()'
+                )
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "v_mov_b32 v{vcc_save_hi}, vcc_hi", ""  : () -> ()'
+                )
+                # Load current values into temp VGPRs
+                for reg in trace_regs:
+                    src_reg = reg_snapshot_map.get(reg, reg)
+                    tmp_vgpr = trace_tmps[reg]
+                    snap_lines.append(
+                        f'              llvm.inline_asm has_side_effects "v_mov_b32 v{tmp_vgpr}, {src_reg}", ""  : () -> ()'
+                    )
+                # Conditional capture using vcc (no exec modification)
+                for idx in range(trace_max):
+                    snap_lines.append(
+                        f'              llvm.inline_asm has_side_effects "v_cmp_eq_u32 vcc, v{trace_counter}, {idx}", ""  : () -> ()'
+                    )
+                    for reg in trace_regs:
+                        dst_vgpr = trace_slots[reg][idx]
+                        tmp_vgpr = trace_tmps[reg]
+                        snap_lines.append(
+                            f'              llvm.inline_asm has_side_effects "v_cndmask_b32 v{dst_vgpr}, v{dst_vgpr}, v{tmp_vgpr}, vcc", ""  : () -> ()'
+                        )
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "v_add_u32 v{trace_counter}, 1, v{trace_counter}", ""  : () -> ()'
+                )
+                # Restore vcc
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "v_readfirstlane_b32 s{SGPR_KERNARG_BACKUP}, v{vcc_save_lo}", ""  : () -> ()'
+                )
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "v_readfirstlane_b32 s{SGPR_KERNARG_BACKUP+1}, v{vcc_save_hi}", ""  : () -> ()'
+                )
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "s_mov_b32 vcc_lo, s{SGPR_KERNARG_BACKUP}", ""  : () -> ()'
+                )
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "s_mov_b32 vcc_hi, s{SGPR_KERNARG_BACKUP+1}", ""  : () -> ()'
+                )
+                snap_lines.append(f'              // === End Trace capture ===')
+
+            if inline_mode:
+                vgpr_snaps = directive_vgpr_snapshots.get(d_idx, [])
+                sgpr_snaps = directive_sgpr_snapshots.get(d_idx, [])
+                cond_snap = directive_cond_snapshots.get(d_idx, None)
+                expr_snap = directive_expr_snapshots.get(d_idx, None)
+                tid_backup = WORKITEM_ID_BACKUP_VGPR if has_conditional_printf else None
+                builtin_vars = {
+                    'tid_vgpr': TID_BACKUP_VGPR,
+                    'lane_vgpr': LANE_BACKUP_VGPR,
+                    'tgid_x_sgpr': 2,
+                    'tgid_y_sgpr': 3,
+                    'tgid_z_sgpr': 4,
+                }
+                snap_lines.append('              // === Inline printf (save s0/s1, restore kernarg) ===')
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "v_mov_b32 v{VGPR_INLINE_S0_SAVE_LO}, s0", ""  : () -> ()'
+                )
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "v_mov_b32 v{VGPR_INLINE_S0_SAVE_HI}, s1", ""  : () -> ()'
+                )
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "s_mov_b64 s[0:1], s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}]", ""  : () -> ()'
+                )
+                snap_lines.append(
+                    generate_printf_with_snapshot(
+                        directive, d_idx, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap, expr_snap, builtin_vars
+                    )
+                )
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "v_readfirstlane_b32 s0, v{VGPR_INLINE_S0_SAVE_LO}", ""  : () -> ()'
+                )
+                snap_lines.append(
+                    f'              llvm.inline_asm has_side_effects "v_readfirstlane_b32 s1, v{VGPR_INLINE_S0_SAVE_HI}", ""  : () -> ()'
+                )
+                snap_lines.append('              // === End Inline printf ===')
             
             # 合併相同位置的快照（多個 @PRINT 可能共用同一個 next_instruction）
             if clean_instr not in snapshot_insertions:
@@ -2037,13 +2369,13 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         
         # 優先在 .LBB0_2: 標籤之前插入 printf
         is_lbb0_2_label = '.LBB0_2:' in line or ('.LBB0_2"' in line and 's_cbranch' not in line)
-        if in_func and not printf_inserted and has_lbb0_2_label and is_lbb0_2_label:
+        if in_func and not printf_inserted and need_deferred_printf_section and has_lbb0_2_label and is_lbb0_2_label:
             modified_lines.append(printf_section)
             modified_lines.append(clobber_end)
             printf_inserted = True
         
         # 如果沒有 .LBB0_2: 標籤，則在 s_endpgm 之前插入
-        if in_func and not printf_inserted and not has_lbb0_2_label and 's_endpgm' in line:
+        if in_func and not printf_inserted and need_deferred_printf_section and not has_lbb0_2_label and 's_endpgm' in line:
             modified_lines.append(printf_section)
             modified_lines.append(clobber_end)
             printf_inserted = True
@@ -3220,6 +3552,12 @@ def main():
         help="禁用 printf 注入（用於純功能驗證）"
     )
     ap.add_argument(
+        "--print-mode",
+        choices=["defer", "inline"],
+        default="defer",
+        help="printf 注入模式：defer（預設，延後到結尾）或 inline（插入原位置）"
+    )
+    ap.add_argument(
         "--test",
         action="store_true",
         help="使用 universal_hsaco_runner 執行測試"
@@ -3314,6 +3652,10 @@ def main():
         print("   2. Use cond=REG_eq(N) to limit printf (e.g., v6_eq(0.0))")
         print("   3. Place @PRINT only after all barriers complete")
         print("=" * 60 + "\n")
+
+        if args.print_mode == "inline":
+            print("[Info] Inline printf disabled due to s_barrier; falling back to defer mode.")
+            args.print_mode = "defer"
     
     if args.dry_run:
         print("\n[Dry Run] Stopping here.")
@@ -3340,7 +3682,7 @@ def main():
         print(f"\n=== Injecting printf/timestamp code ===")
         gpumlir_text = gpumlir_path.read_text()
         modified_mlir, required_vgpr, required_sgpr = inject_printf_into_mlir(
-            gpumlir_text, directives, reg_info, timestamp_directives
+            gpumlir_text, directives, reg_info, timestamp_directives, print_mode=args.print_mode
         )
         
         modified_path = workdir / f"{input_path.stem}_debug_injected.gpumlir"

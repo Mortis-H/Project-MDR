@@ -39,7 +39,7 @@ def main() -> int:
     parser.add_argument(
         "--runs",
         type=int,
-        default=10,
+        default=1,
         help="Number of runs to execute.",
     )
     atomic_group = parser.add_mutually_exclusive_group()
