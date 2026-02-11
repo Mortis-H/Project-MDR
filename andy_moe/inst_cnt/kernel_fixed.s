@@ -283,28 +283,28 @@ _ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E:
   buffer_load_dword  v20, v8, s[40:43], 0 offen         // 000000000634: E0501000 800A1408
   buffer_load_dword  v21, v9, s[40:43], 0 offen         // 00000000063C: E0501000 800A1509
   buffer_load_dword   v26, s[20:23], 0 offen lds     // 000000000644: E0511000 8005001A
-  // @PRINT max=8 if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"X_mem_load v0={v0:d} tid={$tid:d}"
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 129: f"X_mem_load v26={v26:d} tid={$tid:d}"
   s_add_u32     m0, 0x00000100, s50                     // 00000000064C: 807C32FF 00000100
   buffer_load_dword   v27, s[20:23], 0 offen lds     // 000000000654: E0511000 8005001B
-  // @PRINT max=8 if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"X_mem_load v0={v0:d} tid={$tid:d}"
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 129: f"X_mem_load v27={v27:d} tid={$tid:d}"
   s_add_u32     m0, 0x00000200, s50                     // 00000000065C: 807C32FF 00000200
   buffer_load_dword   v28, s[20:23], 0 offen lds     // 000000000664: E0511000 8005001C
-  // @PRINT max=8 if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"X_mem_load v0={v0:d} tid={$tid:d}"
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 129: f"X_mem_load v28={v28:d} tid={$tid:d}"
   s_add_u32     m0, 0x00000300, s50                     // 00000000066C: 807C32FF 00000300
   buffer_load_dword   v29, s[20:23], 0 offen lds     // 000000000674: E0511000 8005001D
-  // @PRINT max=8 if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"X_mem_load v0={v0:d} tid={$tid:d}"
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 129: f"X_mem_load v29={v29:d} tid={$tid:d}"
   s_add_u32     m0, 0x00000400, s50                     // 00000000067C: 807C32FF 00000400
   buffer_load_dword   v30, s[20:23], 0 offen lds     // 000000000684: E0511000 8005001E
-  // @PRINT max=8 if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"X_mem_load v0={v0:d} tid={$tid:d}"
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 129: f"X_mem_load v30={v30:d} tid={$tid:d}"
   s_add_u32     m0, 0x00000500, s50                     // 00000000068C: 807C32FF 00000500
   buffer_load_dword   v31, s[20:23], 0 offen lds     // 000000000694: E0511000 8005001F
-  // @PRINT max=8 if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"X_mem_load v0={v0:d} tid={$tid:d}"
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 129: f"X_mem_load v31={v31:d} tid={$tid:d}"
   s_add_u32     m0, 0x00000600, s50                     // 00000000069C: 807C32FF 00000600
   buffer_load_dword   v32, s[20:23], 0 offen lds     // 0000000006A4: E0511000 80050020
-  // @PRINT max=8 if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"X_mem_load v0={v0:d} tid={$tid:d}"
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 129: f"X_mem_load v32={v32:d} tid={$tid:d}"
   s_add_u32     m0, 0x00000700, s50                     // 0000000006AC: 807C32FF 00000700
   buffer_load_dword   v33, s[20:23], 0 offen lds     // 0000000006B4: E0511000 80050021
-  // @PRINT max=8 if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"X_mem_load v0={v0:d} tid={$tid:d}"
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 129: f"X_mem_load v33={v33:d} tid={$tid:d}"
   s_add_u32     m0, 0, s51                              // 0000000006BC: 807C3380
   s_add_u32     s20, s57, s20                           // 0000000006C0: 80141439
   s_addc_u32    s21, 0, s21                             // 0000000006C4: 82151580

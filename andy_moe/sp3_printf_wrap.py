@@ -53,6 +53,15 @@ class Directive:
     anchor_index: int
     line_no: int
     insert_after: bool = False
+    anchor_raw_operands: Optional[List[str]] = None  # raw operands from SP3 anchor instruction
+
+
+# Regex to match SP3 macro references in @PRINT text:
+# - Full form: v_regs(_v_X_addr, i_idx) or s_regs(_s_X_buf, 0)
+# - Bare form: v_regs or s_regs (used as variable name in format string {v_regs:d})
+SP3_MACRO_RE = re.compile(r'[vs]_regs(?:\s*\([^)]*\))?')
+# Regex to find bare v_regs/s_regs inside format string placeholders like {v_regs:d}
+SP3_BARE_MACRO_IN_FMT_RE = re.compile(r'\{(v_regs|s_regs)(:[^}]*)?\}')
 
 
 def run_cmd(cmd: List[str], env: Optional[Dict[str, str]] = None) -> None:
@@ -169,6 +178,135 @@ def normalize_operand(token: str) -> Optional[str]:
         if IDENT_RE.match(tok):
             return "imm"
     return tok.lower()
+
+
+def extract_raw_operands(line: str) -> List[str]:
+    """Extract raw (un-normalized) operands from an instruction line."""
+    no_comment = strip_inline_comment(line)
+    stripped = no_comment.strip()
+    if not stripped:
+        return []
+    parts = stripped.split(None, 1)
+    if len(parts) < 2:
+        return []
+    return split_operands(parts[1])
+
+
+def resolve_sp3_macros(directive_text: str,
+                       sp3_raw_operands: Optional[List[str]],
+                       disasm_line: str) -> str:
+    """Resolve v_regs(...)/s_regs(...) references in a directive by mapping
+    SP3 operand positions to the matched disasm instruction's operands.
+
+    Supports two forms:
+      1. Full form in directive text: v_regs(_v_X_addr, i_idx) -> v26
+      2. Bare form in format string: {v_regs:d} -> {v26:d}
+         (resolves to the first v_regs(...) operand found in the anchor)
+
+    For example:
+      SP3 instruction: buffer_load_dword v0, v_regs(_v_X_addr,i_idx), s_regs(_s_X_buf,0), 0 lds:1 offen:1
+      Disasm instruction: buffer_load_dword v26, s[20:23], 0 offen lds
+      Directive text:  f"X_mem_load v_regs={v_regs:d}"
+      Result:          f"X_mem_load v_regs={v26:d}"
+    """
+    if not sp3_raw_operands or not SP3_MACRO_RE.search(directive_text):
+        return directive_text
+
+    disasm_raw = extract_raw_operands(disasm_line)
+    if not disasm_raw:
+        return directive_text
+
+    # Build mapping: SP3 macro operands -> concrete disasm registers.
+    #
+    # Strategy: align SP3 and disasm operands by position. When the number
+    # of operands differs (e.g., lds drops vdst in some ISA formats), use
+    # normalized-type matching within each type group, preserving order.
+    # When counts match, use direct positional mapping.
+    sp3_norm = [(op, normalize_operand(op)) for op in sp3_raw_operands]
+    dis_norm = [(op, normalize_operand(op)) for op in disasm_raw]
+
+    macro_map: Dict[str, str] = {}        # full macro text -> concrete
+    bare_macro_map: Dict[str, str] = {}   # 'v_regs' or 's_regs' -> first concrete
+
+    if len(sp3_norm) == len(dis_norm):
+        # Same operand count -> direct positional mapping
+        for (sp3_op, sp3_n), (dis_op, dis_n) in zip(sp3_norm, dis_norm):
+            clean_op = sp3_op.strip().replace(' ', '')
+            call_match = FUNC_CALL_RE.match(clean_op)
+            if call_match:
+                macro_map[clean_op] = dis_op.strip()
+                func_name = call_match.group(1).lower()
+                if func_name in ('v_regs', 'v_reg', 'vreg',
+                                 's_regs', 's_reg', 'sreg'):
+                    base_name = 'v_regs' if func_name.startswith('v') else 's_regs'
+                    if base_name not in bare_macro_map:
+                        bare_macro_map[base_name] = dis_op.strip()
+    else:
+        # Different operand count (e.g., lds drops vdst in ISA disasm).
+        # Match within each normalized-type group, only counting macro ops.
+        # Group disasm operands by normalized type
+        dis_by_norm: Dict[str, List[str]] = {}
+        for raw_op, norm in dis_norm:
+            if norm:
+                dis_by_norm.setdefault(norm, []).append(raw_op.strip())
+
+        # For each SP3 macro operand, find its match within the type group
+        macro_idx_by_norm: Dict[str, int] = {}
+        for raw_op, norm in sp3_norm:
+            if norm is None:
+                continue
+            clean_op = raw_op.strip().replace(' ', '')
+            call_match = FUNC_CALL_RE.match(clean_op)
+            if call_match:
+                idx = macro_idx_by_norm.get(norm, 0)
+                macro_idx_by_norm[norm] = idx + 1
+                candidates = dis_by_norm.get(norm, [])
+                if idx < len(candidates):
+                    concrete = candidates[idx]
+                    macro_map[clean_op] = concrete
+                    func_name = call_match.group(1).lower()
+                    if func_name in ('v_regs', 'v_reg', 'vreg',
+                                     's_regs', 's_reg', 'sreg'):
+                        base_name = 'v_regs' if func_name.startswith('v') else 's_regs'
+                        if base_name not in bare_macro_map:
+                            bare_macro_map[base_name] = concrete
+
+    result = directive_text
+
+    # 1. Replace full-form macro calls (e.g., v_regs(_v_X_addr, i_idx) -> v26)
+    for macro, concrete in macro_map.items():
+        func_match = FUNC_CALL_RE.match(macro)
+        if func_match:
+            func_name = func_match.group(1)
+            func_args = func_match.group(2)
+            escaped_name = re.escape(func_name)
+            args_parts = [re.escape(a.strip()) for a in func_args.split(',')]
+            args_pattern = r'\s*,\s*'.join(args_parts)
+            pattern = escaped_name + r'\s*\(\s*' + args_pattern + r'\s*\)'
+            result = re.sub(pattern, concrete, result)
+
+    # 2. Replace bare-form macros in format strings (e.g., {v_regs:d} -> {v26:d})
+    if bare_macro_map:
+        def _replace_bare(m):
+            macro_name = m.group(1)  # 'v_regs' or 's_regs'
+            fmt_spec = m.group(2) or ''  # ':d' or '' etc.
+            concrete = bare_macro_map.get(macro_name)
+            if concrete:
+                return '{' + concrete + fmt_spec + '}'
+            return m.group(0)
+        result = SP3_BARE_MACRO_IN_FMT_RE.sub(_replace_bare, result)
+
+    # 3. Replace bare v_regs/s_regs in plain text (outside {}) for readability
+    #    e.g., f"X_mem_load v_regs={v26:d}" -> f"X_mem_load v26={v26:d}"
+    if bare_macro_map:
+        for macro_name, concrete in bare_macro_map.items():
+            # Only replace occurrences NOT inside { } (already handled above)
+            # Match: word-boundary v_regs/s_regs NOT preceded by { or followed by :}
+            result = re.sub(
+                r'(?<!\{)\b' + re.escape(macro_name) + r'\b(?![:\}])',
+                concrete, result)
+
+    return result
 
 
 def split_operands(text: str) -> List[str]:
@@ -398,6 +536,33 @@ def collect_directives(
             print(f"[Warn] Cannot find anchor instruction for directive at line {idx + 1}, skip.")
             continue
         kind = "PRINT" if "@PRINT" in directive_text else "TIMESTAMP"
+
+        # If directive contains v_regs/s_regs macros, extract the anchor
+        # instruction's raw operands for later resolution.
+        anchor_raw_operands = None
+        if SP3_MACRO_RE.search(directive_text):
+            # Find the anchor instruction line
+            anchor_line_idx = None
+            if insert_after:
+                # anchor is before the directive
+                for j in range(idx - 1, -1, -1):
+                    pinfo = line_infos[j]
+                    if pinfo.func == info.func and pinfo.instr_index == anchor_index:
+                        anchor_line_idx = j
+                        break
+            else:
+                # anchor is on the same line or after
+                if info.instr_index == anchor_index:
+                    anchor_line_idx = idx
+                else:
+                    for j in range(idx + 1, len(lines)):
+                        ninfo = line_infos[j]
+                        if ninfo.func == info.func and ninfo.instr_index == anchor_index:
+                            anchor_line_idx = j
+                            break
+            if anchor_line_idx is not None:
+                anchor_raw_operands = extract_raw_operands(lines[anchor_line_idx])
+
         directives.append(
             Directive(
                 kind=kind,
@@ -406,6 +571,7 @@ def collect_directives(
                 anchor_index=anchor_index,
                 line_no=idx + 1,
                 insert_after=insert_after,
+                anchor_raw_operands=anchor_raw_operands,
             )
         )
     return directives
@@ -839,27 +1005,31 @@ def insert_directives_into_disasm(
                     )
                     continue
                 for dis_idx, _score in candidates:
-                    insertions.setdefault(dis_idx, []).append((d.text, d.insert_after))
+                    insertions.setdefault(dis_idx, []).append(
+                        (d.text, d.insert_after, d.anchor_raw_operands))
         else:
             positions = select_positions(sorted_dirs, cand_scores_list)
             for d, dis_idx in zip(sorted_dirs, positions):
                 if dis_idx is None:
                     print(f"[Warn] Cannot resolve directive (line {d.line_no}) from {d.func}.")
                     continue
-                insertions.setdefault(dis_idx, []).append((d.text, d.insert_after))
+                insertions.setdefault(dis_idx, []).append(
+                    (d.text, d.insert_after, d.anchor_raw_operands))
 
     new_lines: List[str] = []
     for line_idx, line in enumerate(disasm_lines):
         op_index = line_to_op_index.get(line_idx)
         if op_index is not None and op_index in insertions:
             indent = re.match(r"^(\s*)", line).group(1)
-            for text, insert_after in insertions[op_index]:
+            for text, insert_after, anchor_ops in insertions[op_index]:
                 if not insert_after:
-                    new_lines.append(f"{indent}// {text}")
+                    resolved = resolve_sp3_macros(text, anchor_ops, line)
+                    new_lines.append(f"{indent}// {resolved}")
             new_lines.append(line)
-            for text, insert_after in insertions[op_index]:
+            for text, insert_after, anchor_ops in insertions[op_index]:
                 if insert_after:
-                    new_lines.append(f"{indent}// {text}")
+                    resolved = resolve_sp3_macros(text, anchor_ops, line)
+                    new_lines.append(f"{indent}// {resolved}")
         else:
             new_lines.append(line)
 

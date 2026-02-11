@@ -147,7 +147,8 @@ def merge_hidden_args(fixed_isa: str, generated_isa: str) -> str:
     return fixed_isa
 
 
-def apply_required_gpr_counts(isa_text: str, required_vgpr: int, required_sgpr: int) -> str:
+def apply_required_gpr_counts(isa_text: str, required_vgpr: int, required_sgpr: int,
+                              required_private_size: int = 0) -> str:
     updated = isa_text
     if required_vgpr > 0:
         vgpr_match = re.search(r'\.amdhsa_next_free_vgpr\s+(\d+)', updated)
@@ -191,7 +192,140 @@ def apply_required_gpr_counts(isa_text: str, required_vgpr: int, required_sgpr: 
             lambda m: f"{m.group(1)} {required_sgpr}",
             updated,
         )
+    # Update private segment size and enable scratch for scratch snapshot mode
+    if required_private_size > 0:
+        priv_match = re.search(r'\.amdhsa_private_segment_fixed_size\s+(\d+)', updated)
+        if priv_match:
+            current_priv = int(priv_match.group(1))
+            new_priv = current_priv + required_private_size
+            # Align to 16 bytes
+            new_priv = ((new_priv + 15) // 16) * 16
+            updated = re.sub(
+                r'(\.amdhsa_private_segment_fixed_size)\s+\d+',
+                rf'\1 {new_priv}',
+                updated,
+            )
+            print(f'[Info] Updated .amdhsa_private_segment_fixed_size: {current_priv} -> {new_priv}')
+        # Also update the YAML metadata section (.private_segment_fixed_size: N)
+        yaml_priv_match = re.search(r'\.private_segment_fixed_size:\s*(\d+)', updated)
+        if yaml_priv_match:
+            current_yaml_priv = int(yaml_priv_match.group(1))
+            new_yaml_priv = current_yaml_priv + required_private_size
+            new_yaml_priv = ((new_yaml_priv + 15) // 16) * 16
+            updated = re.sub(
+                r'(\.private_segment_fixed_size:)\s*\d+',
+                rf'\1 {new_yaml_priv}',
+                updated,
+            )
+            print(f'[Info] Updated .private_segment_fixed_size (YAML): {current_yaml_priv} -> {new_yaml_priv}')
+        # Enable private segment so the runtime initialises flat scratch
+        enable_match = re.search(r'\.amdhsa_enable_private_segment\s+(\d+)', updated)
+        if enable_match and int(enable_match.group(1)) == 0:
+            updated = re.sub(
+                r'(\.amdhsa_enable_private_segment)\s+0',
+                r'\1 1',
+                updated,
+            )
+            print('[Info] Set .amdhsa_enable_private_segment = 1 (required for scratch)')
     return updated
+
+
+def fix_llvm_kernarg_register(isa_text: str) -> str:
+    """Fix LLVM's kernarg pointer register mismatch.
+
+    LLVM may copy s[0:1] (kernarg ptr) to another register pair (e.g. s[12:13])
+    at kernel entry and then use that copy for hostcall buffer loads in the printf
+    section.  Our inline_asm restore only writes s[0:1], so the LLVM-chosen copy
+    stays stale.  This function:
+      1. Detects the LLVM-generated copy at kernel entry (before first ;;#ASMSTART).
+      2. Finds the kernarg restore block in the printf section.
+      3. Inserts a matching copy so the LLVM register also holds the correct value.
+    """
+    # Step 1: find LLVM's kernarg backup register
+    # Pattern: at kernel entry, before the first ;;#ASMSTART, LLVM may emit
+    #   s_mov_b64 s[X:X+1], s[0:1]
+    entry_re = re.compile(
+        r'^(\s*s_mov_b64\s+s\[(\d+):(\d+)\],\s*s\[0:1\])\s*$',
+        re.MULTILINE,
+    )
+    # Find kernel function label (followed by s_mov_b64 before first ASMSTART)
+    first_asm = isa_text.find(';;#ASMSTART')
+    if first_asm < 0:
+        return isa_text
+    preamble = isa_text[:first_asm]
+    m = entry_re.search(preamble)
+    if not m:
+        return isa_text  # LLVM used s[0:1] directly, no fix needed
+
+    llvm_reg_lo = int(m.group(2))
+    llvm_reg_hi = int(m.group(3))
+    print(f'[Info] LLVM saved kernarg ptr to s[{llvm_reg_lo}:{llvm_reg_hi}]; patching printf section')
+
+    # Step 2: find our kernarg restore in the printf section.
+    # Look for the pattern:
+    #   v_readfirstlane_b32 s0, vN  (or scratch_load ... for scratch mode)
+    #   ...
+    #   v_readfirstlane_b32 s1, vM
+    # We insert the extra s_mov_b64 after the s1 restore line.
+    # Also handle the s_mov_b64 restore (SGPR backup mode):
+    #   s_mov_b64 s[0:1], s[X:X+1]
+    restore_patterns = [
+        # VGPR mode: v_readfirstlane_b32 s1, vN
+        re.compile(
+            r'(^\s*v_readfirstlane_b32\s+s1,\s*v\d+\s*$)',
+            re.MULTILINE,
+        ),
+        # Scratch mode: the restore block ends with v_readfirstlane_b32 s1, v0
+        re.compile(
+            r'(v_readfirstlane_b32\s+s1,\s*v0")',
+        ),
+        # SGPR backup mode: s_mov_b64 s[0:1], s[X:X+1]
+        re.compile(
+            r'(^\s*s_mov_b64\s+s\[0:1\],\s*s\[\d+:\d+\]\s*$)',
+            re.MULTILINE,
+        ),
+    ]
+
+    fix_line = f'\ts_mov_b64 s[{llvm_reg_lo}:{llvm_reg_hi}], s[0:1]'
+
+    for pat in restore_patterns:
+        matches = list(pat.finditer(isa_text))
+        if not matches:
+            continue
+        # Use the FIRST match that appears after the kernel body (far into the file)
+        # The printf section is in the second half of the ISA
+        midpoint = len(isa_text) // 2
+        for match in matches:
+            if match.start() > midpoint:
+                insert_pos = match.end()
+                # Check if it's inside an inline_asm block
+                if ';;#ASMEND' in isa_text[insert_pos:insert_pos+20]:
+                    # Insert before ;;#ASMEND
+                    end_pos = isa_text.find(';;#ASMEND', insert_pos)
+                    isa_text = isa_text[:end_pos] + f'\n{fix_line}\n\t' + isa_text[end_pos:]
+                else:
+                    isa_text = isa_text[:insert_pos] + f'\n{fix_line}' + isa_text[insert_pos:]
+                print(f'[Info] Inserted s_mov_b64 s[{llvm_reg_lo}:{llvm_reg_hi}], s[0:1] after kernarg restore')
+                return isa_text
+
+    # Fallback: couldn't find the restore block, try to insert before the first
+    # s_load_dwordx2 that uses s[llvm_reg_lo:llvm_reg_hi] in the second half
+    load_re = re.compile(
+        rf'(\s*s_load_dwordx2\s+s\[\d+:\d+\],\s*s\[{llvm_reg_lo}:{llvm_reg_hi}\],\s*0x1f0)',
+        re.MULTILINE,
+    )
+    matches = list(load_re.finditer(isa_text))
+    if matches:
+        # Insert before the first hostcall load in the printf section (second half)
+        for match in matches:
+            if match.start() > len(isa_text) // 2:
+                insert_pos = match.start()
+                isa_text = isa_text[:insert_pos] + f'\n{fix_line}\n' + isa_text[insert_pos:]
+                print(f'[Info] Inserted s_mov_b64 before first hostcall load (fallback)')
+                return isa_text
+
+    print('[Warning] Could not find kernarg restore location; printf may use stale kernarg pointer')
+    return isa_text
 
 
 def build_hsaco_with_pipeline(
@@ -203,6 +337,7 @@ def build_hsaco_with_pipeline(
     has_printf: bool,
     required_vgpr: int,
     required_sgpr: int,
+    required_private_size: int = 0,
 ) -> pathlib.Path:
     kernel_binary_mlir = workdir / f"{output_prefix}_binary_isa.mlir"
     kernel_isa_s = workdir / f"{output_prefix}.s"
@@ -241,7 +376,8 @@ def build_hsaco_with_pipeline(
 
     if has_printf:
         isa = merge_hidden_args(isa, generated_isa)
-        isa = apply_required_gpr_counts(isa, required_vgpr, required_sgpr)
+        isa = apply_required_gpr_counts(isa, required_vgpr, required_sgpr, required_private_size)
+        isa = fix_llvm_kernarg_register(isa)
 
     kernel_isa_s.write_text(isa)
 
@@ -418,6 +554,7 @@ def main() -> int:
     has_printf = (bool(directives) or bool(timestamp_directives)) and not args.no_printf
     required_vgpr = 0
     required_sgpr = 0
+    required_private_size = 0
 
     if (not directives and not timestamp_directives) or args.no_printf:
         print('\nUsing original GPU MLIR (no printf injection)')
@@ -428,12 +565,14 @@ def main() -> int:
         if kernarg_size:
             print('[Info] Padding kernarg segment to {} bytes for hidden args'.format(kernarg_size))
             gpumlir_text = inject_kernarg_padding_arg(gpumlir_text, kernarg_size)
-        modified_mlir, required_vgpr, required_sgpr = mdr_printf.inject_printf_into_mlir(
+        modified_mlir, required_vgpr, required_sgpr, required_private_size = mdr_printf.inject_printf_into_mlir(
             gpumlir_text, directives, reg_info, timestamp_directives, print_mode=args.print_mode
         )
         modified_path = workdir / '{}_debug_injected.gpumlir'.format(input_path.stem)
         modified_path.write_text(modified_mlir)
         print('Generated modified GPU MLIR: {}'.format(modified_path))
+        if required_private_size > 0:
+            print('[Info] Scratch snapshot mode: {} bytes private segment needed'.format(required_private_size))
 
     # 6. 可選：使用 mlir-runner 執行
     if args.run:
@@ -460,6 +599,7 @@ def main() -> int:
         has_printf,
         required_vgpr,
         required_sgpr,
+        required_private_size,
     )
 
     print('\n=== Done ===')

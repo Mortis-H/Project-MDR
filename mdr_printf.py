@@ -873,7 +873,8 @@ def parse_expression(expr: str) -> List[Tuple[str, str]]:
 
 
 def compile_expression_to_mlir(expr: str, result_type: str, unique_id: int, expr_idx: int,
-                                snapshot_map: Dict[str, str] = None) -> Tuple[str, str]:
+                                snapshot_map: Dict[str, str] = None,
+                                scratch_expr_offsets: Dict[str, int] = None) -> Tuple[str, str]:
     """
     將表達式編譯為 MLIR 代碼
     
@@ -885,6 +886,7 @@ def compile_expression_to_mlir(expr: str, result_type: str, unique_id: int, expr
         unique_id: 唯一識別符
         expr_idx: 表達式索引
         snapshot_map: 暫存器快照映射 {原始暫存器: 快照暫存器}，如 {"v6": "v60", "v7": "v61"}
+        scratch_expr_offsets: scratch offset 映射 {原始暫存器: scratch_offset}（scratch mode）
     
     Returns:
         (mlir_code, result_var_name): MLIR 代碼和結果變數名
@@ -903,6 +905,14 @@ def compile_expression_to_mlir(expr: str, result_type: str, unique_id: int, expr
             if token_value not in bound_regs:
                 var_name = f'expr_{unique_id}_{expr_idx}_reg_{var_counter[0]}'
                 var_counter[0] += 1
+                
+                # Check scratch mode first
+                if scratch_expr_offsets and token_value in scratch_expr_offsets:
+                    s_off = scratch_expr_offsets[token_value]
+                    lines.append(f'              // Using scratch [{s_off}] for {token_value}')
+                    lines.append(_gen_scratch_load_mlir(s_off, mlir_type, var_name))
+                    bound_regs[token_value] = var_name
+                    return f'%{bound_regs[token_value]}'
                 
                 # 檢查是否有快照映射
                 actual_reg = token_value
@@ -1042,13 +1052,23 @@ def generate_value_binding(reg: str, type_str: str, var_name: str) -> str:
     return f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "{asm_instr}", "=v": () -> {mlir_type}'
 
 
+def _gen_scratch_load_mlir(scratch_offset: int, mlir_type: str, var_name: str) -> str:
+    """Generate MLIR inline_asm to load a value from scratch memory."""
+    return (
+        f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
+        f'"scratch_load_dword $0, off, off offset:{scratch_offset}\\0A'
+        f's_waitcnt vmcnt(0)", "=v": () -> {mlir_type}'
+    )
+
+
 def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int, 
                                    vgpr_snapshots: List[Tuple[int, str, int]],
                                    sgpr_snapshots: List[Tuple[int, str, int]] = None,
                                    workitem_id_backup_vgpr: int = None,
                                    cond_snapshot: Tuple[str, int, bool, str] = None,
                                    expr_snapshot: Dict[str, str] = None,
-                                   builtin_vars: Dict[str, int] = None) -> str:
+                                   builtin_vars: Dict[str, int] = None,
+                                   scratch_snapshot_map: Dict = None) -> str:
     """
     生成使用快照暫存器的 gpu.printf MLIR 程式碼
     
@@ -1087,9 +1107,27 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
     for orig_reg, (snap_reg, _) in reg_snapshot_map.items():
         full_expr_snapshot[orig_reg] = snap_reg
     
+    # Build scratch expression offset map for compile_expression_to_mlir
+    scratch_expr_offsets = None
+    if scratch_snapshot_map:
+        scratch_expr_offsets = {}
+        # Merge all scratch reg offsets for expression use
+        if 'reg_snapshots' in scratch_snapshot_map:
+            scratch_expr_offsets.update(scratch_snapshot_map['reg_snapshots'])
+        if 'expr' in scratch_snapshot_map:
+            scratch_expr_offsets.update(scratch_snapshot_map['expr'])
+    
+    # --- Solution A: When in scratch snapshot mode, defer print value generation ---
+    # This ensures LLVM keeps the scratch_load results in registers only briefly
+    # (right before gpu.printf) instead of across 600+ hostcall setup instructions.
+    _use_deferred = scratch_snapshot_map is not None
+    _deferred_print_val_lines: List[str] = []  # collected, inserted inside scf.if later
+    
     # === 按照原始順序生成所有值（使用 all_placeholders）===
     # 這確保 printf 參數順序與格式字串中的 placeholder 順序一致
     if directive.all_placeholders:
+        # When in scratch deferred mode, print value lines go to _deferred list
+        _pv_target = _deferred_print_val_lines if _use_deferred else lines
         for i, (value, typ) in enumerate(directive.all_placeholders):
             var_name = f'print_val_{unique_id}_{i}'
             mlir_type = map_type_to_mlir(typ)
@@ -1097,84 +1135,102 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
             # 檢查是否是內建變數
             if value == '$tid':
                 # $tid: Local Thread ID (workitem_id_x)
-                if builtin_vars and builtin_vars.get('tid_vgpr') is not None:
+                if scratch_snapshot_map and scratch_snapshot_map.get('tid') is not None:
+                    tid_off = scratch_snapshot_map['tid']
+                    _pv_target.append(f'              // Built-in $tid: read from scratch[{tid_off}]')
+                    _pv_target.append(_gen_scratch_load_mlir(tid_off, 'i32', var_name))
+                elif builtin_vars and builtin_vars.get('tid_vgpr') is not None:
                     tid_vgpr = builtin_vars['tid_vgpr']
-                    lines.append(f'              // Built-in $tid: read from v{tid_vgpr}')
-                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{tid_vgpr}", "=v": () -> i32')
+                    _pv_target.append(f'              // Built-in $tid: read from v{tid_vgpr}')
+                    _pv_target.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{tid_vgpr}", "=v": () -> i32')
                 else:
-                    lines.append(f'              // Built-in $tid: WARNING - reading v0 directly (may be modified)')
-                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v0", "=v": () -> i32')
+                    _pv_target.append(f'              // Built-in $tid: WARNING - reading v0 directly (may be modified)')
+                    _pv_target.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v0", "=v": () -> i32')
                 var_names.append(var_name)
             
             elif value == '$lane':
                 # $lane: Wavefront Lane ID (0-63)
-                if builtin_vars and builtin_vars.get('lane_vgpr') is not None:
+                if scratch_snapshot_map and scratch_snapshot_map.get('lane') is not None:
+                    lane_off = scratch_snapshot_map['lane']
+                    _pv_target.append(f'              // Built-in $lane: read from scratch[{lane_off}]')
+                    _pv_target.append(_gen_scratch_load_mlir(lane_off, 'i32', var_name))
+                elif builtin_vars and builtin_vars.get('lane_vgpr') is not None:
                     lane_vgpr = builtin_vars['lane_vgpr']
-                    lines.append(f'              // Built-in $lane: read from v{lane_vgpr}')
-                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{lane_vgpr}", "=v": () -> i32')
+                    _pv_target.append(f'              // Built-in $lane: read from v{lane_vgpr}')
+                    _pv_target.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{lane_vgpr}", "=v": () -> i32')
                 else:
-                    lines.append(f'              // Built-in $lane: calculating lane ID on the fly')
-                    lines.append(f'              %{var_name}_lo = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_lo_u32_b32 $0, -1, 0", "=v": () -> i32')
-                    lines.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_hi_u32_b32 $0, -1, $1", "=v,v": (%{var_name}_lo) -> i32')
+                    _pv_target.append(f'              // Built-in $lane: calculating lane ID on the fly')
+                    _pv_target.append(f'              %{var_name}_lo = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_lo_u32_b32 $0, -1, 0", "=v": () -> i32')
+                    _pv_target.append(f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "v_mbcnt_hi_u32_b32 $0, -1, $1", "=v,v": (%{var_name}_lo) -> i32')
                 var_names.append(var_name)
             
             elif value in ('$tgid_x', '$tgid_y', '$tgid_z'):
                 # $tgid_x/y/z: Workgroup ID (block index)
-                tgid_vgpr_map = {
-                    '$tgid_x': 'tgid_x_vgpr',
-                    '$tgid_y': 'tgid_y_vgpr',
-                    '$tgid_z': 'tgid_z_vgpr',
-                }
-                tgid_sgpr_map = {
-                    '$tgid_x': 'tgid_x_sgpr',
-                    '$tgid_y': 'tgid_y_sgpr',
-                    '$tgid_z': 'tgid_z_sgpr',
-                }
-                tgid_vgpr = None
-                sgpr_idx = None
-                if builtin_vars:
-                    tgid_vgpr = builtin_vars.get(tgid_vgpr_map[value])
-                    sgpr_idx = builtin_vars.get(tgid_sgpr_map[value])
-                if tgid_vgpr is not None:
-                    lines.append(f'              // Built-in {value}: read from v{tgid_vgpr}')
-                    lines.append(
-                        f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
-                        f'"v_mov_b32 $0, v{tgid_vgpr}", "=v": () -> i32'
-                    )
+                scratch_tgid_key = value.replace('$', '')  # 'tgid_x', 'tgid_y', 'tgid_z'
+                if scratch_snapshot_map and scratch_snapshot_map.get(scratch_tgid_key) is not None:
+                    tgid_off = scratch_snapshot_map[scratch_tgid_key]
+                    _pv_target.append(f'              // Built-in {value}: read from scratch[{tgid_off}]')
+                    _pv_target.append(_gen_scratch_load_mlir(tgid_off, 'i32', var_name))
                 else:
-                    if sgpr_idx is None:
-                        sgpr_idx = 2 if value == '$tgid_x' else 3 if value == '$tgid_y' else 4
-                    lines.append(f'              // Built-in {value}: read from s{sgpr_idx}')
-                    lines.append(
-                        f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
-                        f'"v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32'
-                    )
+                    tgid_vgpr_map = {
+                        '$tgid_x': 'tgid_x_vgpr',
+                        '$tgid_y': 'tgid_y_vgpr',
+                        '$tgid_z': 'tgid_z_vgpr',
+                    }
+                    tgid_sgpr_map = {
+                        '$tgid_x': 'tgid_x_sgpr',
+                        '$tgid_y': 'tgid_y_sgpr',
+                        '$tgid_z': 'tgid_z_sgpr',
+                    }
+                    tgid_vgpr = None
+                    sgpr_idx = None
+                    if builtin_vars:
+                        tgid_vgpr = builtin_vars.get(tgid_vgpr_map[value])
+                        sgpr_idx = builtin_vars.get(tgid_sgpr_map[value])
+                    if tgid_vgpr is not None:
+                        _pv_target.append(f'              // Built-in {value}: read from v{tgid_vgpr}')
+                        _pv_target.append(
+                            f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
+                            f'"v_mov_b32 $0, v{tgid_vgpr}", "=v": () -> i32'
+                        )
+                    else:
+                        if sgpr_idx is None:
+                            sgpr_idx = 2 if value == '$tgid_x' else 3 if value == '$tgid_y' else 4
+                        _pv_target.append(f'              // Built-in {value}: read from s{sgpr_idx}')
+                        _pv_target.append(
+                            f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att '
+                            f'"v_mov_b32 $0, s{sgpr_idx}", "=v": () -> i32'
+                        )
                 var_names.append(var_name)
             
             elif re.match(r'^[vs]\d+$', value):
                 # 簡單暫存器
-                if value in reg_snapshot_map:
+                if scratch_snapshot_map and value in scratch_snapshot_map.get('reg_snapshots', {}):
+                    s_off = scratch_snapshot_map['reg_snapshots'][value]
+                    _pv_target.append(f'              // Using scratch snapshot [{s_off}] for {value}')
+                    _pv_target.append(_gen_scratch_load_mlir(s_off, mlir_type, var_name))
+                elif value in reg_snapshot_map:
                     snap_reg, _ = reg_snapshot_map[value]
-                    lines.append(f'              // Using snapshot {snap_reg} for {value}')
-                    lines.append(generate_value_binding(snap_reg, typ, var_name))
+                    _pv_target.append(f'              // Using snapshot {snap_reg} for {value}')
+                    _pv_target.append(generate_value_binding(snap_reg, typ, var_name))
                 else:
-                    lines.append(generate_value_binding(value, typ, var_name))
+                    _pv_target.append(generate_value_binding(value, typ, var_name))
                 var_names.append(var_name)
             
             else:
                 # 表達式
                 try:
-                    expr_code, result_var = compile_expression_to_mlir(value, typ, unique_id, i, full_expr_snapshot)
+                    expr_code, result_var = compile_expression_to_mlir(value, typ, unique_id, i, full_expr_snapshot, scratch_expr_offsets)
                     if expr_code:
-                        lines.append(f'              // Expression: {value} (using snapshots)')
-                        lines.append(expr_code)
+                        _pv_target.append(f'              // Expression: {value} (using snapshots)')
+                        _pv_target.append(expr_code)
                     var_names.append(result_var)
                 except Exception as e:
                     print(f"[Warning] Failed to compile expression '{value}': {e}")
                     if typ.startswith('f'):
-                        lines.append(f'              %{var_name} = arith.constant 0.0 : {mlir_type}')
+                        _pv_target.append(f'              %{var_name} = arith.constant 0.0 : {mlir_type}')
                     else:
-                        lines.append(f'              %{var_name} = arith.constant 0 : {mlir_type}')
+                        _pv_target.append(f'              %{var_name} = arith.constant 0 : {mlir_type}')
                     var_names.append(var_name)
     else:
         # Fallback: 使用舊的處理方式（向後兼容）
@@ -1240,7 +1296,7 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
                     var_names.append(var_name)
                 else:
                     try:
-                        expr_code, result_var = compile_expression_to_mlir(expr, typ, unique_id, i, full_expr_snapshot)
+                        expr_code, result_var = compile_expression_to_mlir(expr, typ, unique_id, i, full_expr_snapshot, scratch_expr_offsets)
                         if expr_code:
                             lines.append(expr_code)
                         var_names.append(result_var)
@@ -1286,7 +1342,14 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
             if builtin_cond_match:
                 builtin_var, cmp_op, cmp_value = builtin_cond_match.groups()
                 snapshot_var = f'%cond_builtin_{cond_tag}'
-                if builtin_var == '$tid' and builtin_vars and builtin_vars.get('tid_vgpr') is not None:
+                scratch_cond_key = builtin_var.replace('$', '')  # 'tid', 'lane', 'tgid_x', etc.
+                
+                # Try scratch mode first
+                if scratch_snapshot_map and scratch_snapshot_map.get(scratch_cond_key) is not None:
+                    s_off = scratch_snapshot_map[scratch_cond_key]
+                    lines.append(f'              // Conditional printf: read {builtin_var} from scratch[{s_off}]')
+                    lines.append(_gen_scratch_load_mlir(s_off, 'i32', f'cond_builtin_{cond_tag}'))
+                elif builtin_var == '$tid' and builtin_vars and builtin_vars.get('tid_vgpr') is not None:
                     tid_vgpr = builtin_vars['tid_vgpr']
                     lines.append(f'              // Conditional printf: read $tid from v{tid_vgpr}')
                     lines.append(f'              {snapshot_var} = llvm.inline_asm has_side_effects asm_dialect = att "v_mov_b32 $0, v{tid_vgpr}", "=v": () -> i32')
@@ -1366,6 +1429,21 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
                                 snapshot_type = directive.types[r_idx]
                             break
 
+                # Try scratch snapshot for condition register
+                if not snapshot_var and scratch_snapshot_map and 'cond' in scratch_snapshot_map:
+                    cond_scratch_offsets = scratch_snapshot_map['cond']
+                    if cond_reg in cond_scratch_offsets:
+                        s_off = cond_scratch_offsets[cond_reg]
+                        if cond_snapshot:
+                            _, _, _, cond_type = cond_snapshot
+                            snapshot_type = cond_type
+                        else:
+                            snapshot_type = 'i32'
+                        mlir_type = map_type_to_mlir(snapshot_type)
+                        snapshot_var = f'%cond_snap_val_{cond_tag}'
+                        lines.append(f'              // Using scratch condition snapshot: {cond_reg} -> scratch[{s_off}]')
+                        lines.append(_gen_scratch_load_mlir(s_off, mlir_type, f'cond_snap_val_{cond_tag}'))
+
                 if not snapshot_var and cond_snapshot:
                     cond_snap_reg, snap_num, is_vgpr, cond_type = cond_snapshot
                     if cond_snap_reg == cond_reg:
@@ -1427,12 +1505,20 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
                 lines.append(f'              {merged} = arith.andi {cond_final}, {cond_vars[idx]} : i1')
                 cond_final = merged
             lines.append(f'              scf.if {cond_final} {{')
+            # Solution A: insert deferred print value loads INSIDE scf.if
+            if _deferred_print_val_lines:
+                lines.append(f'                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---')
+                lines.extend(_deferred_print_val_lines)
             lines.append(f'                gpu.printf "{escaped_format}", {args} : {types}')
             lines.append(f'              }}')
         else:
             print(f"[Warning] Unknown condition format: {directive.condition}, printing unconditionally")
+            if _deferred_print_val_lines:
+                lines.extend(_deferred_print_val_lines)
             lines.append(f'              gpu.printf "{escaped_format}", {args} : {types}')
     else:
+        if _deferred_print_val_lines:
+            lines.extend(_deferred_print_val_lines)
         lines.append(f'              gpu.printf "{escaped_format}", {args} : {types}')
     
     lines.append(f'              // === End @PRINT ===')
@@ -1597,6 +1683,56 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     if total_snapshot_sgprs > 0:
         print(f"[Info] SGPR Snapshots: {total_snapshot_sgprs} (s{snapshot_sgpr_start} - s{snapshot_sgpr_start + total_snapshot_sgprs - 1})")
     
+    # === Scratch snapshot mode detection ===
+    # Estimate total VGPR need: snapshots + builtins (workitem, tid, lane, tgid_xyz, kernarg_lo/hi, inline_s0 save)
+    estimated_builtin_vgprs = 10
+    VGPR_HW_LIMIT = 256
+    use_scratch_snapshot = (snapshot_vgpr_start + total_snapshot_vgprs + estimated_builtin_vgprs > VGPR_HW_LIMIT)
+    
+    # Scratch offset tracking (only used when use_scratch_snapshot=True)
+    SCRATCH_V0_SPILL_OFFSET = 0  # bytes 0-3 reserved for v0 temp spill
+    scratch_offset_next = 4      # next available scratch offset (bytes)
+    scratch_vgpr_map = {}        # (d_idx, r_idx) -> scratch_offset (for VGPR snapshots)
+    scratch_sgpr_map = {}        # (d_idx, r_idx) -> scratch_offset (for SGPR snapshots)
+    scratch_expr_map = {}        # d_idx -> {orig_reg: scratch_offset}
+    scratch_cond_map = {}        # d_idx -> scratch_offset
+    scratch_builtin_map = {}     # 'tid' / 'lane' / 'tgid_x' etc -> scratch_offset
+    scratch_kernarg_map = {}     # 'lo' / 'hi' -> scratch_offset
+    
+    if use_scratch_snapshot:
+        print(f"[Info] VGPR overflow detected: snapshot_vgpr_start({snapshot_vgpr_start}) + snapshots({total_snapshot_vgprs}) + builtins(~{estimated_builtin_vgprs}) > {VGPR_HW_LIMIT}")
+        print(f"[Info] Switching to scratch memory snapshot mode")
+        if inline_mode:
+            print(f"[Info] Inline printf mode disabled in scratch snapshot mode; using defer mode")
+            inline_mode = False
+        
+        # Assign scratch offsets for VGPR snapshots
+        for d_idx, r_idx, reg, _snap_vgpr in snapshot_vgprs:
+            scratch_vgpr_map[(d_idx, r_idx)] = scratch_offset_next
+            scratch_offset_next += 4
+        
+        # Assign scratch offsets for SGPR snapshots
+        for d_idx, r_idx, reg, _snap_sgpr in snapshot_sgprs:
+            scratch_sgpr_map[(d_idx, r_idx)] = scratch_offset_next
+            scratch_offset_next += 4
+        
+        # Assign scratch offsets for expression snapshots
+        for d_idx, expr_snap_map in directive_expr_snapshots.items():
+            scratch_expr_map[d_idx] = {}
+            for orig_reg in expr_snap_map:
+                scratch_expr_map[d_idx][orig_reg] = scratch_offset_next
+                scratch_offset_next += 4
+        
+        # Assign scratch offsets for condition snapshots
+        for d_idx, (cond_reg, _snap_num, _is_vgpr, _cond_type) in directive_cond_snapshots.items():
+            scratch_cond_map[d_idx] = scratch_offset_next
+            scratch_offset_next += 4
+        
+        # Built-in vars will be assigned below when we know which are needed
+        # Kernarg backup will also be assigned below
+        
+        print(f"[Info] Scratch snapshot offsets: {scratch_offset_next} bytes allocated so far (snapshot slots)")
+
     # 建立 directive -> snapshot 映射
     # directive_vgpr_snapshots[d_idx] = [(r_idx, original_reg, snapshot_vgpr), ...]
     # directive_sgpr_snapshots[d_idx] = [(r_idx, original_reg, snapshot_sgpr), ...]
@@ -1676,9 +1812,6 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     # 使用在快照暫存器之後的 VGPR
     WORKITEM_ID_BACKUP_VGPR = snapshot_vgpr_start + total_snapshot_vgprs
     has_conditional_printf = any(d.condition for d in directives)
-    if has_conditional_printf:
-        clobber_start_lines.append(f'              // Save workitem_id (v0) to v{WORKITEM_ID_BACKUP_VGPR} for conditional printf')
-        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{WORKITEM_ID_BACKUP_VGPR}, v0", ""  : () -> ()')
     
     # === 內建變數支援：$tid / $lane / $tgid_* ===
     # 檢查是否有任何 directive 使用了內建變數
@@ -1696,73 +1829,176 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             if '$tgid_x' in ts.condition or '$tgid_y' in ts.condition or '$tgid_z' in ts.condition:
                 uses_tgid = True
     
-    # 分配專用 VGPR 給內建變數（在 WORKITEM_ID_BACKUP 之後）
-    next_builtin_vgpr = WORKITEM_ID_BACKUP_VGPR + (1 if has_conditional_printf else 0)
-
-    # 保存 kernarg pointer（trace 模式用 VGPR 備份，避免佔用 SGPR）
-    VGPR_KERNARG_BACKUP_LO = None
-    VGPR_KERNARG_BACKUP_HI = None
-    if kernarg_backup_in_vgpr:
-        VGPR_KERNARG_BACKUP_LO = next_builtin_vgpr
-        VGPR_KERNARG_BACKUP_HI = next_builtin_vgpr + 1
-        next_builtin_vgpr += 2
-        clobber_start_lines.append('              // Save kernarg pointer for printf (to VGPRs)')
+    if use_scratch_snapshot:
+        # =====================================================================
+        # Scratch snapshot mode: all backups go to scratch memory, no extra VGPRs
+        # =====================================================================
+        next_builtin_vgpr = original_vgpr  # Do NOT inflate VGPR count
+        
+        # Allocate scratch offsets for built-in vars
+        if uses_tid:
+            scratch_builtin_map['tid'] = scratch_offset_next
+            scratch_offset_next += 4
+        if uses_lane:
+            scratch_builtin_map['lane'] = scratch_offset_next
+            scratch_offset_next += 4
+        if uses_tgid:
+            scratch_builtin_map['tgid_x'] = scratch_offset_next
+            scratch_offset_next += 4
+            scratch_builtin_map['tgid_y'] = scratch_offset_next
+            scratch_offset_next += 4
+            scratch_builtin_map['tgid_z'] = scratch_offset_next
+            scratch_offset_next += 4
+        
+        # Kernarg backup always goes to scratch in scratch mode
+        scratch_kernarg_map['lo'] = scratch_offset_next
+        scratch_offset_next += 4
+        scratch_kernarg_map['hi'] = scratch_offset_next
+        scratch_offset_next += 4
+        
+        # Helper: generate inline_asm to store SGPR to scratch (needs v0 spill)
+        def _scratch_store_sgpr_asm(sgpr_name: str, scratch_off: int) -> str:
+            """Generate multi-instruction asm to store an SGPR to scratch via v0 temp."""
+            return (
+                f"scratch_store_dword off, v0, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A"
+                f"v_mov_b32 v0, {sgpr_name}\\0A"
+                f"scratch_store_dword off, v0, off offset:{scratch_off}\\0A"
+                f"scratch_load_dword v0, off, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A"
+                f"s_waitcnt vmcnt(0)"
+            )
+        
+        # Kernarg backup: s0/s1 -> scratch
+        clobber_start_lines.append('              // Save kernarg pointer for printf (to scratch memory)')
         clobber_start_lines.append(
-            f'              llvm.inline_asm has_side_effects "v_mov_b32 v{VGPR_KERNARG_BACKUP_LO}, s0", ""  : () -> ()'
+            f'              llvm.inline_asm has_side_effects "{_scratch_store_sgpr_asm("s0", scratch_kernarg_map["lo"])}", ""  : () -> ()'
         )
         clobber_start_lines.append(
-            f'              llvm.inline_asm has_side_effects "v_mov_b32 v{VGPR_KERNARG_BACKUP_HI}, s1", ""  : () -> ()'
+            f'              llvm.inline_asm has_side_effects "{_scratch_store_sgpr_asm("s1", scratch_kernarg_map["hi"])}", ""  : () -> ()'
         )
+        
+        # $tid: v0 -> scratch (v0 is VGPR, can store directly)
+        if uses_tid:
+            tid_off = scratch_builtin_map['tid']
+            clobber_start_lines.append(f'              // === Built-in variable: $tid (local thread ID) -> scratch[{tid_off}] ===')
+            clobber_start_lines.append(
+                f'              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:{tid_off}", ""  : () -> ()'
+            )
+            print(f"[Info] Built-in $tid: v0 -> scratch[{tid_off}]")
+        
+        # $lane: compute v_mbcnt into v0 (spill v0 first), store to scratch, restore v0
+        if uses_lane:
+            lane_off = scratch_builtin_map['lane']
+            clobber_start_lines.append(f'              // === Built-in variable: $lane (wavefront lane ID) -> scratch[{lane_off}] ===')
+            clobber_start_lines.append(
+                f'              llvm.inline_asm has_side_effects "'
+                f'scratch_store_dword off, v0, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                f'v_mbcnt_lo_u32_b32 v0, -1, 0\\0A'
+                f'v_mbcnt_hi_u32_b32 v0, -1, v0\\0A'
+                f'scratch_store_dword off, v0, off offset:{lane_off}\\0A'
+                f'scratch_load_dword v0, off, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                f's_waitcnt vmcnt(0)", ""  : () -> ()'
+            )
+            print(f"[Info] Built-in $lane: v_mbcnt -> scratch[{lane_off}]")
+        
+        # $tgid_x/y/z: s2/s3/s4 -> scratch (SGPRs, need v0 temp)
+        if uses_tgid:
+            clobber_start_lines.append('              // === Built-in variable: $tgid_x/$tgid_y/$tgid_z (workgroup ID) -> scratch ===')
+            for tgid_name, sgpr_name in [('tgid_x', 's2'), ('tgid_y', 's3'), ('tgid_z', 's4')]:
+                tgid_off = scratch_builtin_map[tgid_name]
+                clobber_start_lines.append(
+                    f'              llvm.inline_asm has_side_effects "{_scratch_store_sgpr_asm(sgpr_name, tgid_off)}", ""  : () -> ()'
+                )
+            print(f"[Info] Built-in $tgid_x/y/z: s2/s3/s4 -> scratch[{scratch_builtin_map.get('tgid_x')}/{scratch_builtin_map.get('tgid_y')}/{scratch_builtin_map.get('tgid_z')}]")
+        
+        # Set VGPR backup vars to None (not used in scratch mode)
+        VGPR_KERNARG_BACKUP_LO = None
+        VGPR_KERNARG_BACKUP_HI = None
+        kernarg_backup_in_vgpr = False
+        TID_BACKUP_VGPR = None
+        LANE_BACKUP_VGPR = None
+        TGID_X_BACKUP_VGPR = None
+        TGID_Y_BACKUP_VGPR = None
+        TGID_Z_BACKUP_VGPR = None
+        VGPR_INLINE_S0_SAVE_LO = None
+        VGPR_INLINE_S0_SAVE_HI = None
+        
+        print(f"[Info] Scratch snapshot: total {scratch_offset_next} bytes (aligned to 16: {((scratch_offset_next + 15) // 16) * 16})")
+        
     else:
-        clobber_start_lines.append('              // Save kernarg pointer for printf (to s[18:19])')
-        clobber_start_lines.append(
-            f'              llvm.inline_asm has_side_effects "s_mov_b64 s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], s[0:1]", ""  : () -> ()'
-        )
-    
-    # $tid: Local Thread ID (workitem_id_x) - 備份 v0
-    TID_BACKUP_VGPR = None
-    if uses_tid:
-        TID_BACKUP_VGPR = next_builtin_vgpr
-        next_builtin_vgpr += 1
-        clobber_start_lines.append(f'              // === Built-in variable: $tid (local thread ID) ===')
-        clobber_start_lines.append(f'              // Backup workitem_id_x (v0) to v{TID_BACKUP_VGPR}')
-        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TID_BACKUP_VGPR}, v0", ""  : () -> ()')
-        print(f"[Info] Built-in $tid: v0 -> v{TID_BACKUP_VGPR}")
-    
-    # $lane: Wavefront Lane ID (0-63) - 使用 v_mbcnt 計算
-    LANE_BACKUP_VGPR = None
-    if uses_lane:
-        LANE_BACKUP_VGPR = next_builtin_vgpr
-        next_builtin_vgpr += 1
-        clobber_start_lines.append(f'              // === Built-in variable: $lane (wavefront lane ID) ===')
-        clobber_start_lines.append(f'              // Calculate lane ID using v_mbcnt instructions')
-        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mbcnt_lo_u32_b32 v{LANE_BACKUP_VGPR}, -1, 0", ""  : () -> ()')
-        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mbcnt_hi_u32_b32 v{LANE_BACKUP_VGPR}, -1, v{LANE_BACKUP_VGPR}", ""  : () -> ()')
-        print(f"[Info] Built-in $lane: v_mbcnt -> v{LANE_BACKUP_VGPR}")
+        # =====================================================================
+        # Original VGPR snapshot mode
+        # =====================================================================
+        if has_conditional_printf:
+            clobber_start_lines.append(f'              // Save workitem_id (v0) to v{WORKITEM_ID_BACKUP_VGPR} for conditional printf')
+            clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{WORKITEM_ID_BACKUP_VGPR}, v0", ""  : () -> ()')
+        
+        # 分配專用 VGPR 給內建變數（在 WORKITEM_ID_BACKUP 之後）
+        next_builtin_vgpr = WORKITEM_ID_BACKUP_VGPR + (1 if has_conditional_printf else 0)
 
-    # $tgid_x/$tgid_y/$tgid_z: Workgroup ID - 備份 s2/s3/s4，避免後續被覆寫
-    TGID_X_BACKUP_VGPR = None
-    TGID_Y_BACKUP_VGPR = None
-    TGID_Z_BACKUP_VGPR = None
-    if uses_tgid:
-        TGID_X_BACKUP_VGPR = next_builtin_vgpr
-        TGID_Y_BACKUP_VGPR = next_builtin_vgpr + 1
-        TGID_Z_BACKUP_VGPR = next_builtin_vgpr + 2
-        next_builtin_vgpr += 3
-        clobber_start_lines.append('              // === Built-in variable: $tgid_x/$tgid_y/$tgid_z (workgroup ID) ===')
-        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TGID_X_BACKUP_VGPR}, s2", ""  : () -> ()')
-        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TGID_Y_BACKUP_VGPR}, s3", ""  : () -> ()')
-        clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TGID_Z_BACKUP_VGPR}, s4", ""  : () -> ()')
-        print(f"[Info] Built-in $tgid_x/y/z: s2/s3/s4 -> v{TGID_X_BACKUP_VGPR}/v{TGID_Y_BACKUP_VGPR}/v{TGID_Z_BACKUP_VGPR}")
+        # 保存 kernarg pointer（trace 模式用 VGPR 備份，避免佔用 SGPR）
+        VGPR_KERNARG_BACKUP_LO = None
+        VGPR_KERNARG_BACKUP_HI = None
+        if kernarg_backup_in_vgpr:
+            VGPR_KERNARG_BACKUP_LO = next_builtin_vgpr
+            VGPR_KERNARG_BACKUP_HI = next_builtin_vgpr + 1
+            next_builtin_vgpr += 2
+            clobber_start_lines.append('              // Save kernarg pointer for printf (to VGPRs)')
+            clobber_start_lines.append(
+                f'              llvm.inline_asm has_side_effects "v_mov_b32 v{VGPR_KERNARG_BACKUP_LO}, s0", ""  : () -> ()'
+            )
+            clobber_start_lines.append(
+                f'              llvm.inline_asm has_side_effects "v_mov_b32 v{VGPR_KERNARG_BACKUP_HI}, s1", ""  : () -> ()'
+            )
+        else:
+            clobber_start_lines.append('              // Save kernarg pointer for printf (to s[18:19])')
+            clobber_start_lines.append(
+                f'              llvm.inline_asm has_side_effects "s_mov_b64 s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], s[0:1]", ""  : () -> ()'
+            )
+        
+        # $tid: Local Thread ID (workitem_id_x) - 備份 v0
+        TID_BACKUP_VGPR = None
+        if uses_tid:
+            TID_BACKUP_VGPR = next_builtin_vgpr
+            next_builtin_vgpr += 1
+            clobber_start_lines.append(f'              // === Built-in variable: $tid (local thread ID) ===')
+            clobber_start_lines.append(f'              // Backup workitem_id_x (v0) to v{TID_BACKUP_VGPR}')
+            clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TID_BACKUP_VGPR}, v0", ""  : () -> ()')
+            print(f"[Info] Built-in $tid: v0 -> v{TID_BACKUP_VGPR}")
+        
+        # $lane: Wavefront Lane ID (0-63) - 使用 v_mbcnt 計算
+        LANE_BACKUP_VGPR = None
+        if uses_lane:
+            LANE_BACKUP_VGPR = next_builtin_vgpr
+            next_builtin_vgpr += 1
+            clobber_start_lines.append(f'              // === Built-in variable: $lane (wavefront lane ID) ===')
+            clobber_start_lines.append(f'              // Calculate lane ID using v_mbcnt instructions')
+            clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mbcnt_lo_u32_b32 v{LANE_BACKUP_VGPR}, -1, 0", ""  : () -> ()')
+            clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mbcnt_hi_u32_b32 v{LANE_BACKUP_VGPR}, -1, v{LANE_BACKUP_VGPR}", ""  : () -> ()')
+            print(f"[Info] Built-in $lane: v_mbcnt -> v{LANE_BACKUP_VGPR}")
 
-    # Inline printf 需要備份 s0/s1，使用 VGPR 避免超出 SGPR 上限
-    VGPR_INLINE_S0_SAVE_LO = None
-    VGPR_INLINE_S0_SAVE_HI = None
-    if inline_mode:
-        VGPR_INLINE_S0_SAVE_LO = next_builtin_vgpr
-        VGPR_INLINE_S0_SAVE_HI = next_builtin_vgpr + 1
-        next_builtin_vgpr += 2
-        print(f"[Info] Inline printf: s0/s1 backup -> v{VGPR_INLINE_S0_SAVE_LO}:v{VGPR_INLINE_S0_SAVE_HI}")
+        # $tgid_x/$tgid_y/$tgid_z: Workgroup ID - 備份 s2/s3/s4，避免後續被覆寫
+        TGID_X_BACKUP_VGPR = None
+        TGID_Y_BACKUP_VGPR = None
+        TGID_Z_BACKUP_VGPR = None
+        if uses_tgid:
+            TGID_X_BACKUP_VGPR = next_builtin_vgpr
+            TGID_Y_BACKUP_VGPR = next_builtin_vgpr + 1
+            TGID_Z_BACKUP_VGPR = next_builtin_vgpr + 2
+            next_builtin_vgpr += 3
+            clobber_start_lines.append('              // === Built-in variable: $tgid_x/$tgid_y/$tgid_z (workgroup ID) ===')
+            clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TGID_X_BACKUP_VGPR}, s2", ""  : () -> ()')
+            clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TGID_Y_BACKUP_VGPR}, s3", ""  : () -> ()')
+            clobber_start_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{TGID_Z_BACKUP_VGPR}, s4", ""  : () -> ()')
+            print(f"[Info] Built-in $tgid_x/y/z: s2/s3/s4 -> v{TGID_X_BACKUP_VGPR}/v{TGID_Y_BACKUP_VGPR}/v{TGID_Z_BACKUP_VGPR}")
+
+        # Inline printf 需要備份 s0/s1，使用 VGPR 避免超出 SGPR 上限
+        VGPR_INLINE_S0_SAVE_LO = None
+        VGPR_INLINE_S0_SAVE_HI = None
+        if inline_mode:
+            VGPR_INLINE_S0_SAVE_LO = next_builtin_vgpr
+            VGPR_INLINE_S0_SAVE_HI = next_builtin_vgpr + 1
+            next_builtin_vgpr += 2
+            print(f"[Info] Inline printf: s0/s1 backup -> v{VGPR_INLINE_S0_SAVE_LO}:v{VGPR_INLINE_S0_SAVE_HI}")
 
     # === Trace buffer (VGPR) ===
     # 依據 max= 配置，為每個 @PRINT 分配 VGPR trace buffer
@@ -1770,6 +2006,9 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     VGPR_LIMIT = 256  # v0 ~ v255
     for d_idx, directive in enumerate(directives):
         if not directive.trace_max:
+            continue
+        if use_scratch_snapshot:
+            print(f"[Warning] Trace max for @PRINT #{d_idx+1} disabled in scratch snapshot mode (insufficient VGPRs)")
             continue
         trace_max = directive.trace_max
         # 僅支援 32-bit 值
@@ -1901,7 +2140,21 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     need_deferred_printf_section = (not inline_mode) or bool(timestamp_directives)
     printf_blocks = []
     if need_deferred_printf_section:
-        if kernarg_backup_in_vgpr:
+        if use_scratch_snapshot:
+            # Scratch mode: restore kernarg from scratch memory (v0 is freely available at kernel end)
+            kernarg_lo_off = scratch_kernarg_map['lo']
+            kernarg_hi_off = scratch_kernarg_map['hi']
+            printf_blocks.append('              // Restore kernarg pointer for printf (from scratch memory)')
+            printf_blocks.append(
+                f'              llvm.inline_asm has_side_effects "'
+                f'scratch_load_dword v0, off, off offset:{kernarg_lo_off}\\0A'
+                f's_waitcnt vmcnt(0)\\0A'
+                f'v_readfirstlane_b32 s0, v0\\0A'
+                f'scratch_load_dword v0, off, off offset:{kernarg_hi_off}\\0A'
+                f's_waitcnt vmcnt(0)\\0A'
+                f'v_readfirstlane_b32 s1, v0", ""  : () -> ()'
+            )
+        elif kernarg_backup_in_vgpr:
             printf_blocks.append('              // Restore kernarg pointer for printf (from VGPRs)')
             printf_blocks.append(
                 f'              llvm.inline_asm has_side_effects "v_readfirstlane_b32 s0, v{VGPR_KERNARG_BACKUP_LO}", ""  : () -> ()'
@@ -1937,6 +2190,40 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                     'tgid_y_sgpr': 3,
                     'tgid_z_sgpr': 4,
                 }
+                
+                # Build per-directive scratch_snapshot_map for generate_printf_with_snapshot
+                dir_scratch_map = None
+                if use_scratch_snapshot:
+                    dir_scratch_map = {
+                        'tid': scratch_builtin_map.get('tid'),
+                        'lane': scratch_builtin_map.get('lane'),
+                        'tgid_x': scratch_builtin_map.get('tgid_x'),
+                        'tgid_y': scratch_builtin_map.get('tgid_y'),
+                        'tgid_z': scratch_builtin_map.get('tgid_z'),
+                        'reg_snapshots': {},
+                        'expr': {},
+                        'cond': {},
+                    }
+                    # Collect VGPR snapshot offsets for this directive
+                    for d_idx, r_idx, reg, _snap_vgpr in snapshot_vgprs:
+                        if d_idx == i:
+                            s_off = scratch_vgpr_map.get((d_idx, r_idx))
+                            if s_off is not None:
+                                dir_scratch_map['reg_snapshots'][reg] = s_off
+                    # Collect SGPR snapshot offsets for this directive
+                    for d_idx, r_idx, reg, _snap_sgpr in snapshot_sgprs:
+                        if d_idx == i:
+                            s_off = scratch_sgpr_map.get((d_idx, r_idx))
+                            if s_off is not None:
+                                dir_scratch_map['reg_snapshots'][reg] = s_off
+                    # Collect expression snapshot offsets
+                    if i in scratch_expr_map:
+                        dir_scratch_map['expr'] = scratch_expr_map[i]
+                    # Collect condition snapshot offset
+                    if i in scratch_cond_map:
+                        cond_reg_name = directive_cond_snapshots[i][0] if i in directive_cond_snapshots else None
+                        if cond_reg_name:
+                            dir_scratch_map['cond'][cond_reg_name] = scratch_cond_map[i]
 
                 if i in trace_buffers:
                     trace_cfg = trace_buffers[i]
@@ -1967,7 +2254,8 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                 else:
                     printf_blocks.append(
                         generate_printf_with_snapshot(
-                            directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap, expr_snap, builtin_vars
+                            directive, i, vgpr_snaps, sgpr_snaps, tid_backup, cond_snap, expr_snap, builtin_vars,
+                            scratch_snapshot_map=dir_scratch_map
                         )
                     )
     
@@ -2122,35 +2410,94 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             # 生成快照指令
             snap_lines = [f'              // === Snapshot for @PRINT at line {directive.line_number + 1} ===']
             
-            # VGPR 快照：使用 v_mov_b32
-            if has_vgpr_snap:
-                for r_idx, orig_reg, snap_vgpr in directive_vgpr_snapshots[d_idx]:
-                    snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{snap_vgpr}, {orig_reg}", ""  : () -> ()')
-            
-            # SGPR 快照：使用 s_mov_b32
-            if has_sgpr_snap:
-                for r_idx, orig_reg, snap_sgpr in directive_sgpr_snapshots[d_idx]:
-                    snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 s{snap_sgpr}, {orig_reg}", ""  : () -> ()')
-            
-            # 表達式暫存器快照
-            if has_expr_snap:
-                for orig_reg, snap_reg in directive_expr_snapshots[d_idx].items():
-                    if snap_reg.startswith('v'):
-                        snap_lines.append(f'              // Expression register snapshot: {orig_reg} -> {snap_reg}')
-                        snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 {snap_reg}, {orig_reg}", ""  : () -> ()')
+            if use_scratch_snapshot:
+                # --- Scratch snapshot mode ---
+                # VGPR snapshots: directly store to scratch (no temp needed)
+                if has_vgpr_snap:
+                    for r_idx, orig_reg, _snap_vgpr in directive_vgpr_snapshots[d_idx]:
+                        s_off = scratch_vgpr_map.get((d_idx, r_idx))
+                        if s_off is not None:
+                            snap_lines.append(f'              // Scratch snapshot: {orig_reg} -> scratch[{s_off}]')
+                            snap_lines.append(f'              llvm.inline_asm has_side_effects "scratch_store_dword off, {orig_reg}, off offset:{s_off}", ""  : () -> ()')
+                
+                # SGPR snapshots: need v0 temp
+                if has_sgpr_snap:
+                    for r_idx, orig_reg, _snap_sgpr in directive_sgpr_snapshots[d_idx]:
+                        s_off = scratch_sgpr_map.get((d_idx, r_idx))
+                        if s_off is not None:
+                            snap_lines.append(f'              // Scratch snapshot (SGPR): {orig_reg} -> scratch[{s_off}]')
+                            snap_lines.append(
+                                f'              llvm.inline_asm has_side_effects "'
+                                f'scratch_store_dword off, v0, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                                f'v_mov_b32 v0, {orig_reg}\\0A'
+                                f'scratch_store_dword off, v0, off offset:{s_off}\\0A'
+                                f'scratch_load_dword v0, off, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                                f's_waitcnt vmcnt(0)", ""  : () -> ()'
+                            )
+                
+                # Expression register snapshots
+                if has_expr_snap and d_idx in scratch_expr_map:
+                    for orig_reg, s_off in scratch_expr_map[d_idx].items():
+                        snap_lines.append(f'              // Scratch expr snapshot: {orig_reg} -> scratch[{s_off}]')
+                        if orig_reg.startswith('v'):
+                            snap_lines.append(f'              llvm.inline_asm has_side_effects "scratch_store_dword off, {orig_reg}, off offset:{s_off}", ""  : () -> ()')
+                        else:
+                            snap_lines.append(
+                                f'              llvm.inline_asm has_side_effects "'
+                                f'scratch_store_dword off, v0, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                                f'v_mov_b32 v0, {orig_reg}\\0A'
+                                f'scratch_store_dword off, v0, off offset:{s_off}\\0A'
+                                f'scratch_load_dword v0, off, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                                f's_waitcnt vmcnt(0)", ""  : () -> ()'
+                            )
+                
+                # Condition register snapshot
+                if has_cond_snap and d_idx in scratch_cond_map:
+                    cond_reg, _snap_num, _is_vgpr, _cond_type = directive_cond_snapshots[d_idx]
+                    s_off = scratch_cond_map[d_idx]
+                    snap_lines.append(f'              // Scratch cond snapshot: {cond_reg} -> scratch[{s_off}]')
+                    if cond_reg.startswith('v'):
+                        snap_lines.append(f'              llvm.inline_asm has_side_effects "scratch_store_dword off, {cond_reg}, off offset:{s_off}", ""  : () -> ()')
                     else:
-                        snap_lines.append(f'              // Expression register snapshot: {orig_reg} -> {snap_reg}')
-                        snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 {snap_reg}, {orig_reg}", ""  : () -> ()')
-            
-            # 條件暫存器快照
-            if has_cond_snap:
-                cond_reg, snap_num, is_vgpr, cond_type = directive_cond_snapshots[d_idx]
-                if is_vgpr:
-                    snap_lines.append(f'              // Condition register snapshot: {cond_reg} -> v{snap_num}')
-                    snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{snap_num}, {cond_reg}", ""  : () -> ()')
-                else:
-                    snap_lines.append(f'              // Condition register snapshot: {cond_reg} -> s{snap_num}')
-                    snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 s{snap_num}, {cond_reg}", ""  : () -> ()')
+                        snap_lines.append(
+                            f'              llvm.inline_asm has_side_effects "'
+                            f'scratch_store_dword off, v0, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                            f'v_mov_b32 v0, {cond_reg}\\0A'
+                            f'scratch_store_dword off, v0, off offset:{s_off}\\0A'
+                            f'scratch_load_dword v0, off, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                            f's_waitcnt vmcnt(0)", ""  : () -> ()'
+                        )
+            else:
+                # --- Original VGPR snapshot mode ---
+                # VGPR 快照：使用 v_mov_b32
+                if has_vgpr_snap:
+                    for r_idx, orig_reg, snap_vgpr in directive_vgpr_snapshots[d_idx]:
+                        snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{snap_vgpr}, {orig_reg}", ""  : () -> ()')
+                
+                # SGPR 快照：使用 s_mov_b32
+                if has_sgpr_snap:
+                    for r_idx, orig_reg, snap_sgpr in directive_sgpr_snapshots[d_idx]:
+                        snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 s{snap_sgpr}, {orig_reg}", ""  : () -> ()')
+                
+                # 表達式暫存器快照
+                if has_expr_snap:
+                    for orig_reg, snap_reg in directive_expr_snapshots[d_idx].items():
+                        if snap_reg.startswith('v'):
+                            snap_lines.append(f'              // Expression register snapshot: {orig_reg} -> {snap_reg}')
+                            snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 {snap_reg}, {orig_reg}", ""  : () -> ()')
+                        else:
+                            snap_lines.append(f'              // Expression register snapshot: {orig_reg} -> {snap_reg}')
+                            snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 {snap_reg}, {orig_reg}", ""  : () -> ()')
+                
+                # 條件暫存器快照
+                if has_cond_snap:
+                    cond_reg, snap_num, is_vgpr, cond_type = directive_cond_snapshots[d_idx]
+                    if is_vgpr:
+                        snap_lines.append(f'              // Condition register snapshot: {cond_reg} -> v{snap_num}')
+                        snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{snap_num}, {cond_reg}", ""  : () -> ()')
+                    else:
+                        snap_lines.append(f'              // Condition register snapshot: {cond_reg} -> s{snap_num}')
+                        snap_lines.append(f'              llvm.inline_asm has_side_effects "s_mov_b32 s{snap_num}, {cond_reg}", ""  : () -> ()')
             
             snap_lines.append(f'              // === End Snapshot ===')
 
@@ -2218,7 +2565,7 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                 )
                 snap_lines.append(f'              // === End Trace capture ===')
 
-            if inline_mode:
+            if inline_mode and not use_scratch_snapshot:
                 vgpr_snaps = directive_vgpr_snapshots.get(d_idx, [])
                 sgpr_snaps = directive_sgpr_snapshots.get(d_idx, [])
                 cond_snap = directive_cond_snapshots.get(d_idx, None)
@@ -2396,10 +2743,20 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     # 計算所需的暫存器數量（用於後續 ISA metadata 修復）
     # 需要包含：快照 VGPR + workitem_id backup VGPR + 內建變數 VGPR
     # next_builtin_vgpr 已經計算了所有需要的 VGPR（包括 conditional、$tid、$lane）
-    required_vgpr = next_builtin_vgpr
+    if use_scratch_snapshot:
+        required_vgpr = original_vgpr  # No extra VGPRs needed in scratch mode
+    else:
+        required_vgpr = next_builtin_vgpr
     required_sgpr = max(snapshot_sgpr_start + total_snapshot_sgprs, SGPR_KERNARG_BACKUP + 2)
     
-    return '\n'.join(modified_lines), required_vgpr, required_sgpr
+    # Calculate required private segment size for scratch snapshots
+    required_private_size = 0
+    if use_scratch_snapshot:
+        # Align to 16 bytes
+        required_private_size = ((scratch_offset_next + 15) // 16) * 16
+        print(f"[Info] Scratch snapshot: required private segment size = {required_private_size} bytes")
+    
+    return '\n'.join(modified_lines), required_vgpr, required_sgpr, required_private_size
 
 
 # ============================================================
@@ -3681,7 +4038,7 @@ def main():
     else:
         print(f"\n=== Injecting printf/timestamp code ===")
         gpumlir_text = gpumlir_path.read_text()
-        modified_mlir, required_vgpr, required_sgpr = inject_printf_into_mlir(
+        modified_mlir, required_vgpr, required_sgpr, required_private_size = inject_printf_into_mlir(
             gpumlir_text, directives, reg_info, timestamp_directives, print_mode=args.print_mode
         )
         
