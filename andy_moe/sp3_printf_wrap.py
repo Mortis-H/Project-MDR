@@ -19,9 +19,9 @@ from typing import Dict, List, Optional, Tuple
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
 
-DEFAULT_SP3_DIR = "/home/root123/andy-mdr/poc_kl/mi300/fused_moe_asm/mi300_sp3_to_asm"
-DEFAULT_MOE_CVT = "/home/root123/andy-mdr/poc_kl/scripts/fused_moe/moe_cvt.py"
-DEFAULT_FIX_SCRIPT = "/home/root123/andy-mdr/poc_kl/mi300/fix_atomic_add.py"
+DEFAULT_SP3_DIR = "../../poc_kl/mi300/fused_moe_asm/mi300_sp3_to_asm"
+DEFAULT_MOE_CVT = "../..//poc_kl/scripts/fused_moe/moe_cvt.py"
+DEFAULT_FIX_SCRIPT = "../..//poc_kl/mi300/fix_atomic_add.py"
 DEFAULT_KERNEL_SYMBOL = "_ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E"
 DEFAULT_GPR_TOOL = str(PROJECT_ROOT / "gpr_printf_tool.py")
 
@@ -52,6 +52,7 @@ class Directive:
     func: str
     anchor_index: int
     line_no: int
+    insert_after: bool = False
 
 
 def run_cmd(cmd: List[str], env: Optional[Dict[str, str]] = None) -> None:
@@ -142,7 +143,7 @@ def normalize_operand(token: str) -> Optional[str]:
         if func in ("v_regs", "v_reg", "vreg"):
             return "v"
         if func in ("s_regs", "s_reg", "sreg"):
-            return "s"
+            return "s[]"
         if func in ("acc_regs", "acc_reg", "accreg"):
             return "acc"
         if func in ("a_regs", "a_reg", "areg"):
@@ -221,6 +222,10 @@ def tokenize_instruction(line: str) -> Optional[str]:
         return opcode
     modifiers = re.findall(r"\b(row_[A-Za-z0-9_]+):", operands_part)
     modifiers += re.findall(r"\b(bank_[A-Za-z0-9_]+):", operands_part)
+    lower_operands = operands_part.lower()
+    for flag in ("lds", "offen"):
+        if re.search(rf"\b{flag}\b", lower_operands):
+            modifiers.append(flag)
     operands = []
     for raw in split_operands(operands_part):
         norm = normalize_operand(raw)
@@ -375,6 +380,14 @@ def collect_directives(
             print(f"[Warn] Directive outside any function at line {idx + 1}, skip.")
             continue
         anchor_index = info.instr_index
+        insert_after = False
+        if anchor_index is None:
+            for j in range(idx - 1, -1, -1):
+                prev_info = line_infos[j]
+                if prev_info.func == info.func and prev_info.instr_index is not None:
+                    anchor_index = prev_info.instr_index
+                    insert_after = True
+                    break
         if anchor_index is None:
             for j in range(idx + 1, len(lines)):
                 next_info = line_infos[j]
@@ -392,6 +405,7 @@ def collect_directives(
                 func=info.func,
                 anchor_index=anchor_index,
                 line_no=idx + 1,
+                insert_after=insert_after,
             )
         )
     return directives
@@ -469,6 +483,11 @@ def collect_candidates(
     anchor_index: int,
     windows: Tuple[int, ...] = (5, 4, 3, 2, 1, 0),
     anchor_scan: int = 12,
+    debug: bool = False,
+    debug_max_patterns: int = 200,
+    debug_max_matches: int = 50,
+    debug_disasm_lines: Optional[List[str]] = None,
+    debug_op_index_to_line: Optional[Dict[int, int]] = None,
 ) -> Dict[int, int]:
     if anchor_index < 0 or anchor_index >= len(func_tokens):
         return {}
@@ -480,10 +499,16 @@ def collect_candidates(
     func_block_len = func_meta.get("block_len", [])
 
     dis_labels = dis_meta.get("labels", [])
+    dis_block_pos = dis_meta.get("block_pos", [])
+    dis_block_len = dis_meta.get("block_len", [])
+    dis_block_pos = dis_meta.get("block_pos", [])
+    dis_block_len = dis_meta.get("block_len", [])
     dis_block_hashes = dis_meta.get("block_hashes", [])
     dis_block_pos = dis_meta.get("block_pos", [])
     dis_block_len = dis_meta.get("block_len", [])
 
+    debug_patterns = 0
+    debug_match_budget = debug_max_matches
     for shift in range(anchor_scan + 1):
         idx = anchor_index + shift
         if idx >= len(func_tokens):
@@ -495,31 +520,65 @@ def collect_candidates(
             match_starts = find_pattern_matches(dis_tokens, pattern)
             if not match_starts:
                 continue
+            if debug and (debug_max_patterns <= 0 or debug_patterns < debug_max_patterns):
+                debug_patterns += 1
+                pattern_text = " | ".join(pattern)
+                print(
+                    f"[DEBUG] shift={shift} window={window} pattern_len={len(pattern)} "
+                    f"offset={offset} matches={len(match_starts)}"
+                )
+                print(f"[DEBUG] pattern: {pattern_text}")
             for start in match_starts:
                 dis_idx = start + offset
-                score = window * 5 - shift * 2
-                if (
+                base_score = window * 5 - shift * 2
+                score = base_score
+                hash_match = (
                     func_block_hashes
                     and dis_block_hashes
                     and func_block_hashes[idx] == dis_block_hashes[dis_idx]
-                ):
+                )
+                if hash_match:
                     score += 4
-                if (
+                label_match = (
                     func_labels
                     and dis_labels
                     and func_labels[idx]
                     and func_labels[idx] == dis_labels[dis_idx]
-                ):
+                )
+                if label_match:
                     score += 2
-                if (
+                block_match = (
                     func_block_len
                     and dis_block_len
                     and func_block_len[idx] == dis_block_len[dis_idx]
                     and func_block_pos
                     and dis_block_pos
                     and abs(func_block_pos[idx] - dis_block_pos[dis_idx]) <= 1
-                ):
+                )
+                if block_match:
                     score += 1
+                if debug and (debug_max_matches <= 0 or debug_match_budget > 0):
+                    # only print up to debug_max_matches total if > 0
+                    if debug_max_matches > 0:
+                        debug_match_budget -= 1
+                    line_text = ""
+                    if debug_disasm_lines is not None and debug_op_index_to_line is not None:
+                        line_idx = debug_op_index_to_line.get(dis_idx)
+                        if line_idx is not None and line_idx < len(debug_disasm_lines):
+                            line_text = debug_disasm_lines[line_idx]
+                    calc = (
+                        f"base={base_score} "
+                        f"+hash({4 if hash_match else 0}) "
+                        f"+label({2 if label_match else 0}) "
+                        f"+block({1 if block_match else 0})"
+                    )
+                    print(
+                        "[DEBUG]  match dis_idx="
+                        f"{dis_idx} score={score} {calc} "
+                        f"token={dis_tokens[dis_idx]}"
+                    )
+                    if line_text:
+                        print(f"[DEBUG]   disasm: {line_text}")
                 prev = cand_scores.get(dis_idx)
                 if prev is None or score > prev:
                     cand_scores[dis_idx] = score
@@ -609,11 +668,18 @@ def insert_directives_into_disasm(
     dis_tokens: List[str],
     dis_meta: Dict[str, List],
     line_to_op_index: Dict[int, int],
+    op_index_to_line: Dict[int, int],
     directives: List[Directive],
     func_tokens: Dict[str, List[str]],
     func_meta: Dict[str, Dict[str, List]],
+    insert_mode: str = "best",
+    insert_all_score_margin: int = 2,
+    insert_all_max: int = 20,
+    debug_match: bool = False,
+    debug_max_patterns: int = 200,
+    debug_max_matches: int = 50,
 ) -> List[str]:
-    insertions: Dict[int, List[str]] = {}
+    insertions: Dict[int, List[Tuple[str, bool]]] = {}
     if not directives:
         return disasm_lines
 
@@ -623,6 +689,10 @@ def insert_directives_into_disasm(
 
     main_tokens = func_tokens.get("__shader_main__")
     main_map = build_index_map(main_tokens, dis_tokens) if main_tokens else {}
+
+    dis_labels = dis_meta.get("labels", [])
+    dis_block_pos = dis_meta.get("block_pos", [])
+    dis_block_len = dis_meta.get("block_len", [])
 
     for func, dirs in directives_by_func.items():
         tokens = func_tokens.get(func)
@@ -638,8 +708,25 @@ def insert_directives_into_disasm(
 
         cand_scores_list: List[Dict[int, int]] = []
         for d in sorted_dirs:
+            if debug_match:
+                anchor_token = (
+                    tokens[d.anchor_index] if 0 <= d.anchor_index < len(tokens) else "n/a"
+                )
+                print(
+                    f"[DEBUG] directive line={d.line_no} func={d.func} "
+                    f"anchor_index={d.anchor_index} anchor_token={anchor_token}"
+                )
             cand_scores = collect_candidates(
-                tokens, meta, dis_tokens, dis_meta, d.anchor_index
+                tokens,
+                meta,
+                dis_tokens,
+                dis_meta,
+                d.anchor_index,
+                debug=debug_match,
+                debug_max_patterns=debug_max_patterns,
+                debug_max_matches=debug_max_matches,
+                debug_disasm_lines=disasm_lines,
+                debug_op_index_to_line=op_index_to_line,
             )
             if func_map:
                 for shift in range(13):
@@ -648,12 +735,36 @@ def insert_directives_into_disasm(
                         break
                     mapped = func_map.get(idx)
                     if mapped is not None:
-                        cand_scores[mapped] = max(cand_scores.get(mapped, 0), 30 - shift)
+                        base_score = 30 - shift
+                        prev_score = cand_scores.get(mapped, 0)
+                        cand_scores[mapped] = max(prev_score, base_score)
+                        if debug_match:
+                            print(
+                                "[DEBUG] func_map boost "
+                                f"src_idx={idx} shift={shift} dis_idx={mapped} "
+                                f"base=30-shift={base_score} prev={prev_score} "
+                                f"score={cand_scores[mapped]}"
+                            )
             if func == "__shader_main__":
                 mapped = main_map.get(d.anchor_index)
                 if mapped is not None:
                     cand_scores[mapped] = max(cand_scores.get(mapped, 0), 40)
-            if cand_scores:
+                    if debug_match:
+                        print(
+                            "[DEBUG] main_map boost "
+                            f"src_idx={d.anchor_index} dis_idx={mapped} score={cand_scores[mapped]}"
+                        )
+            if insert_mode == "all" and cand_scores:
+                if 0 <= d.anchor_index < len(tokens):
+                    anchor_token = tokens[d.anchor_index]
+                    filtered = {
+                        idx: score
+                        for idx, score in cand_scores.items()
+                        if idx < len(dis_tokens) and dis_tokens[idx] == anchor_token
+                    }
+                    if filtered:
+                        cand_scores = filtered
+            if cand_scores and insert_mode == "best":
                 max_score = max(cand_scores.values())
                 if max_score >= 28:
                     cand_scores = {
@@ -661,6 +772,10 @@ def insert_directives_into_disasm(
                         for idx, score in cand_scores.items()
                         if score >= max_score - 2
                     }
+            if debug_match and cand_scores:
+                top = sorted(cand_scores.items(), key=lambda x: (-x[1], x[0]))[:10]
+                top_text = ", ".join(f"{idx}:{score}" for idx, score in top)
+                print(f"[DEBUG] cand_scores top: {top_text}")
             cand_scores_list.append(cand_scores)
             if not cand_scores:
                 print(f"[Warn] Cannot map directive (line {d.line_no}) from {d.func}.")
@@ -670,21 +785,83 @@ def insert_directives_into_disasm(
                     "placement may be ambiguous."
                 )
 
-        positions = select_positions(sorted_dirs, cand_scores_list)
-        for d, dis_idx in zip(sorted_dirs, positions):
-            if dis_idx is None:
-                print(f"[Warn] Cannot resolve directive (line {d.line_no}) from {d.func}.")
-                continue
-            insertions.setdefault(dis_idx, []).append(d.text)
+        if insert_mode == "all":
+            for d, cand_scores in zip(sorted_dirs, cand_scores_list):
+                if not cand_scores:
+                    continue
+                candidates = list(cand_scores.items())
+                if candidates:
+                    max_score = max(score for _, score in candidates)
+                    base_candidates = [
+                        (idx, score)
+                        for idx, score in candidates
+                        if score >= max_score - insert_all_score_margin
+                    ]
+                    label_set = {
+                        dis_labels[idx]
+                        for idx, _score in base_candidates
+                        if idx < len(dis_labels)
+                    }
+                    if 0 <= d.anchor_index < len(tokens):
+                        anchor_token = tokens[d.anchor_index]
+                        if label_set and any(label is not None for label in label_set):
+                            for idx, tok in enumerate(dis_tokens):
+                                if tok == anchor_token and dis_labels[idx] in label_set:
+                                    cand_scores[idx] = max(cand_scores.get(idx, 0), max_score)
+                        else:
+                            top_idx, _top_score = max(
+                                candidates, key=lambda x: (x[1], -x[0])
+                            )
+                            if (
+                                0 <= top_idx < len(dis_block_pos)
+                                and 0 <= top_idx < len(dis_block_len)
+                            ):
+                                block_start = top_idx - dis_block_pos[top_idx]
+                                block_end = block_start + dis_block_len[top_idx] - 1
+                                if dis_block_len[top_idx] > 512:
+                                    window = 64
+                                    block_start = max(block_start, top_idx - window)
+                                    block_end = min(block_end, top_idx + window)
+                                for idx in range(block_start, block_end + 1):
+                                    if dis_tokens[idx] == anchor_token:
+                                        cand_scores[idx] = max(cand_scores.get(idx, 0), max_score)
+                    candidates = [
+                        (idx, score)
+                        for idx, score in cand_scores.items()
+                        if score >= max_score - insert_all_score_margin
+                    ]
+                candidates.sort(key=lambda x: (-x[1], x[0]))
+                if insert_all_max and insert_all_max > 0:
+                    candidates = candidates[:insert_all_max]
+                if not candidates:
+                    print(
+                        f"[Warn] No candidates after filtering for directive (line {d.line_no}) from {d.func}."
+                    )
+                    continue
+                for dis_idx, _score in candidates:
+                    insertions.setdefault(dis_idx, []).append((d.text, d.insert_after))
+        else:
+            positions = select_positions(sorted_dirs, cand_scores_list)
+            for d, dis_idx in zip(sorted_dirs, positions):
+                if dis_idx is None:
+                    print(f"[Warn] Cannot resolve directive (line {d.line_no}) from {d.func}.")
+                    continue
+                insertions.setdefault(dis_idx, []).append((d.text, d.insert_after))
 
     new_lines: List[str] = []
     for line_idx, line in enumerate(disasm_lines):
         op_index = line_to_op_index.get(line_idx)
         if op_index is not None and op_index in insertions:
             indent = re.match(r"^(\s*)", line).group(1)
-            for text in insertions[op_index]:
-                new_lines.append(f"{indent}// {text}")
-        new_lines.append(line)
+            for text, insert_after in insertions[op_index]:
+                if not insert_after:
+                    new_lines.append(f"{indent}// {text}")
+            new_lines.append(line)
+            for text, insert_after in insertions[op_index]:
+                if insert_after:
+                    new_lines.append(f"{indent}// {text}")
+        else:
+            new_lines.append(line)
 
     return new_lines
 
@@ -746,6 +923,41 @@ def main() -> int:
     ap.add_argument("--gpr-output-dir", default=None, help="gpr_printf_tool 輸出目錄")
     ap.add_argument("--skip-gpr", action="store_true", help="不執行 gpr_printf_tool")
     ap.add_argument("--keep-disasm", action="store_true", help="保留中間檔案")
+    ap.add_argument(
+        "--insert-mode",
+        choices=("best", "all"),
+        default="best",
+        help="PRINT/TIMESTAMP 插入模式：best(選最佳位置) 或 all(插入多個候選位置)",
+    )
+    ap.add_argument(
+        "--insert-all-score-margin",
+        type=int,
+        default=2,
+        help="insert-mode=all 時，保留 >= (max_score - margin) 的候選",
+    )
+    ap.add_argument(
+        "--insert-all-max",
+        type=int,
+        default=20,
+        help="insert-mode=all 時，每個 directive 最多插入幾個位置 (0=不限)",
+    )
+    ap.add_argument(
+        "--debug-match",
+        action="store_true",
+        help="輸出 pattern/shift/anchor 的匹配除錯資訊",
+    )
+    ap.add_argument(
+        "--debug-max-patterns",
+        type=int,
+        default=200,
+        help="debug 模式最多列印幾個 pattern (0=不限)",
+    )
+    ap.add_argument(
+        "--debug-max-matches",
+        type=int,
+        default=50,
+        help="debug 模式最多列印幾個 match (0=不限)",
+    )
     args, gpr_args = ap.parse_known_args()
 
     input_sp3 = pathlib.Path(args.input_sp3).resolve()
@@ -787,16 +999,23 @@ def main() -> int:
     ], env=env)
 
     print("\n=== Step 3: Inject directives into disasm ===")
-    disasm_lines, dis_tokens, _, line_to_op_index, dis_meta = parse_disasm(disasm_path)
+    disasm_lines, dis_tokens, op_index_to_line, line_to_op_index, dis_meta = parse_disasm(disasm_path)
     if directives:
         disasm_with_print = insert_directives_into_disasm(
             disasm_lines,
             dis_tokens,
             dis_meta,
             line_to_op_index,
+            op_index_to_line,
             directives,
             func_tokens,
             func_meta,
+            insert_mode=args.insert_mode,
+            insert_all_score_margin=args.insert_all_score_margin,
+            insert_all_max=args.insert_all_max,
+            debug_match=args.debug_match,
+            debug_max_patterns=args.debug_max_patterns,
+            debug_max_matches=args.debug_max_matches,
         )
         disasm_print_path.write_text("\n".join(disasm_with_print) + "\n")
     else:
