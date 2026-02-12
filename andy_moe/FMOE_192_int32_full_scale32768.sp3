@@ -1,0 +1,2107 @@
+//Design     Author: Zhang,Niels
+//HostCode   Author: Zheng,Huan
+//KernelCode Author: Zhang,Niels;Zheng,Huan
+///////////////kernel limitation///////////////////////////////////////////////////
+/////1. hidden_dim and dim should be multiple of 64                           /////
+/////2. Gate/UP/Down should be pre-shuffled                                   /////
+/////3. hidden_dim multiple of 64                                             /////
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////parameter description beginning////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////user input parameters///////////////////////////////////////////////////
+//  belowing parameters has been passed in a buffer that pointed by s0,s1
+//  name                size    offset       comment                                 sreg in kernel
+//-----------------------------------------------------------------------------------------------------
+//   R                   4       0x0       R address                                   s_R_buf
+//   X                   4       0x10      X address                                   s_X_buf
+//   G                   4       0x20      G address                                   s_G_buf
+//   U                   4       0x30      U address                                   s_U_buf
+//   D                   4       0x40      D address                                   s_D_buf
+//   STP                 4       0x50      STP address                                 s_STP_buf
+//   SW                  4       0x60      SW  address                                 s_SW_buf
+//   SEP                 4       0x70      SEP address                                 s_SEP_buf
+//   log2e               4       0x80      log2(e)                                     s_log2e
+//   dim                 4       0x90      dim_size                                    s_dim_len
+//   hidden_dim          4       0xA0      hidden_dim size                             s_hidden_len
+//   topk                4       0xB0      topk cnt                                    s_tk      
+//   eprt                4       0xC0      expert cnt                                  s_eprt
+//   stride_X            4       0xD0      one token size of X (in bytes)              s_Xs
+//   stride_GU           4       0xE0      one token size of GU (in bytes)             s_GUs
+//   stride_D            4       0xF0      hidden-dim dimension size of D (in bytes)   s_Ds
+//   stride_R            4       0x100     one token size of R(in bytes)               s_Rs
+//   stride_expert_GU    4       0x110     one expert size of GU (in bytes)            s_eGUs
+//   stride_expert_D     4       0x120     one expert size of D (in bytes)             s_eDs       
+///////////////////////////////////////////////////////////////////////////////////////////
+////////////////spi input/////////////////////////////////////////////////////////////////
+// spi_set_reg      description            reg used by kernel
+//--------------------------------------------------------------
+//   s2          thread group idx            _s_tgid_x
+//   s3          thread group idy            _s_tgid_y
+//   s4          thread group idz             not used
+//   v0           thread idx/y/z              v0,v1,v2 (threadidx,idy, idz)
+//----------------------------------------------------------------------
+// Above SPI input vaule should be derived by following threadgroup grid in host opencl code
+// 1. global_size_x = (hidden_dim/sub_GU)*256
+// 2. global_size_y = sub_X_cnt
+// 3. global_size_z = 1
+// 4. local_size_x = 256
+// 5. local_size_y = 1
+// 6. local_size_z = 1
+////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////parmaeter description end///////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////macro definition////////////////////////////////////////
+////////belowing macro could be tuned////////
+/////////////////every explicit numbers below in comments are base on SUB_GU==512 for reference/////////////////////
+var CNT_WV                      = 4
+var SUB_X                       = 32
+var SUB_GU                      = 192                               //192 for 32x192 kernel
+var SUB_D                       = 256
+var gemm0_SUB_K                 = 256
+var gemm2_SUB_N                 = SUB_D
+
+var DENO                        = 0x42fe0000                        //127
+var DENO_FP8                    = 0x43700000                        //240
+var FP8                         = 1
+var Bpp                         = 1                                 //bytes per point
+var PF_Bs                       = 2                                 //prefetch blk of QRLseD
+
+var RDM                         = 1
+var I_PL                        = 0
+var USE_GELU                    = 0
+var DO_SMOOTH                   = 0
+var DO_UP                       = 1
+var USE_VSKIP                   = 1                                 //use vskip or not when atomic_add
+var GEMM2_OPT                   = 1
+    if SUB_GU == 128
+        GEMM2_OPT               = 0                                 // gemm2 opt for 128N has bugs
+    end
+
+var CNT_TG_STRIDE               = 16*CNT_WV                         //since tiled into 16(h_dim)*64(dim), and use 4 waves
+var CNT_GU_ADDR                 = SUB_GU/CNT_TG_STRIDE              //8
+var CNT_D_ADDR                  = SUB_D/CNT_WV/16                   //4
+var CNT_D_HDIM_BLKS             = SUB_GU/64                         //8
+var CNT_GU_Q                    = (CNT_GU_ADDR*16+63)/64            //2
+
+var CNT_X_Q                     = SUB_X/16                          //2
+
+///////non-tuned macro///////////////////////////////
+var blk_32x256_mem_ld_insts     = 32*256*Bpp/256/4                  //8
+var blk_32x256_lds_rd_insts     = 32*256*Bpp/1024                   //8
+var blk_32x256_pad              = 32 *4                             //32DW
+var blk_32x256_size             = 32*256*Bpp + blk_32x256_pad
+
+var GU_256xSUB_GU_mem_ld_insts  = 256*SUB_GU*Bpp/1024/4             //32
+
+var D_SUB_GUx256_mem_ld_insts      = SUB_GU*256*Bpp/1024/4             //32
+var DQ_32x256_mem_ld_insts      = 1
+var blk_32x256_cvt_insts        = 32*256/4/64/2                     //16
+
+var R_32x256_lds_wr_insts       = 32*256*2/4/4/64/2                 //8
+var R_32x256_lds_rd_insts       = R_32x256_lds_wr_insts*2           //16
+var R_32x256_mem_atomic_insts   = R_32x256_lds_rd_insts             //16
+
+////LDS addr definition//////////
+var LDS_X_BASE                  = 0
+var LDS_X_SIZE                  = blk_32x256_size*PF_Bs             //4160DW
+
+var LDS_GMAX_BASE               = LDS_X_BASE        + LDS_X_SIZE
+var LDS_GMAX_SIZE               = CNT_WV*SUB_X*4*4                  //512DW
+
+var LDS_G_RSP_BASE              = LDS_GMAX_BASE     + LDS_GMAX_SIZE
+var LDS_G_RSP_SIZE              = SUB_X*SUB_GU                      //4096DW
+
+var LDS_R_BASE                  = LDS_G_RSP_BASE    + LDS_G_RSP_SIZE
+var LDS_R_BLK_SIZE              = (16*64/2 + 8*4)*8*4               //4352DW
+var LDS_R_SIZE                  = LDS_R_BLK_SIZE
+if GEMM2_OPT == 1
+    LDS_R_BASE                  = LDS_G_RSP_BASE        //reuse with G reshape 
+    LDS_R_SIZE                  = LDS_R_BLK_SIZE*2      //8704DW
+end
+
+var max_lds                     = LDS_R_BASE        + LDS_R_SIZE
+
+var vs_CD                       = 4
+var vs_AB                       = 2
+var NEG_INF                     = 0xff800000
+
+//////sreg def//////////////
+var s_tg_idx                    = s2
+var s_tg_idy                    = s3
+var s_tg_idz                    = s4
+
+var s_eprt_idx                  = s5
+var s_log2e                     = s6
+var s_wave_id                   = s7
+
+var _s_R_buf                    = 8
+var _s_D_buf                    = 12
+var _s_DQ_buf                   = 16
+
+    var _s_atomic_exec          = 20                                //it will reuse 20-35 after gemm0
+    var _s_restore_mask         = _s_atomic_exec+16                 //it will reuse 36-37 after gemm0
+var _s_X_buf                    = 20
+var _s_G_buf                    = 24
+var _s_XQ_buf                   = 28
+var _s_GQ_buf                   = 32
+var _s_GsmQ_buf                 = 36
+var _s_SW_buf                   = 40
+var _s_STP_buf                  = 44
+var _s_SEP_buf                  = _s_STP_buf        + 2             //46 
+var _s_bf16_cvt                 = _s_SEP_buf        + 2             //48
+var _s_X_lds_wr_base_m0         = _s_bf16_cvt       + 2             //50
+    var _s_Xc_buf = _s_X_lds_wr_base_m0                             //50 re-used
+
+//start from 52
+var s_perm0                     = s52
+var s_perm1                     = s53 
+var s_perm2                     = s54
+var s_perm3                     = s55
+var s_D_buf_inc                 = s56
+var s_X_buf_inc                 = s57
+var s_G_buf_inc                 = s58
+var s_R_buf_inc                 = s59
+
+var s_tmp0                      = s60
+var s_tmp1                      = s61
+var s_tmp2                      = s62
+
+var s_dim_len                   = s64
+var s_hidden_len                = s65
+var s_token_cnt                 = s66
+var s_eprt_cnt                  = s67
+var s_Xs                        = s68
+var s_GUs                       = s69
+var s_Ds                        = s70
+var s_Rs                        = s71
+var s_eGUs                      = s72
+var s_eDs                       = s73
+var s_eGUQs                     = s74
+var s_eDQs                      = s75
+var s_eGsmQs                    = s76
+
+var s_c1                        = s77
+var s_D_hf_buf_inc              = s78
+var s_DQ_buf_inc                = s79
+
+var s_loop_idx                  = s80
+var s_loop_cnt                  = s81
+
+var _s_token_idx                = 82
+var _s_U_buf_inc                = _s_token_idx      + 8
+var _s_U_buf                    = _s_U_buf_inc      + 1
+_s_U_buf                        = (_s_U_buf+3)/4*4
+var _s_end                      = _s_U_buf          + 4
+////////////////////////////////////////
+var Vsrc63_48   = 0x00040000
+var Vsrc95_64   = 0xfffffff0
+var Vsrc127_96  = 0x00020000
+///////////////////////////////////////
+
+/////vreg def////////////////
+var sz_vDQ                      = 1
+
+var _v_c2                       = 1
+var _v_X_lds_rd                 = 2
+var _v_R_lds_wr                 = _v_X_lds_rd + 1                   //3
+var _v_R_lds_rd                 = _v_R_lds_wr + 1                   //4
+var _v_DQ_addr                  = _v_R_lds_rd + 1                   //5
+var _v_XQ_addr                  = _v_DQ_addr  + 1                   //6
+var _v_W_addr                   = _v_XQ_addr  + 2                   //8
+var _v_GQ_addr                  = _v_W_addr   + 2                   //10
+var _v_DQ                       = _v_GQ_addr  + CNT_GU_Q            //12
+var _v_XQ                       = _v_DQ       + sz_vDQ*PF_Bs        //14 
+var _v_GQ                       = _v_XQ       + CNT_X_Q             //16 
+var _v_GsmQ                     = _v_GQ       + CNT_GU_Q            //18
+var _v_W                        = _v_GsmQ     + CNT_GU_Q            //20
+var _v_Max                      = _v_W        + 2                   //22
+    _v_Max                      =((_v_Max+1)/2)*2
+var _v_ZdynQ                    = _v_Max      + CNT_X_Q             //24
+var _v_X_addr                   = _v_ZdynQ    + 2                   //26
+var _v_GU_addr                  = _v_X_addr   + 8                   //34
+var _v_D_addr                   = _v_GU_addr  + CNT_GU_ADDR         //42
+var _v_bf16_cvt                 = _v_D_addr   + CNT_D_ADDR          //46
+var _v_UQ                       = _v_bf16_cvt + 4                   //50
+var _v_tmp                      = _v_UQ       + CNT_GU_Q            //52
+    _v_tmp                      = ((_v_tmp+1)/2)*2
+
+var _v_R_save                   = 64
+var _v_R_save_reg_size          = 16
+
+var _v_R_addr                   = _v_R_save   + _v_R_save_reg_size  //[80] 
+var _v_R_addr_reg_size          = 16
+
+var _v_GMAX                     = _v_R_addr   + _v_R_addr_reg_size  //[96]
+var _v_GMAX_reg_size            = (SUB_X/16)*CNT_WV*4               //32
+
+var _v_Z                        = _v_GMAX     + _v_GMAX_reg_size    //[128]
+var sz_vP                       = SUB_X*SUB_GU*Bpp/4/64             //64
+var _v_Z_reg_size               = SUB_X*SUB_GU/4/64                 //64
+
+var _v_GM1                      = _v_R_save                         //reuse this portion 64~127 when GEMM1 
+var _v_GM1_size                 = _v_Z_reg_size                     //same as GEMM0 size
+
+var _v_X                        = _v_Z        +_v_Z_reg_size        //[192]
+var sz_vX                       = SUB_X*256*Bpp/4/64                //32
+var _v_X_reg_size               = sz_vX*2                           //64
+
+var _v_R                        = _v_X                              //reused with X---- [192]
+var sz_vR                       = SUB_X*256/4/64                    //32
+var _v_R_reg_size               = sz_vR*2                           //64
+
+var _v_arc_end                  = _v_R        + _v_R_reg_size-1     //255
+ 
+
+//ACC_VGPR
+var _v_G                        = 0
+var sz_vGU                      = SUB_GU*256*Bpp/4/4/64             //128
+var _v_G_reg_size               = sz_vGU*2                          //256
+
+var _v_D                        = 0                                 //---reused with v_G
+var sz_vD                       = SUB_GU*256*Bpp/4/4/64             //128
+var _v_D_reg_size               = sz_vD*2                           //256
+
+var _v_acc_end                  = _v_D        + _v_D_reg_size-1     //255
+//////////////////
+label label_wave01_core_loop
+label label_wave23_core_loop
+label label_main_loops_exit
+label label_aligned_exit
+label label_actv[2]
+label label_gemm0[2]
+label label_gemm2[2]
+///////////////////
+
+function v_regs(base, offset)
+    var v_idx
+    v_idx = base + offset
+    return v[v_idx]
+end
+
+function s_regs(base, offset)
+    var s_idx
+    s_idx = base + offset
+    return s[s_idx]
+end
+
+function acc_regs(base, offset)
+    var v_idx
+    v_idx = base + offset
+    return acc[v_idx]
+end
+
+////////////////////////////////////////
+function setup_atomic_exec(s_at_exec, s_restore_exec, s_tk_idx)
+   if USE_VSKIP == 0
+        //must be called after gemm0 since it re-used gemm0 srsc reg
+        s_mov_b32 s_regs(s_restore_exec, 0), 0xffffffff
+        s_mov_b32 s_regs(s_restore_exec, 1), 0xffffffff
+        s_mov_b64 s_tmp0, 0
+   
+        for var k=0; k<8; k++
+            s_cmp_lt_u32  s_regs(s_tk_idx, k), s_token_cnt
+            s_cselect_b64 s_regs(s_at_exec, k*2), s_regs(s_restore_exec, 0), s_tmp0
+        end
+    else
+        s_mov_b32  s_regs(s_at_exec, 0), 0
+        for var k=7; k>=0; k--
+            s_cmp_lt_u32     s_regs(s_tk_idx, k),  s_token_cnt
+            s_cselect_b32    s_tmp0,               0,                    1
+            s_lshl1_add_u32  s_regs(s_at_exec, 0), s_regs(s_at_exec, 0), s_tmp0
+        end
+    end
+end
+
+function expert_idx_s_load(s_rsrc)
+  s_mul_i32       s_tmp0,                  s_tg_idy,     4
+  s_add_u32       s_regs(s_rsrc, 0),   s_tmp0,       s_regs(s_rsrc, 0)
+  s_addc_u32      s_regs(s_rsrc, 1),   0,            s_regs(s_rsrc, 1)
+  
+  s_load_dword    s_eprt_idx,              s_regs(s_rsrc, 0),  0x0
+end
+
+function token_idx_load(s_t_idx, v_t_idx, s_rsrc)
+  s_mul_i32       s_tmp0,                  s_tg_idy,     SUB_X
+  s_mul_i32       s_tmp0,                  4,            s_tmp0
+
+  v_and_b32       v_regs(_v_tmp, 0),       0xf,          v0 //r_id
+  v_lshlrev_b32   v_regs(_v_tmp, 0),       2,            v_regs(_v_tmp, 0) //each thread take 4 bytes
+  v_add_u32       v_regs(_v_tmp, 0),       s_tmp0,       v_regs(_v_tmp, 0)
+
+  ///+++V_load+++//
+  v_mov_b32       v_regs(_v_tmp, 1),       0
+  global_load_dword  v_regs(v_t_idx, 0),   v_regs(_v_tmp, 0),  s_regs(s_rsrc, 0)
+
+  v_add_u32       v_regs(_v_tmp, 0),       64,                 v_regs(_v_tmp, 0) //next 16 token id
+  global_load_dword  v_regs(v_t_idx, 1),   v_regs(_v_tmp, 0),  s_regs(s_rsrc, 0)
+
+  //get token_idx into SGPR, each wave get 1 in order
+  s_mul_i32       s_tmp0,                  s_tg_idy,     SUB_X
+  s_add_u32       s_tmp0,                  s_wave_id,    s_tmp0
+  s_mul_i32       s_tmp0,                  4,            s_tmp0
+
+  s_add_u32       s_regs(s_rsrc, 0),   s_tmp0,       s_regs(s_rsrc, 0)
+  s_addc_u32      s_regs(s_rsrc, 1),   0,            s_regs(s_rsrc, 1)
+
+  ///+++S_load+++//
+  for var i=0; i < SUB_X/4; i++
+    s_load_dword    s_regs(s_t_idx, i), s_regs(s_rsrc, 0),     16*i
+  end
+end
+
+function blk_32x256k_lds_rd_addr_gen(v_addr)
+  //a 32(tokens)x256(dim) data was saved in lds as following layout:
+  //wave0:
+  //token0:  dim[0:255]
+  //token4:  dim[0:255]
+  //token8:  dim[0:255]
+  //token12: dim[0:255]
+  //........
+  //token28: dim[0:255]
+  //8DW padding
+  //wave1:
+  //token1:  dim[0:255]
+  //token5:  dim[0:255]
+  //token9:  dim[0:255]
+  //token13: dim[0:255]
+  //........
+  //token29: dim[0:255]
+  //8DW padding
+  //......wave23 save the remain token as above layout.
+
+  //when lds reading:
+  //each 4 vgpr load 16(tokens)*64(dim).
+  //each thread load's offset(in DW) is
+  //  t0 [0][64*8*0+64*0+ 8*0], t1  [8][64*8*1+64*0+ 8*1], t2  [16][64*8*2+64*0+ 8*2], t3  [24][64*8*3+64*0+ 8*3]
+  //  t4 [0][64*8*0+64*1+ 8*0], t5  [8][64*8*1+64*1+ 8*1], t6  [16][64*8*2+64*1+ 8*2], t7  [24][64*8*3+64*1+ 8*3]
+  //  t8 [0][64*8*0+64*2+ 8*0], t9  [8][64*8*1+64*2+ 8*1], t10 [16][64*8*2+64*2+ 8*2], t11 [24][64*8*3+64*2+ 8*3]
+  //  t12[0][64*8*0+64*3+ 8*0], t13 [8][64*8*1+64*3+ 8*1], t14 [16][64*8*2+64*3+ 8*2], t15 [24][64*8*3+64*3+ 8*3]
+  
+  //  t16[4][64*8*0+64*0+ 8*0+4], t17 [12][64*8*1+64*0+ 8*1+4], t18 [20][64*8*2+64*0+ 8*2+4], t19 [28][64*8*3+64*0+ 8*3+4]
+  //  t20[4][64*8*0+64*1+ 8*0+4], t21 [12][64*8*1+64*1+ 8*1+4], t22 [20][64*8*2+64*1+ 8*2+4], t23 [28][64*8*3+64*1+ 8*3+4]
+  //  t24[4][64*8*0+64*2+ 8*0+4], t25 [12][64*8*1+64*2+ 8*1+4], t26 [20][64*8*2+64*2+ 8*2+4], t27 [28][64*8*3+64*2+ 8*3+4]
+  //  t28[4][64*8*0+64*3+ 8*0+4], t29 [12][64*8*1+64*3+ 8*1+4], t30 [20][64*8*2+64*3+ 8*2+4], t31 [28][64*8*3+64*3+ 8*3+4]
+ 
+  // t32-t63 = t0-t31 + 8DW
+  
+  //h_id = t_id/16
+  //r_id = t_id&0xf
+  //p_id = r_id/4
+  //q_id = r_id&3
+  //thread offset in dw = h_id*4+p_id*64+q_id*(64*8+8)
+  
+  v_lshrrev_b32    v_regs(_v_tmp, 0),         4,                        v0 //h_id
+  v_lshlrev_b32    v_regs(_v_tmp, 1),         2,                        v_regs(_v_tmp, 0) //h_id*4
+
+  v_and_b32        v_regs(_v_tmp, 0),         0xf,                      v0 //r_id
+  v_lshrrev_b32    v_regs(_v_tmp, 2),         2,                        v_regs(_v_tmp, 0) //p_id
+  v_lshlrev_b32    v_regs(_v_tmp, 2),         6,                        v_regs(_v_tmp, 2) //p_id*64
+  v_add_u32        v_regs(_v_tmp, 1),         v_regs(_v_tmp, 2),        v_regs(_v_tmp, 1) //h_id*4+p_id*64
+
+  v_and_b32        v_regs(_v_tmp, 0),         0x3,                      v0 //q_id
+  v_mul_i32_i24    v_regs(_v_tmp, 2),         64*8+8,                   v_regs(_v_tmp, 0) //q_id*(64*8+8)
+  v_add_u32        v_regs(_v_tmp, 1),         v_regs(_v_tmp, 2),        v_regs(_v_tmp, 1) //h_id*4+p_id*64+q_id*(64*8+8) 
+
+  v_lshlrev_b32    v_regs(v_addr, 0),         2,                        v_regs(_v_tmp, 1) //cvt to bytes.
+end
+
+function X_mem_load(fch_idx, s, n)
+    var ret = 0
+    if s < blk_32x256_mem_ld_insts
+       var inst_cnt = (s+n <= blk_32x256_mem_ld_insts) ? n : blk_32x256_mem_ld_insts - s
+
+       for var i=0; i < inst_cnt; i++
+           var i_idx = s+i
+           buffer_load_dword  v0,  v_regs(_v_X_addr, i_idx),  s_regs(_s_X_buf, 0), 0 lds:1 offen:1
+           ret++
+           if i_idx != blk_32x256_mem_ld_insts-1
+              s_add_u32   m0, (i_idx+1)*256, s_regs(_s_X_lds_wr_base_m0, fch_idx)
+           else
+              var n_fch_idx = (fch_idx+1)%PF_Bs
+              s_add_u32   m0, 0, s_regs(_s_X_lds_wr_base_m0, n_fch_idx)
+           end
+       end
+    end
+    return ret
+end
+
+function X_mem_sa_upd
+    s_add_u32       s_regs(_s_X_buf, 0),   s_X_buf_inc,   s_regs(_s_X_buf, 0)
+    s_addc_u32      s_regs(_s_X_buf, 1),   0,             s_regs(_s_X_buf, 1) 
+end
+
+//function X_mem_load_m0_va_upd(fch_idx, s)
+//    if (fch_idx < PF_Bs) && (s < blk_32x256_mem_ld_insts)
+//        s_add_u32   m0, s*256, s_regs(_s_X_lds_wr_base_m0, fch_idx)
+//    end
+//end
+
+function X_lds_rd(fch_idx, v_blk_idx, s, n)
+    //after mem_load, each 4 vgpr takes 16(tokens)*64(dim)
+    //continous 16 vgprs take 16(tokens)*256(dim)
+
+    var ret = 0
+    var ds_base = LDS_X_BASE + blk_32x256_size*fch_idx
+    if s < blk_32x256_lds_rd_insts
+       var inst_cnt = (s+n <= blk_32x256_lds_rd_insts) ? n : blk_32x256_lds_rd_insts - s
+       
+       var v_off = v_blk_idx*sz_vX
+       for var i=0; i < inst_cnt; i++
+           var blk_16x256_idx = (s+i)/(blk_32x256_lds_rd_insts/2)
+           var lds_off = (((s+i)&3)*16 + blk_16x256_idx*64*4) * 4
+           ds_read_b128  v_regs(_v_X+v_off, (s+i)*4),  v_regs(_v_X_lds_rd, 0) offset: lds_off + ds_base
+           ret++
+       end
+    end
+    return ret
+end
+
+function blk_cvt(v_dst, v_src, blk_cvt_insts, s, n)
+    if s < blk_cvt_insts
+       var inst_cnt = (s+n <= blk_cvt_insts) ? n : blk_cvt_insts - s
+       
+       for var i=0; i < inst_cnt; i++
+           var i_idx = s+i
+           if RDM == 0  //round to nearest even
+              v_cmp_u_f32    s_regs(_s_bf16_cvt, 0), v_regs(v_src, 2*i_idx), v_regs(v_src, 2*i_idx) // check Nan
+              v_bfe_u32      v_regs(_v_bf16_cvt, 0), v_regs(v_src, 2*i_idx), 16, 1 // Non-Nan case: store lsb of bf16
+              v_add3_u32     v_regs(_v_bf16_cvt, 0), v_regs(v_src, 2*i_idx), v_regs(_v_bf16_cvt, 0), v_regs(_v_bf16_cvt, 3) // Non-Nan case: add lsb and the increment for rounding
+              v_cndmask_b32  v_regs(_v_tmp, 0),      v_regs(_v_bf16_cvt, 0), v_regs(_v_bf16_cvt, 2), s_regs(_s_bf16_cvt, 0)
+              v_lshrrev_b32  v_regs(_v_tmp, 0),      16,                     v_regs(_v_tmp, 0) // convert C to bf16
+              
+              v_cmp_u_f32    s_regs(_s_bf16_cvt, 0), v_regs(v_src, 2*i_idx+1), v_regs(v_src, 2*i_idx+1) // check Nan
+              v_bfe_u32      v_regs(_v_bf16_cvt, 0), v_regs(v_src, 2*i_idx+1), 16, 1 // Non-Nan case: store lsb of bf16
+              v_add3_u32     v_regs(_v_bf16_cvt, 0), v_regs(v_src, 2*i_idx+1), v_regs(_v_bf16_cvt, 0), v_regs(_v_bf16_cvt, 3) // Non-Nan case: add lsb and the increment for rounding
+              v_cndmask_b32  v_regs(_v_tmp, 1),      v_regs(_v_bf16_cvt, 0),   v_regs(_v_bf16_cvt, 2), s_regs(_s_bf16_cvt, 0)
+              v_and_or_b32   v_regs(v_dst, i_idx),   v_regs(_v_tmp, 1),        v_regs(_v_bf16_cvt, 1), v_regs(_v_tmp, 0)    // pack two bf16 to dword
+           end
+ 
+           if RDM == 1 //round to nearest away
+              v_cmp_u_f32    s_regs(_s_bf16_cvt, 0), v_regs(v_src, 2*i_idx), v_regs(v_src, 2*i_idx) // check Nan
+              v_add3_u32     v_regs(_v_bf16_cvt, 0), v_regs(v_src, 2*i_idx), v_regs(_v_bf16_cvt, 3), 1
+              v_cndmask_b32  v_regs(_v_tmp, 0),      v_regs(_v_bf16_cvt, 0), v_regs(_v_bf16_cvt, 2), s_regs(_s_bf16_cvt, 0)
+              
+              v_cmp_u_f32    s_regs(_s_bf16_cvt, 0), v_regs(v_src, 2*i_idx+1), v_regs(v_src, 2*i_idx+1) // check Nan
+              v_add3_u32     v_regs(_v_bf16_cvt, 0), v_regs(v_src, 2*i_idx+1), v_regs(_v_bf16_cvt, 3), 1
+              v_cndmask_b32  v_regs(_v_tmp, 1),      v_regs(_v_bf16_cvt, 0),   v_regs(_v_bf16_cvt, 2), s_regs(_s_bf16_cvt, 0)
+              
+              v_perm_b32     v_regs(v_dst, i_idx),   v_regs(_v_tmp, 1),        v_regs(_v_tmp, 0),      s_perm0
+           end
+
+           if RDM == 2 //round to zero
+              v_perm_b32     v_regs(v_dst, i_idx),   v_regs(v_src, 2*i_idx+1), v_regs(v_src, 2*i_idx), s_perm0
+           end
+       end
+    end
+end
+
+function G_mem_load(fch_idx, s, n)
+    //after mem_load, each 4 vgpr takes 16(h-dim)*64(dim)
+    //continous 16 vgprs take 16(h-dim)*256(dim)
+    var ret = 0
+    if s < GU_256xSUB_GU_mem_ld_insts
+       var inst_cnt = (s+n <= GU_256xSUB_GU_mem_ld_insts) ? n : GU_256xSUB_GU_mem_ld_insts - s
+       var v_off = fch_idx*sz_vGU
+
+       for var i=0; i < inst_cnt; i++
+           var i_idx = s+i
+           buffer_load_dwordx4  acc_regs(_v_G+v_off, i_idx*4),   v_regs(_v_GU_addr, i_idx/4),  s_regs(_s_G_buf, 0), 0 offen:1 offset: (i_idx&3)*1024
+           ret++
+       end
+    end
+    return ret
+end
+
+function U_mem_load(fch_idx, s, n)
+    //after mem_load, each 4 vgpr takes 16(h-dim)*64(dim)
+    //continous 16 vgprs take 16(h-dim)*256(dim)
+    var ret = 0
+    if s < GU_256xSUB_GU_mem_ld_insts
+       var inst_cnt = (s+n <= GU_256xSUB_GU_mem_ld_insts) ? n : GU_256xSUB_GU_mem_ld_insts - s
+       var v_off = fch_idx*sz_vGU
+
+       for var i=0; i < inst_cnt; i++
+           var i_idx = s+i
+           buffer_load_dwordx4  acc_regs(_v_G+v_off, i_idx*4),   v_regs(_v_GU_addr, i_idx/4),  s_regs(_s_U_buf, 0), 0 offen:1 offset: (i_idx&3)*1024
+           ret++
+       end
+    end
+    return ret
+end
+
+function G_mem_sa_upd
+    s_add_u32       s_regs(_s_G_buf, 0),   s_G_buf_inc,  s_regs(_s_G_buf, 0)
+    s_addc_u32      s_regs(_s_G_buf, 1),   0,            s_regs(_s_G_buf, 1) 
+end
+
+function U_mem_sa_upd
+    s_add_u32       s_regs(_s_U_buf, 0),   s_regs(_s_U_buf_inc,0),  s_regs(_s_U_buf, 0)
+    s_addc_u32      s_regs(_s_U_buf, 1),   0,                       s_regs(_s_U_buf, 1) 
+end
+
+function D_mem_load(fch_idx, s, n)
+    //after mem_load, each 4 vgpr takes 16(dim)*64(h-dim)
+    //next continous 4 vgprs take [64:79](dim)*64(h-dim)
+    //continous 16 vgprs take [0:15][64:79][128:143][192:207] 64(dim)*64(h-dim)
+    //next 16vgpr take 64(dim)*[64:127](h-dim)
+
+    var ret = 0
+    if s < D_SUB_GUx256_mem_ld_insts
+       var inst_cnt = (s+n <= D_SUB_GUx256_mem_ld_insts) ? n : D_SUB_GUx256_mem_ld_insts - s
+       var v_off = fch_idx*sz_vD
+	   
+       for var i=0; i < inst_cnt; i++
+           var i_idx = s+i
+
+           buffer_load_dwordx4  acc_regs(_v_D+v_off, i_idx*4),   v_regs(_v_D_addr, i_idx%4),  s_regs(_s_D_buf, 0), 0 offen:1
+           ret++
+           if i_idx%4==3 && i_idx!=D_SUB_GUx256_mem_ld_insts-1
+              s_add_u32       s_regs(_s_D_buf, 0),   s_D_hf_buf_inc,  s_regs(_s_D_buf, 0)
+              s_addc_u32      s_regs(_s_D_buf, 1),   0,               s_regs(_s_D_buf, 1)
+           end
+       end
+    end
+    return ret
+end
+
+function D_mem_sa_upd
+   s_add_u32       s_regs(_s_D_buf, 0),   s_D_buf_inc,  s_regs(_s_D_buf, 0)
+   s_addc_u32      s_regs(_s_D_buf, 1),   0,            s_regs(_s_D_buf, 1)
+end
+
+function GDQ_mem_load_addr_gen(vG_addr, vD_addr)
+  //wave0 v0 quant load:(in DW)
+  //t0-t3: h-dim[0:3]   t4-t7: h-dim[0+64*1:3+64*1]  t8-t11: h-dim[0+64*2:3+64*2]  t12-t15:h-dim[0+64*3:3+64*3]
+  //t15-t31: t0-t3+4
+  //t32-t47: t0-t3+8
+  //t48-t63: t0-t3+12
+   
+  //v1 = v0.addr+256
+
+  //h_id = t_id/16
+  //r_id = t_id&0xf
+  //p_id = r_id/4
+  //q_id = r_id&3
+  //thread offset in dw = h_id*4+p_id*64+q_id
+  
+  v_lshrrev_b32    v_regs(_v_tmp, 0),         4,                        v0 //h_id
+  v_lshlrev_b32    v_regs(_v_tmp, 1),         2,                        v_regs(_v_tmp, 0) //h_id*4
+
+  v_and_b32        v_regs(_v_tmp, 0),         0xf,                      v0 //r_id
+  v_lshrrev_b32    v_regs(_v_tmp, 2),         2,                        v_regs(_v_tmp, 0) //p_id
+  v_lshlrev_b32    v_regs(_v_tmp, 2),         6,                        v_regs(_v_tmp, 2) //p_id*64
+  v_add_u32        v_regs(_v_tmp, 1),         v_regs(_v_tmp, 2),        v_regs(_v_tmp, 1) //h_id*4+p_id*64
+
+  v_and_b32        v_regs(_v_tmp, 0),         0x3,                      v0 //q_id
+  v_add_u32        v_regs(_v_tmp, 1),         v_regs(_v_tmp, 0),        v_regs(_v_tmp, 1) //h_id*4+p_id*64+q_id 
+
+  v_lshlrev_b32    v_regs(vG_addr, 0),        2,                        v_regs(_v_tmp, 1) //cvt to bytes.
+  v_add_u32        v_regs(vG_addr, 1),        256*4,                    v_regs(vG_addr, 0)
+
+  s_mul_i32        s_tmp0,                    s_wave_id,    16
+  s_mul_i32        s_tmp0,                    s_tmp0,       4
+  v_add_u32        v_regs(vG_addr, 0),        s_tmp0,       v_regs(vG_addr, 0)
+  v_add_u32        v_regs(vG_addr, 1),        s_tmp0,       v_regs(vG_addr, 1)
+  
+  v_mov_b32        v_regs(vD_addr, 0),        v_regs(vG_addr, 0)
+  
+  if(SUB_GU == 128)
+	  v_lshrrev_b32    v_regs(_v_tmp, 0),         4,                        v0 //h_id
+	  v_lshlrev_b32    v_regs(_v_tmp, 1),         2,                        v_regs(_v_tmp, 0) //h_id*4
+
+	  v_and_b32        v_regs(_v_tmp, 0),         0xf,                      v0 //r_id
+	  v_lshrrev_b32    v_regs(_v_tmp, 2),         2,                        v_regs(_v_tmp, 0) //p_id
+	  v_and_b32        v_regs(_v_tmp, 2),         0x01,                     v_regs(_v_tmp, 2) //ignore hidden_dim 128~256 for TileN128
+	  v_lshlrev_b32    v_regs(_v_tmp, 2),         6,                        v_regs(_v_tmp, 2) //p_id*64
+	  v_add_u32        v_regs(_v_tmp, 1),         v_regs(_v_tmp, 2),        v_regs(_v_tmp, 1) //h_id*4+p_id*64
+
+	  v_and_b32        v_regs(_v_tmp, 0),         0x3,                      v0 //q_id
+	  v_add_u32        v_regs(_v_tmp, 1),         v_regs(_v_tmp, 0),        v_regs(_v_tmp, 1) //h_id*4+p_id*64+q_id 
+
+	  v_lshlrev_b32    v_regs(vG_addr, 0),        2,                        v_regs(_v_tmp, 1) //cvt to bytes.
+	  v_add_u32        v_regs(vG_addr, 1),        256*4,                    v_regs(vG_addr, 0)
+
+	  s_mul_i32        s_tmp0,                    s_wave_id,    16
+	  s_mul_i32        s_tmp0,                    s_tmp0,       4
+	  v_add_u32        v_regs(vG_addr, 0),        s_tmp0,       v_regs(vG_addr, 0)
+	  v_add_u32        v_regs(vG_addr, 1),        s_tmp0,       v_regs(vG_addr, 1)
+  end
+end
+
+function DQ_mem_load(fch_idx, s, n)
+    var ret = 0
+    if s < DQ_32x256_mem_ld_insts
+       var inst_cnt = (s+n <= DQ_32x256_mem_ld_insts) ? n : DQ_32x256_mem_ld_insts - s
+       var v_off = fch_idx*sz_vDQ
+	   
+       for var i=0; i < inst_cnt; i++
+           var i_idx = s+i
+           buffer_load_dword  v_regs(_v_DQ+v_off, i_idx),   v_regs(_v_DQ_addr, i_idx),  s_regs(_s_DQ_buf, 0), 0 offen:1
+           ret++
+       end
+    end
+    return ret
+end
+
+function DQ_mem_sa_upd
+   s_add_u32       s_regs(_s_DQ_buf, 0),   s_DQ_buf_inc,  s_regs(_s_DQ_buf, 0)
+   s_addc_u32      s_regs(_s_DQ_buf, 1),   0,             s_regs(_s_DQ_buf, 1)
+end
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////// R reshape//////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+//input each 2vgpr hold 16(tokens)*16(dim)
+//v0-v1 tk[0-15]*hdim[ 0-15] ---- v0v1.t0-t15 hold dim[0-3]*tk[ 0-15]
+//v4-v5 tk[0-15]*hdim[64-79]
+//v8-v9 tk[0-15]*hdim[128-143]
+//v12-v13 tk[0-15]*hdim[192-207]
+
+//v2-v3 tk[16-31]*hdim[ 0-15] 
+//v6-v7 tk[16-31]*hdim[64-79]
+//v10-v11 tk[16-31]*hdim[128-143]
+//v14-v15 tk[16-31]*hdim[192-207]
+///////////////////////////////
+function R_32x256_lds_wr_addr_gen(v_addr)
+  //wave0's each thread addr (in DW):
+  // each thread in a row of v0-v1 is continuous
+  // each row has 2 DW padding  
+  // wave123's v0-v1 is right behind wave0's v0-v1
+  
+  //wave0123's v0-v1 hold a 16*64.(occupied 16*64/2 + 8*4 DW)
+  
+  //wave0's v4-v5.addr   = v0-v1.addr + (16*64/2 + 8*4)*1
+  //wave0's v8-v9.addr   = v0-v1.addr + (16*64/2 + 8*4)*2
+  //wave0's v12-v13.addr = v0-v1.addr + (16*64/2 + 8*4)*3
+  
+  //wave0's v2-v3.addr   = v0-v1.addr + (16*64/2 + 8*4)*4
+  //wave0's v6-v7.addr   = v0-v1.addr + (16*64/2 + 8*4)*5
+  //wave0's v10-v11.addr = v0-v1.addr + (16*64/2 + 8*4)*6
+  //wave0's v14-v15.addr = v0-v1.addr + (16*64/2 + 8*4)*7
+ 
+  //wave1 's addr(in DW) = wave0's + (16*16/2+8) * 1
+  //wave2 's addr(in DW) = wave0's + (16*16/2+8) * 2
+  //wave3 's addr(in DW) = wave0's + (16*16/2+8) * 3
+
+  //h_id = t_id/16
+  //p_id = t_id%16
+  //thread offset in dw = h_id*(16*2+2) + p_id*2
+
+  v_lshrrev_b32    v_regs(_v_tmp, 0),         4,                        v0  //h_id
+  v_mul_i32_i24    v_regs(v_addr, 0),         16*2+2,                   v_regs(_v_tmp, 0) //h_id*(16*2+2)
+
+  v_and_b32        v_regs(_v_tmp, 0),         0xf,                      v0 //p_id
+  v_mul_i32_i24    v_regs(_v_tmp, 1),         2,                        v_regs(_v_tmp, 0) //p_id*2
+  v_add_u32        v_regs(v_addr, 0),         v_regs(_v_tmp, 1),        v_regs(v_addr, 0) //h_id*(16*2+2) + p_id*2
+
+  ///////wave addr offset//////
+  //wave has offset (16*16/2+8)*wave_idx  in DW
+  s_mul_i32        s_tmp0,        s_wave_id,  (16*16/2+8)      
+
+  v_add_u32        v_regs(v_addr, 0),        s_tmp0,        v_regs(v_addr, 0) // add wave offset
+  v_lshlrev_b32    v_regs(v_addr, 0),        2,             v_regs(v_addr, 0) // cvt to bytes
+end
+
+function R_32x256_lds_wr(ds_base, v_src, v_addr, s, n)
+    if s < R_32x256_lds_wr_insts
+       var inst_cnt = (s+n <= R_32x256_lds_wr_insts) ? n : R_32x256_lds_wr_insts - s
+       
+       for var i=0; i < inst_cnt; i++
+           var v_idx = s+i
+           var lds_off = ((v_idx/2)+(v_idx&1)*4)*(16*64/2 + 8*4) * 4
+           ds_write_b64  v_regs(v_addr, 0),  v_regs(v_src, v_idx*2) offset: lds_off + ds_base
+       end
+    end
+end
+
+function R_32x256_lds_rd_addr_gen(v_addr)
+  //wave0's each thread addr (in DW):
+  //  v0 rd addr of thread:  
+  //  each two thread take continuous 2DW
+  //  t2t3 = t0t1 + (16*2+2)*1 DW
+  //  t4t5 = t0t1 + (16*2+2)*2 DW
+  //   ...................
+  //  t60t63 = t0t1 + (16*2+2)*31 DW
+ 
+  // v1.addr = v0.addr + (16*2+2)*32DW
+
+  // v2.addr = v0.addr + 4*2*1 DW
+  // v3.addr = v0.addr + 4*2*1 DW + (16*2+2)*32DW
+ 
+  // v4.addr = v0.addr + 4*2*2 DW
+  // v5.addr = v0.addr + 4*2*2 DW + (16*2+2)*32DW
+  // v6.addr = v0.addr + 4*2*3 DW
+  // v7.addr = v0.addr + 4*2*3 DW + (16*2+2)*32DW
+
+  // v8-v15.addr = v0-v7.addr + (16*64/2 + 8*4)*4 DW
+
+  //wave1 's addr(in DW) = wave0's + 2 * 1 DW
+  //wave2 's addr(in DW) = wave0's + 2 * 2 DW
+  //wave3 's addr(in DW) = wave0's + 2 * 3 DW
+
+  //after lds read, each vgpr load 1(tokens)*128(dim),
+  //2vgpr hold 1(tokens)*256(head-dim)
+  //v0-v1 hold token[0]*dim[0-255], 
+  //v2-v3 hold token[4]*dim[0-255], 
+  //v4-v5 hold token[8]*dim[0-255], 
+  // .....
+  //v14-v15 hold token[28]*dim[0-255], 
+
+  //h_id = t_id/2
+  //q_id = t_id&1
+  //thread offset in dw = h_id*(16*2+2) + q_id
+
+  v_lshrrev_b32    v_regs(_v_tmp, 0),         1,                        v0  //h_id
+  v_mul_i32_i24    v_regs(v_addr, 0),         (16*2+2),                 v_regs(_v_tmp, 0) //h_id*(16*2+2)
+
+  v_and_b32        v_regs(_v_tmp, 1),         0x1,                      v0 //q_id
+  v_add_u32        v_regs(v_addr, 0),         v_regs(_v_tmp, 1),        v_regs(v_addr, 0) //h_id*(16*2+2) + q_id
+
+  ///////wave addr offset//////
+  //wave has offset 2*wave_idx  in DW
+  s_mul_i32        s_tmp0,        s_wave_id,  2
+
+  v_add_u32        v_regs(v_addr, 0),        s_tmp0,        v_regs(v_addr, 0) // add wave offset
+  v_lshlrev_b32    v_regs(v_addr, 0),        2,             v_regs(v_addr, 0) // cvt to bytes
+end
+
+function R_32x256_lds_rd(ds_base, v_src, v_addr, s, n)
+    //after lds read, each vgpr load 1(tokens)*128(dim),
+    //2vgpr hold 1(tokens)*256(head-dim)
+    //v0-v1 hold token[0]*dim[0-255], 
+    //v2-v3 hold token[4]*dim[0-255], 
+    //v4-v5 hold token[8]*dim[0-255], 
+    // .....
+    //v14-v15 hold token[28]*dim[0-255]
+
+    if s < R_32x256_lds_rd_insts
+       var inst_cnt = (s+n <= R_32x256_lds_rd_insts) ? n : R_32x256_lds_rd_insts - s
+       
+       for var i=0; i < inst_cnt; i++
+           var v_idx = s+i
+           var v8_off = (16*64/2 + 8*4)*4*(v_idx/8)
+           var v8_idx = v_idx&7
+
+           var lds_off = (v8_off + (v8_idx/2)*4*2 + (v8_idx&1)*(16*2+2)*32) * 4
+
+           ds_read_b32  v_regs(v_src, v_idx), v_regs(v_addr, 0)  offset: lds_off + ds_base
+       end
+    end
+end
+
+function R_32x256_mem_store_addr_gen(v_addr)
+  //after lds read, each vgpr load 1(tokens)*128(dim),
+  //2vgpr hold 1(tokens)*256(head-dim)
+  //v0-v1 hold token[0]*dim[0-255], 
+  //v2-v3 hold token[4]*dim[0-255], 
+  //v4-v5 hold token[8]*dim[0-255], 
+  // .....
+  //v14-v15 hold token[28]*dim[0-255]
+
+  // INT32 Full: each BF16 -> one INT32, so 2x space
+  // Interleaved layout: [lo_0, hi_0, lo_1, hi_1, ...]
+  // Each thread handles 8 bytes (2 INT32s)
+
+  v_lshlrev_b32    v_regs(_v_tmp, 0),     3,                           v0 //each thread take 8 bytes (2x original)
+  for var i=0; i < SUB_X/4; i++
+    s_lshl_b32     s_tmp1,                s_Rs,                        1  //stride * 2 for INT32 buffer
+    s_mul_i32      s_tmp0,                s_regs(_s_token_idx, i),     s_tmp1 
+    v_add_u32      v_regs(v_addr, i*2),   v_regs(_v_tmp, 0),           s_tmp0
+    v_mov_b32      v_regs(v_addr, i*2+1), 0
+  end
+end
+
+// INT32 FULL atomic add version for deterministic accumulation
+// Each BF16 -> one full INT32 (no packing)
+// Scale factor: 32768 = 2^15 = 0x47000000 in FP32
+// Interleaved layout: [lo_int32, hi_int32, lo_int32, hi_int32, ...]
+function R_32x256_mem_atomic(v_src, s_rsrc, v_addr, s, n)
+    if s < R_32x256_mem_atomic_insts
+       var inst_cnt = (s+n <= R_32x256_mem_atomic_insts) ? n : R_32x256_mem_atomic_insts - s
+
+        for var i=0; i < inst_cnt; i++
+            var i_idx = s+i
+            if USE_VSKIP == 0
+                s_mov_b64 exec, s_regs(_s_atomic_exec, (i_idx/2)*2)
+            else
+                s_setvskip  s_regs(_s_atomic_exec, 0), i_idx/2
+            end
+            
+            // === INT32 FULL Atomic Add (deterministic, no carry-over) ===
+            // v_src contains packed 2xBF16, convert each to full INT32
+            
+            // Step 1: Extract lo BF16 and convert to FP32
+            v_and_b32      v_regs(_v_tmp, 0), 0xFFFF, v_regs(v_src, i_idx)
+            v_lshlrev_b32  v_regs(_v_tmp, 0), 16, v_regs(_v_tmp, 0)      // BF16 -> FP32
+            
+            // Step 2: Extract hi BF16 (already in FP32 position)
+            v_and_b32      v_regs(_v_tmp, 1), 0xFFFF0000, v_regs(v_src, i_idx)
+            
+            // Step 3: Scale to integer (multiply by 32768 = 0x47000000)
+            v_mul_f32      v_regs(_v_tmp, 0), 0x47000000, v_regs(_v_tmp, 0)
+            v_mul_f32      v_regs(_v_tmp, 1), 0x47000000, v_regs(_v_tmp, 1)
+            
+            // Step 4: Convert FP32 to INT32 (full 32-bit, no truncation)
+            v_cvt_i32_f32  v_regs(_v_tmp, 0), v_regs(_v_tmp, 0)
+            v_cvt_i32_f32  v_regs(_v_tmp, 1), v_regs(_v_tmp, 1)
+            
+            // Step 5: Two separate atomic adds (no packing = no carry-over!)
+            // Interleaved layout: lo at offset 0, hi at offset 4
+            // inst_offset base: ((s+i)&1)*64 * 8 (8 bytes per element pair)
+            global_atomic_add    v0, v_regs(v_addr, ((s+i)/2)*2), v_regs(_v_tmp, 0), s_regs(s_rsrc, 0) inst_offset:((s+i)&1)*64 * 8
+            global_atomic_add    v0, v_regs(v_addr, ((s+i)/2)*2), v_regs(_v_tmp, 1), s_regs(s_rsrc, 0) inst_offset:((s+i)&1)*64 * 8 + 4
+            // === END INT32 FULL Atomic Add ===
+            
+            if USE_VSKIP == 0
+                s_mov_b64 exec, s_regs(_s_restore_mask, 0)
+            else
+                s_setvskip  0, 0
+            end
+        end
+    end
+end
+
+function R_mem_va_upd
+    s_add_u32            s_regs(_s_R_buf, 0),  s_R_buf_inc,    s_regs(_s_R_buf, 0)
+    s_addc_u32           s_regs(_s_R_buf, 1),  0,              s_regs(_s_R_buf, 1)
+end
+
+function R_mem_store(s, n)
+    R_32x256_mem_atomic(_v_R_save, _s_R_buf, _v_R_addr, s, n)
+end
+
+function R_reshape_wr(pi, s, n)
+    var v_off = pi*sz_vR 
+    if GEMM2_OPT == 0
+        R_32x256_lds_wr(LDS_R_BASE, _v_R+v_off, _v_R_lds_wr, s, n)
+    else
+        R_32x256_lds_wr(LDS_R_BASE+pi*LDS_R_BLK_SIZE, _v_R+v_off, _v_R_lds_wr, s, n)
+    end
+end
+
+function R_reshape_rd(pi, s, n)
+    if GEMM2_OPT == 0
+        R_32x256_lds_rd(LDS_R_BASE, _v_R_save, _v_R_lds_rd, s, n)
+    else
+        R_32x256_lds_rd(LDS_R_BASE+pi*LDS_R_BLK_SIZE, _v_R_save, _v_R_lds_rd, s, n)
+    end
+end
+
+function G_dequant
+   for var j = 0; j < CNT_GU_ADDR; j++  //h-dim(N)--8
+      for var i = 0; i < CNT_X_Q; i++  //tokens(M)--2
+         var vZ_idx = (j*CNT_X_Q+i)*vs_CD
+         
+         if FP8 == 0
+             //12*4 = 48 per iter, totally 48*16 = 768 cycles
+             //int32 cvt to f32
+             for var k = 0; k < vs_CD; k++
+                v_cvt_f32_i32 v_regs(_v_Z, vZ_idx+k), v_regs(_v_Z, vZ_idx+k)
+             end
+         end
+      
+         //dequant
+         for var k = 0; k < vs_CD; k++
+            v_mul_f32 v_regs(_v_Z, vZ_idx+k), v_regs(_v_XQ, i), v_regs(_v_Z, vZ_idx+k)
+         end
+ 
+         for var k = 0; k < vs_CD; k++
+            v_mul_f32 v_regs(_v_Z, vZ_idx+k), v_regs(_v_GQ, j/4), v_regs(_v_Z, vZ_idx+k) row_newbcast:[k+(j&3)*4]
+         end
+      end
+   end
+end
+
+function U_dequant
+   for var j = 0; j < CNT_GU_ADDR; j++  //h-dim(N)--8
+      for var i = 0; i < CNT_X_Q; i++  //tokens(M)--2
+         var vZ_idx = (j*CNT_X_Q+i)*vs_CD
+         
+         if FP8 == 0
+             //12*4 = 48 per iter, totally 48*16 = 768 cycles
+             //int32 cvt to f32
+             for var k = 0; k < vs_CD; k++
+                v_cvt_f32_i32 v_regs(_v_GM1, vZ_idx+k), v_regs(_v_GM1, vZ_idx+k)
+             end
+         end
+      
+         //dequant
+         for var k = 0; k < vs_CD; k++
+            v_mul_f32 v_regs(_v_GM1, vZ_idx+k), v_regs(_v_XQ, i), v_regs(_v_GM1, vZ_idx+k)
+         end
+ 
+         for var k = 0; k < vs_CD; k++
+            v_mul_f32 v_regs(_v_GM1, vZ_idx+k), v_regs(_v_UQ, j/4), v_regs(_v_GM1, vZ_idx+k) row_newbcast:[k+(j&3)*4]
+         end
+      end
+   end
+end
+
+function G_actv_D_load
+
+   var  D_ml_idx=0
+   var  gu_cnt_unit = GU_256xSUB_GU_mem_ld_insts/CNT_GU_ADDR   //strong assumption is 4
+
+   //var  wait_cnt0 = 3*GU_256xSUB_GU_mem_ld_insts/4
+   var  wait_cnt0 = (CNT_GU_ADDR-1)*gu_cnt_unit
+
+   for var j = 0; j < CNT_GU_ADDR; j++  //h-dim(N)--8
+      for var i = 0; i < CNT_X_Q; i++  //tokens(M)--2
+         var vZ_idx = (j*2+i)*vs_CD
+         
+         if ((D_ml_idx%gu_cnt_unit)==0)
+            s_waitcnt vmcnt(wait_cnt0) //wait one blk G load done
+         end
+
+         D_mem_load(0, D_ml_idx, 1)
+         D_ml_idx++
+
+         if USE_GELU == 1
+             //6 valu-->24cycle, 2 talu-->32 cycle, (32+24)*4 = 224 per iter, totally 224*16 = 3584 cycles
+             //x * x
+             for var k = 0; k < vs_CD; k++
+                v_mul_f32  v_regs(_v_tmp, k), v_regs(_v_Z, vZ_idx+k), v_regs(_v_Z, vZ_idx+k)
+             end
+
+             //c1*x*x+c2
+             for var k = 0; k < vs_CD; k++
+                v_fma_f32  v_regs(_v_tmp, k), v_regs(_v_tmp, k), s_c1, v_regs(_v_c2, 0)
+             end
+
+             //x*(c1*x*x+c2)
+             for var k = 0; k < vs_CD; k++
+                v_mul_f32  v_regs(_v_tmp, k), v_regs(_v_tmp, k), v_regs(_v_Z, vZ_idx+k)
+             end
+
+             //log2e * (x*(c1*x*x+c2))
+             for var k = 0; k < vs_CD; k++
+                v_mul_f32  v_regs(_v_tmp, k), v_regs(_v_tmp, k), s_log2e
+             end
+
+             //emu = e^(x*(c1*x*x+c2))
+             for var k = 0; k < vs_CD; k++
+                v_exp_f32  v_regs(_v_tmp, k), v_regs(_v_tmp, k)
+             end
+         else
+             //log2e * (-x)
+             for var k = 0; k < vs_CD; k++
+                v_mul_f32  v_regs(_v_tmp, k), -v_regs(_v_Z, vZ_idx+k), s_log2e
+             end
+             //emu = e^(-x)
+             for var k = 0; k < vs_CD; k++
+                v_exp_f32  v_regs(_v_tmp, k), v_regs(_v_tmp, k)
+             end
+         end
+
+         D_mem_load(0, D_ml_idx, 1)
+         D_ml_idx++
+
+         //1.0 + emu
+         for var k = 0; k < vs_CD; k++
+            v_add_f32  v_regs(_v_tmp, k), v_regs(_v_tmp, k), 1.0
+         end
+
+         //1/(1.0 + emu)
+         for var k = 0; k < vs_CD; k++
+            v_rcp_f32  v_regs(_v_tmp, k), v_regs(_v_tmp, k)
+         end
+
+         //x * 1/(1.0 + emu)
+         for var k = 0; k < vs_CD; k++
+            v_mul_f32  v_regs(_v_Z, vZ_idx+k), v_regs(_v_Z, vZ_idx+k), v_regs(_v_tmp, k)
+         end
+
+         if DO_UP ==1
+            //GEMM0 = GEMM0 * GEMM1
+            for var k = 0; k < vs_CD; k++
+                v_mul_f32  v_regs(_v_Z, vZ_idx+k), v_regs(_v_Z, vZ_idx+k), v_regs(_v_GM1, vZ_idx+k)
+            end
+         end
+      end
+   end
+end
+
+function G_smooth_dequant
+   for var j = 0; j < CNT_GU_ADDR; j++  //h-dim(N)--8
+      for var i = 0; i < CNT_X_Q; i++  //tokens(M)--2
+         var vZ_idx = (j*CNT_X_Q+i)*vs_CD
+         
+         //256 cycles
+         for var k = 0; k < vs_CD; k++
+            v_mul_f32 v_regs(_v_Z, vZ_idx+k), v_regs(_v_GsmQ, j/4), v_regs(_v_Z, vZ_idx+k) row_newbcast:[k+(j&3)*4]
+         end
+      end
+   end
+end
+
+function G_max_lds_wr
+   //write two max vpgr
+   var ds_base = LDS_GMAX_BASE
+   v_lshlrev_b32    v_regs(_v_tmp, 0),      3,           v0 //2DW per thread
+   s_mul_i32        s_tmp0,                 512,         s_wave_id
+   v_add_u32        v_regs(_v_tmp, 0),      s_tmp0,      v_regs(_v_tmp, 0)
+
+   ds_write_b64     v_regs(_v_tmp, 0),      v_regs(_v_Max,0) offset: ds_base
+end
+
+function G_max_lds_rd
+   var ds_base = LDS_GMAX_BASE
+   v_and_b32        v_regs(_v_tmp, 0),      0xf,         v0
+   v_lshlrev_b32    v_regs(_v_tmp, 0),      3,           v_regs(_v_tmp, 0) //2DW per thread
+
+   for var i = 0; i < 16; i++
+      var lds_off = 8*16*i
+      ds_read_b64  v_regs(_v_GMAX, i*2), v_regs(_v_tmp, 0)  offset: lds_off + ds_base
+   end
+end
+
+function G_dyn_quant
+   v_mov_b32  v_regs(_v_Max, 0),     0x358637bd
+   v_mov_b32  v_regs(_v_Max, 1),     0x358637bd
+
+   //totally 16*2*4 = 128 cycles
+   for var j = 0; j < CNT_GU_ADDR; j++  //h-dim(N)--8
+      for var i = 0; i < CNT_X_Q; i++  //tokens(M)--2
+         var vZ_idx = (j*CNT_X_Q+i)*vs_CD
+      
+         for var k = 0; k < vs_CD; k+=2
+            v_max3_f32  v_regs(_v_Max, i), abs(v_regs(_v_Z, vZ_idx+k)), abs(v_regs(_v_Z, vZ_idx+k+1)), v_regs(_v_Max, i)
+         end
+      end
+   end
+
+   G_max_lds_wr()
+   s_waitcnt lgkmcnt(0)
+   s_barrier
+
+   G_max_lds_rd()
+   s_waitcnt lgkmcnt(0)
+
+   //v_mov_b32  v_regs(_v_Max, 0),     0x358637bd
+   //v_mov_b32  v_regs(_v_Max, 1),     0x358637bd
+
+   for var i = 0; i < 16; i+=2
+      v_max3_f32  v_regs(_v_Max, 0), abs(v_regs(_v_GMAX, i*2)),   abs(v_regs(_v_GMAX, (i+1)*2)),    v_regs(_v_Max, 0)
+      v_max3_f32  v_regs(_v_Max, 1), abs(v_regs(_v_GMAX, i*2+1)), abs(v_regs(_v_GMAX, (i+1)*2+1)),  v_regs(_v_Max, 1)
+   end
+
+   //Trans valu has 1 pass data harzard
+   v_rcp_f32  v_regs(_v_Max, 0), v_regs(_v_Max, 0)
+   v_rcp_f32  v_regs(_v_Max, 1), v_regs(_v_Max, 1)
+
+   if FP8 == 0
+        v_mov_b32  v_regs(_v_tmp, 0), DENO
+   else
+        v_mov_b32  v_regs(_v_tmp, 0), DENO_FP8
+   end
+   v_mul_f32  v_regs(_v_Max, 0), v_regs(_v_tmp,0), v_regs(_v_Max, 0)
+   v_mul_f32  v_regs(_v_Max, 1), v_regs(_v_tmp,0), v_regs(_v_Max, 1)
+
+   var vZ_cvt_idx = 0
+
+   //totally 16*11*4 = 704 cycles
+   for var j = 0; j < CNT_GU_ADDR; j++  //h-dim(N)--8
+      for var i = 0; i < CNT_X_Q; i++  //tokens(M)--2
+         var vZ_idx = (j*CNT_X_Q+i)*vs_CD
+
+         for var k = 0; k < vs_CD; k++
+            v_mul_f32  v_regs(_v_Z, vZ_idx+k), v_regs(_v_Max, i), v_regs(_v_Z, vZ_idx+k)
+         end
+
+         if FP8 == 0
+             //cvt f32 to i32
+             for var k = 0; k < vs_CD; k++
+                v_cvt_i32_f32 v_regs(_v_Z, vZ_idx+k), v_regs(_v_Z, vZ_idx+k)
+             end
+             
+             v_perm_b32 v_regs(_v_Z, vZ_cvt_idx+i), v_regs(_v_Z, vZ_idx+1), v_regs(_v_Z, vZ_idx+0),     s_perm1
+             v_perm_b32 v_regs(_v_Z, vZ_cvt_idx+i), v_regs(_v_Z, vZ_idx+2), v_regs(_v_Z, vZ_cvt_idx+i), s_perm2
+             v_perm_b32 v_regs(_v_Z, vZ_cvt_idx+i), v_regs(_v_Z, vZ_idx+3), v_regs(_v_Z, vZ_cvt_idx+i), s_perm3
+         else
+             //cvt f32 to fp8
+             v_cvt_pk_fp8_f32 v_regs(_v_Z, vZ_cvt_idx+i), v_regs(_v_Z, vZ_idx+0),  v_regs(_v_Z, vZ_idx+1) op_sel:[0,0,0,0]
+             //v_lshlrev_b32    v_regs(_v_Z, vZ_cvt_idx+i), 16, v_regs(_v_Z, vZ_cvt_idx+i)
+             v_cvt_pk_fp8_f32 v_regs(_v_Z, vZ_cvt_idx+i), v_regs(_v_Z, vZ_idx+2),  v_regs(_v_Z, vZ_idx+3) op_sel:[0,0,1,0]    //op_sel 3
+         end
+      end
+      vZ_cvt_idx += CNT_X_Q
+   end
+
+   //save de-quant scale
+   v_rcp_f32  v_regs(_v_ZdynQ, 0), v_regs(_v_Max, 0)
+   v_rcp_f32  v_regs(_v_ZdynQ, 1), v_regs(_v_Max, 1)
+end
+
+function G_reshape_wr
+  //v0 which hold [0:15](tokens)x16(h-dim))
+  //v0 wr addr in DW. 
+  //t0  0, t1  2,....t15 30
+  //t16 1, t17 3.....t31 31
+  //t32-t63 = t0-t31+ 32DW.
+
+  //v1 which hold [16:31](tokens)x16(h-dim))
+  //v1 wr addr in DW = v0.addr+(4*8)*64DW 
+
+  //h_id = t_id/32
+  //r_id = t_id&0x1f
+  //p_id = r_id/16
+  //q_id = r_id&f
+  //thread offset in dw = h_id*32+p_id+q_id*2
+
+  var ds_base = LDS_G_RSP_BASE
+
+  v_lshrrev_b32    v_regs(_v_tmp, 0),         5,                        v0 //h_id
+  v_lshlrev_b32    v_regs(_v_tmp, 1),         5,                        v_regs(_v_tmp, 0) //h_id*32
+
+  v_and_b32        v_regs(_v_tmp, 0),         0x1f,                     v0 //r_id
+  v_lshrrev_b32    v_regs(_v_tmp, 2),         4,                        v_regs(_v_tmp, 0) //p_id
+  v_add_u32        v_regs(_v_tmp, 1),         v_regs(_v_tmp, 2),        v_regs(_v_tmp, 1) //h_id*32+p_id
+
+  v_and_b32        v_regs(_v_tmp, 0),         0xf,                      v0 //q_id
+  v_lshlrev_b32    v_regs(_v_tmp, 0),         1,                        v_regs(_v_tmp, 0) //q_id*2
+  v_add_u32        v_regs(_v_tmp, 1),         v_regs(_v_tmp, 0),        v_regs(_v_tmp, 1) //h_id*32+p_id+q_id*2
+
+  v_lshlrev_b32    v_regs(_v_tmp, 0),         2,                        v_regs(_v_tmp, 1) //cvt to bytes.
+
+  s_mul_i32        s_tmp0,                    256,                      s_wave_id 
+  v_add_u32        v_regs(_v_tmp, 0),         v_regs(_v_tmp, 0),        s_tmp0
+
+  for var k = 0; k < _v_Z_reg_size/4; k++
+     var lds_off = (CNT_WV*CNT_GU_ADDR*64*(k&1) + CNT_WV*64*(k/2)) * 4
+     ds_write_b32     v_regs(_v_tmp, 0),      v_regs(_v_Z, k)    offset: lds_off + ds_base
+  end
+end
+
+function G_reshape_rd
+  //v0v1v2v3 will hold [0:15](tokens)x[0:63](h-dim))
+  //v0v1 rd addr in DW. 
+  //t0  0, t1  2,....t15 30
+  //t16-t31 = t0-t15+ 64DW
+  //t32-t63 = t0-t31+ 128DW.
+
+  //v2v3 rd addr in DW = v0v1.addr+32DW
+
+  //v4-v7 = v0-v3.addr+256DW
+
+  //h_id = t_id/16
+  //q_id = t_id&f
+  //thread offset in dw = h_id*64+q_id*2
+
+  var ds_base = LDS_G_RSP_BASE
+
+  v_lshrrev_b32    v_regs(_v_tmp, 0),         4,                        v0 //h_id
+  v_lshlrev_b32    v_regs(_v_tmp, 1),         6,                        v_regs(_v_tmp, 0) //h_id*64
+
+  v_and_b32        v_regs(_v_tmp, 0),         0xf,                      v0 //q_id
+  v_lshlrev_b32    v_regs(_v_tmp, 0),         1,                        v_regs(_v_tmp, 0) //q_id*2
+  v_add_u32        v_regs(_v_tmp, 1),         v_regs(_v_tmp, 0),        v_regs(_v_tmp, 1) //h_id*64+p_id+q_id*2
+
+  v_lshlrev_b32    v_regs(_v_tmp, 0),         2,                        v_regs(_v_tmp, 1) //cvt to bytes.
+
+  for var k = 0; k < _v_Z_reg_size; k+=2
+     var lds_off = ((((k&3)/2)*32) + (k/4)*256) * 4
+     ds_read_b64  v_regs(_v_Z, k), v_regs(_v_tmp, 0)  offset: lds_off + ds_base
+  end
+end
+
+function R_cvt(pi, s, n)
+    var vR_idx = pi*sz_vR
+    blk_cvt(_v_R+vR_idx, _v_R+vR_idx, blk_32x256_cvt_insts, s, n)
+end
+
+function R_dqt_mwt_cvt(pi)
+   for var j = 0; j < 256/64; j++  //h-dim(N)--4
+      for var i = 0; i < 32/16; i++  //tokens(M)--2
+         var vR_idx = pi*sz_vR + (j*2+i)*vs_CD
+         var vDQ_idx = pi*sz_vDQ
+
+         if FP8 == 0
+             //int32 cvt to f32
+             for var k = 0; k < vs_CD; k++
+                v_cvt_f32_i32 v_regs(_v_R, vR_idx+k), v_regs(_v_R, vR_idx+k)
+             end
+         end
+      
+         //dequant
+         for var k = 0; k < vs_CD; k++
+            v_mul_f32 v_regs(_v_R, vR_idx+k), v_regs(_v_ZdynQ, i), v_regs(_v_R, vR_idx+k)
+         end
+ 
+         for var k = 0; k < vs_CD; k++
+            v_mul_f32 v_regs(_v_R, vR_idx+k), v_regs(_v_DQ+vDQ_idx, j/4), v_regs(_v_R, vR_idx+k) row_newbcast:[k+(j&3)*4]
+         end
+
+         //mul_weight
+         for var k = 0; k < vs_CD; k++
+            v_mul_f32 v_regs(_v_R, vR_idx+k), v_regs(_v_W, i), v_regs(_v_R, vR_idx+k)
+         end
+      end
+   end
+
+   R_cvt(pi, 0, blk_32x256_cvt_insts)
+end
+
+////////////////////////////////////////////
+//////GEMM0: S=X*Gate//////////
+////////////////////////////////////////////
+function cl_gemm0(cl_p, pi)
+   //input X vpgpr layout
+   // v0-v15: [ 0:15](tokens)x256(dim)
+   //v16-v31: [16:31](tokens)x256(dim)
+
+   //input G vpgpr layout
+   // v0-v15: [  0: 15](h-dim)x256(dim)
+   //v16-v31: [ 64: 79](h-dim)x256(dim)
+   //......................
+   //v111-v127: [448:463](h-dim)x256(dim)
+
+   //output Z vpgpr layout
+   // v0-v3 : [ 0:15](tokens)x[ 0: 15](h-dim)
+   // v4-v7 : [16:31](tokens)x[ 0: 15](h-dim)
+   // v8-v11: [ 0:15](tokens)x[64: 79](h-dim)
+   //v12-v15: [16:31](tokens)x[64: 79](h-dim)
+   //......................
+   //v56-v59: [ 0:15](tokens)x[448:463](h-dim)
+   //v60-v63: [16:31](tokens)x[448:463](h-dim)
+
+   var XDL_idx  = 0
+   var G_ml_idx = 0
+   var X_ml_idx = 0
+   var X_lr_idx = 0
+
+   //var wait_cnt0 = 3*GU_256xSUB_GU_mem_ld_insts/4
+   //var wait_cnt1 = 3*GU_256xSUB_GU_mem_ld_insts/4 + blk_32x256_mem_ld_insts
+   var gu_cnt_unit = GU_256xSUB_GU_mem_ld_insts/CNT_GU_ADDR
+   var ds_thresholder = 32
+   if (SUB_GU == 128)
+     ds_thresholder = 0
+   end
+   if (SUB_GU == 192)
+     ds_thresholder = 16
+   end
+
+   var wait_cnt0 = (CNT_GU_ADDR-2) * gu_cnt_unit                            //wait for 2 GUs to arrive
+   var wait_cnt1 = (CNT_GU_ADDR-1) * gu_cnt_unit + blk_32x256_mem_ld_insts  //wait for 1 GU to arrive, take X vmcnts into consider
+
+   s_waitcnt vmcnt(wait_cnt0) & lgkmcnt(0) //wait input X lds ready,  X.blk memload is ready, 2 blks of Gate memload is ready.
+
+   for var j = 0; j < CNT_GU_ADDR; j++  //h-dim(N)--8
+      for var i = 0; i < CNT_X_Q; i++  //tokens(M)--2
+         var vZ_idx = (j*2+i)*vs_CD
+         var vX_off = pi*sz_vX + i*sz_vX/CNT_X_Q
+         var vG_off = pi*sz_vGU + j*sz_vGU/CNT_GU_ADDR
+
+         //when xdl_idx>32, X and 2 blks of G mem load is issued.
+         if ((XDL_idx >= 32) && (XDL_idx%16 == 0))
+           s_waitcnt vmcnt(wait_cnt1)
+         end
+
+         for var k = 0; k < 256/32; k++  //dim(K)--8
+            if FP8 == 1
+                v_mfma_f32_16x16x32_fp8_fp8  v_regs(_v_Z, vZ_idx), acc_regs(_v_G+vG_off, k*vs_AB), v_regs(_v_X+vX_off, k*vs_AB), v_regs(_v_Z, vZ_idx)
+            else
+                v_mfma_i32_16x16x32_i8   v_regs(_v_Z, vZ_idx), acc_regs(_v_G+vG_off, k*vs_AB), v_regs(_v_X+vX_off, k*vs_AB), v_regs(_v_Z, vZ_idx)
+            end
+
+            if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) < 2)
+                G_mem_load(1-pi, G_ml_idx, 1) //mem_rd_b128*32
+                G_ml_idx += 1
+            end
+
+            if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) >= 2)
+                X_mem_load(pi, X_ml_idx, 1) //mem_rd_b32*8
+                X_ml_idx += 1
+            end
+
+            if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) >= 2) && (XDL_idx>=ds_thresholder)
+                X_lds_rd(1-pi, 1-pi, X_lr_idx, 1) //lds_rd_b128*8
+                X_lr_idx += 1
+            end
+
+            XDL_idx++
+         end
+      end
+   end
+
+   s_add_u32       s_tmp0,         gemm0_SUB_K*3,      s_loop_idx
+   s_cmp_lt_u32    s_tmp0,         s_loop_cnt
+   s_cselect_b32   s_X_buf_inc,    s_X_buf_inc,   0
+
+   s_add_u32       s_tmp0,         gemm0_SUB_K*2,      s_loop_idx
+   s_cmp_lt_u32    s_tmp0,         s_loop_cnt
+   s_cselect_b32   s_G_buf_inc,    s_G_buf_inc,     0
+
+   X_mem_sa_upd()
+   G_mem_sa_upd()
+end
+
+////////////////////////////////////////////
+//////GEMM0: S=X*Gate//////////
+////////////////////////////////////////////
+function cl_gemm0_withup(cl_p, pi)
+   //input X vpgpr layout
+   // v0-v15: [ 0:15](tokens)x256(dim)
+   //v16-v31: [16:31](tokens)x256(dim)
+
+   //input G vpgpr layout
+   // v0-v15: [  0: 15](h-dim)x256(dim)
+   //v16-v31: [ 64: 79](h-dim)x256(dim)
+   //......................
+   //v111-v127: [448:463](h-dim)x256(dim)
+
+   //output Z vpgpr layout
+   // v0-v3 : [ 0:15](tokens)x[ 0: 15](h-dim)
+   // v4-v7 : [16:31](tokens)x[ 0: 15](h-dim)
+   // v8-v11: [ 0:15](tokens)x[64: 79](h-dim)
+   //v12-v15: [16:31](tokens)x[64: 79](h-dim)
+   //......................
+   //v56-v59: [ 0:15](tokens)x[448:463](h-dim)
+   //v60-v63: [16:31](tokens)x[448:463](h-dim)
+
+   //inputU vgpr layout and output GEMM1 layout is the same as G/Z
+
+   var XDL_idx  = 0
+   var G_ml_idx = 0
+   var U_ml_idx = 0
+   var X_ml_idx = 0
+   var X_lr_idx = 0
+
+   var gu_cnt_unit = GU_256xSUB_GU_mem_ld_insts/CNT_GU_ADDR
+
+   var wait_cnt0 = (CNT_GU_ADDR-2) * gu_cnt_unit                            //wait for 2 GUs to arrive
+   var wait_cnt1 = (CNT_GU_ADDR-1) * gu_cnt_unit + blk_32x256_mem_ld_insts  //wait for 1 GU to arrive, take X vmcnts into consider
+   var wait_cnt3 = (CNT_GU_ADDR-1) * gu_cnt_unit                            //wait for 1 GU to arrive
+
+   s_waitcnt vmcnt(wait_cnt0) & lgkmcnt(0) //wait input X lds ready,  2 blks of Gate memload is ready.
+   s_barrier
+
+   //compute Gemm0
+   //memload U0
+   //memload X1
+   for var j = 0; j < CNT_GU_ADDR; j++  //h-dim(N)--8
+      for var i = 0; i < CNT_X_Q; i++  //tokens(M)--2
+         var vZ_idx = (j*2+i)*vs_CD
+         var vX_off = pi*sz_vX + i*sz_vX/CNT_X_Q
+         var vG_off = 0*sz_vGU + j*sz_vGU/CNT_GU_ADDR
+
+         //when xdl_idx>32, X and 1/4 G mem load is issued.
+         if (XDL_idx >= 32 && XDL_idx%16==0)
+            s_waitcnt vmcnt(wait_cnt1)
+         end
+
+         for var k = 0; k < 256/32; k++  //dim(K)--8
+            if FP8 == 1
+                v_mfma_f32_16x16x32_fp8_fp8   v_regs(_v_Z, vZ_idx), acc_regs(_v_G+vG_off, k*vs_AB), v_regs(_v_X+vX_off, k*vs_AB), v_regs(_v_Z, vZ_idx)
+            else
+                v_mfma_i32_16x16x32_i8   v_regs(_v_Z, vZ_idx), acc_regs(_v_G+vG_off, k*vs_AB), v_regs(_v_X+vX_off, k*vs_AB), v_regs(_v_Z, vZ_idx)
+            end
+
+            if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) < 2)
+                U_mem_load(1, U_ml_idx, 1) //mem_rd_b128*32
+                U_ml_idx += 1
+            end
+
+            if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) >= 2)
+                X_mem_load(1-pi, X_ml_idx, 1) //mem_rd_b32*8
+                X_ml_idx += 1
+            end
+
+            XDL_idx++
+         end
+      end
+   end
+
+   //compute Gemm1
+   //memload G1
+   //dsread  X1
+   s_waitcnt vmcnt(wait_cnt0)  //X.blk memload is ready, 2 blks of Up memload is ready. since X/U load was interleaved
+   s_barrier
+
+   XDL_idx=0
+   G_ml_idx = 0
+   X_lr_idx = 0
+   var ds_thresholder = 32
+   if (SUB_GU == 128)
+     ds_thresholder = 0
+   end
+   if (SUB_GU == 192)
+     ds_thresholder = 16
+   end
+   //compute Gemm1
+   //memload G1
+   //dsread  X1
+   for var j = 0; j < CNT_GU_ADDR; j++  //h-dim(N)--8
+      for var i = 0; i < CNT_X_Q; i++  //tokens(M)--2
+         var vZ_idx = (j*2+i)*vs_CD
+         var vX_off = pi*sz_vX + i*sz_vX/CNT_X_Q
+         var vG_off = 1*sz_vGU + j*sz_vGU/CNT_GU_ADDR
+
+         if (XDL_idx >= 32 && XDL_idx%16 == 0)
+           s_waitcnt vmcnt(wait_cnt3)
+         end
+
+         for var k = 0; k < 256/32; k++  //dim(K)--8
+            if FP8 == 1
+                v_mfma_f32_16x16x32_fp8_fp8   v_regs(_v_GM1, vZ_idx), acc_regs(_v_G+vG_off, k*vs_AB), v_regs(_v_X+vX_off, k*vs_AB), v_regs(_v_GM1, vZ_idx)
+            else
+                v_mfma_i32_16x16x32_i8   v_regs(_v_GM1, vZ_idx), acc_regs(_v_G+vG_off, k*vs_AB), v_regs(_v_X+vX_off, k*vs_AB), v_regs(_v_GM1, vZ_idx)
+            end
+
+            if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) < 2)
+                G_mem_load(0, G_ml_idx, 1) //mem_rd_b128*32
+                G_ml_idx += 1
+            end
+
+            if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) >= 2) && (XDL_idx>=ds_thresholder)
+                X_lds_rd(1-pi, 1-pi, X_lr_idx, 1) //lds_rd_b128*8
+                X_lr_idx += 1
+            end
+
+            XDL_idx++
+         end
+      end
+   end
+
+   s_add_u32       s_tmp0,         gemm0_SUB_K*2,      s_loop_idx
+   s_cmp_lt_u32    s_tmp0,         s_loop_cnt
+   s_cselect_b32   s_X_buf_inc,    s_X_buf_inc,   0
+
+   s_add_u32       s_tmp0,         gemm0_SUB_K*2,      s_loop_idx
+   s_cmp_lt_u32    s_tmp0,         s_loop_cnt
+   s_cselect_b32   s_G_buf_inc,    s_G_buf_inc,     0
+   //no need to protect U, since compute block is the same as U block
+
+   X_mem_sa_upd()
+   G_mem_sa_upd()
+   U_mem_sa_upd()
+end
+////////////////////////////////////////////
+//////GEMM1: P=X*UP//////////
+////////////////////////////////////////////
+function cl_gemm1(cl_p, pi)
+
+end
+////////////////////////////////////////////
+//////activation: Z=gelu(S)/////////////////
+////////////////////////////////////////////
+function cl_actv_reshape_D_load(cl_p)
+    G_dequant()
+if DO_UP ==1
+    U_dequant()
+end
+    G_actv_D_load()
+if DO_SMOOTH == 1
+    G_smooth_dequant()
+end
+if DO_UP == 1 //regenerate R addr
+    R_32x256_mem_store_addr_gen(_v_R_addr)
+end
+    DQ_mem_load(0, 0, DQ_32x256_mem_ld_insts)
+    G_dyn_quant()
+    G_reshape_wr()
+    s_waitcnt lgkmcnt(0)
+    s_barrier
+    G_reshape_rd()
+end
+////////////////////////////////////////////
+//////GEMM2: R=Z*Down//////////
+////////////////////////////////////////////
+function cl_gemm2(cl_p, pi)
+   //input Z vpgpr layout
+   // v0-v31: [ 0:15](tokens)x512(dim)
+   //v32-v63: [16:31](tokens)x512(dim)
+
+   //input D vpgpr layout
+   // v0-v15: [0:15][64:79][128:143][192:207] 64(dim)*[0 : 63](h-dim)
+   //v16-v31:                                 64(dim)*[64:127](h-dim)
+   //......................
+
+   //output R vpgpr layout
+   // v0-v3 : [ 0:15](tokens)x[ 0: 15](h-dim)
+   // v4-v7 : [16:31](tokens)x[ 0: 15](h-dim)
+   // v8-v11: [ 0:15](tokens)x[64: 79](h-dim)
+   //v12-v15: [16:31](tokens)x[64: 79](h-dim)
+   //......................
+   //v24-v27: [ 0:15](tokens)x[192:207](h-dim)
+   //v28-v31: [16:31](tokens)x[192:207](h-dim)
+
+   var XDL_idx  = 0
+   var D_ml_idx = 0
+   var DQ_ml_idx = 0
+   var R_lr_idx = 0
+   var R_lw_idx = 0
+   var vm_cnt_unit = D_SUB_GUx256_mem_ld_insts/CNT_D_HDIM_BLKS
+   var Z_cnt_unit  = sz_vP/2/CNT_D_HDIM_BLKS
+   var D_cnt_unit  = sz_vD/CNT_D_HDIM_BLKS/4
+
+   //var wait_cnt0 = 3*D_SUB_GUx256_mem_ld_insts/4 + DQ_32x256_mem_ld_insts + R_32x256_mem_atomic_insts
+   //var wait_cnt1 = 3*D_SUB_GUx256_mem_ld_insts/4 + R_32x256_mem_atomic_insts
+   var wait_cnt0 = vm_cnt_unit*(CNT_D_HDIM_BLKS-1) + DQ_32x256_mem_ld_insts + R_32x256_mem_atomic_insts
+   var wait_cnt1 = vm_cnt_unit*(CNT_D_HDIM_BLKS-1) + R_32x256_mem_atomic_insts
+   var xdl_idx_lastblk = 16*(CNT_D_HDIM_BLKS-1)
+    
+    if USE_VSKIP == 1
+        wait_cnt0 -= R_32x256_mem_atomic_insts
+        wait_cnt1 -= R_32x256_mem_atomic_insts
+    end
+
+    if GEMM2_OPT == 0
+        s_waitcnt vmcnt(wait_cnt0) //wait 1 blk of D memload is ready.
+    else
+        s_waitcnt vmcnt(wait_cnt0) & lgkmcnt(0)
+    end
+   s_barrier
+
+   for var blk = 0; blk < CNT_D_HDIM_BLKS; blk++    //blk--8
+      for var j = 0; j < 256/64; j++                //dim(N)--4
+         for var i = 0; i < 32/16; i++              //tokens(M)--2
+            var vR_idx = pi*sz_vR + (j*2+i)*vs_CD
+            var vP_off = i*sz_vP/2 + blk*Z_cnt_unit
+            var vD_off = pi*sz_vD + blk*4*D_cnt_unit + j*D_cnt_unit
+            
+            if (XDL_idx > 0) && (XDL_idx %16==0) && (XDL_idx < xdl_idx_lastblk)
+               s_waitcnt vmcnt(wait_cnt0)
+            end
+
+            if (XDL_idx >= xdl_idx_lastblk && (XDL_idx % 16==0))
+               s_waitcnt vmcnt(wait_cnt1)
+            end
+
+            for var k = 0; k < 64/32; k++  //dim(K)--2
+                if FP8 == 1
+                    if (blk==0) && (k==0)
+                        v_mfma_f32_16x16x32_fp8_fp8  v_regs(_v_R, vR_idx), acc_regs(_v_D+vD_off, k*vs_AB), v_regs(_v_Z+vP_off, k*vs_AB), 0
+                    else
+                        v_mfma_f32_16x16x32_fp8_fp8  v_regs(_v_R, vR_idx), acc_regs(_v_D+vD_off, k*vs_AB), v_regs(_v_Z+vP_off, k*vs_AB), v_regs(_v_R, vR_idx)
+                    end
+                else
+                    if (blk==0) && (k==0)
+                        v_mfma_i32_16x16x32_i8   v_regs(_v_R, vR_idx), acc_regs(_v_D+vD_off, k*vs_AB), v_regs(_v_Z+vP_off, k*vs_AB), 0
+                    else
+                        v_mfma_i32_16x16x32_i8   v_regs(_v_R, vR_idx), acc_regs(_v_D+vD_off, k*vs_AB), v_regs(_v_Z+vP_off, k*vs_AB), v_regs(_v_R, vR_idx)
+                    end
+               end
+
+               if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) < 2)
+                   D_mem_load(1-pi, D_ml_idx, 1) //mem_rd_b128*32
+                   D_ml_idx += 1
+               end
+
+               if GEMM2_OPT == 1
+                    if (cl_p ^ (XDL_idx&1)) //cost 16 xdl 
+                    else
+                        R_reshape_rd(pi,R_lr_idx, 2) //mem_rd_b32*16
+                        R_lr_idx+=2
+                    end
+
+                    if (XDL_idx >= 32) 
+                        if (cl_p ^ (XDL_idx&1)) //cost 16 xdl 
+                        else
+                            R_reshape_wr(1-pi, R_lw_idx, 1) //lds_wr_b64*8
+                            R_lw_idx += 1
+                        end
+                    end
+               end
+   
+               //load next DQ at last
+               if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) >= 2) && (XDL_idx>=xdl_idx_lastblk)
+                   DQ_mem_load(1-pi, DQ_ml_idx, 1) //mem_rd_b32*2
+                   DQ_ml_idx += 1
+               end
+   
+               XDL_idx++
+            end
+         end
+      end
+   end
+
+   s_add_u32       s_tmp0,         gemm2_SUB_N*2,     s_loop_idx
+   s_cmp_lt_u32    s_tmp0,         s_loop_cnt
+   s_cselect_b32   s_D_buf_inc,    s_D_buf_inc,     0
+   s_cselect_b32   s_D_hf_buf_inc, s_D_hf_buf_inc,  0
+   s_cselect_b32   s_DQ_buf_inc,   s_DQ_buf_inc,    0
+
+   D_mem_sa_upd()
+   DQ_mem_sa_upd()
+
+   R_dqt_mwt_cvt(pi)
+
+   if GEMM2_OPT == 0
+       R_reshape_wr(pi, 0, R_32x256_lds_wr_insts)
+       s_waitcnt lgkmcnt(0) //reshape wr ready
+       s_barrier
+
+       R_reshape_rd(0, 0, R_32x256_lds_rd_insts)
+       s_waitcnt lgkmcnt(0)
+   else
+       s_cmp_ge_u32    s_loop_idx,     gemm2_SUB_N*2
+       s_cselect_b32   s_R_buf_inc,    1024,             s_R_buf_inc   // 2x for INT32 full
+   end
+
+   R_mem_store(0, R_32x256_mem_atomic_insts)
+   R_mem_va_upd()
+end
+////////////////////////////////////////////
+//////////////////core-loop/////////////////
+////////////////////////////////////////////
+function core_loop(cl_p)
+  label_gemm0[cl_p]:
+  if DO_UP == 0
+     for var pi = 0; pi < 2; pi++
+        cl_gemm0(cl_p, pi)
+        
+        s_addk_i32        s_loop_idx,    gemm0_SUB_K
+// We would like to print the value of s_loop_idx (s80) here.
+// @PRINT max=16 if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"s80={s80:d}"
+        s_cmp_lt_i32      s_loop_idx,    s_loop_cnt
+        s_cbranch_scc0    label_actv[cl_p]
+     end
+  else
+     for var pi = 0; pi < 2; pi++
+        cl_gemm0_withup(cl_p, pi)
+        
+        s_addk_i32        s_loop_idx,    gemm0_SUB_K
+        s_cmp_lt_i32      s_loop_idx,    s_loop_cnt
+        s_cbranch_scc0    label_actv[cl_p]
+     end
+  end
+  s_branch label_gemm0[cl_p]
+  
+  label_actv[cl_p]:
+     setup_atomic_exec(_s_atomic_exec, _s_restore_mask, _s_token_idx)  //must be called after gemm0 since it re-used gemm0 srsc reg
+     cl_actv_reshape_D_load(cl_p)
+     D_mem_sa_upd()
+     DQ_mem_sa_upd()
+     
+     if GEMM2_OPT == 1
+        s_waitcnt lgkmcnt(0)
+        s_barrier
+        for var k = 0; k < _v_R_save_reg_size; k++
+            v_mov_b32   v_regs(_v_R, k), 0
+            v_mov_b32   v_regs(_v_R+sz_vR, k), 0
+        end
+
+        R_reshape_wr(0, 0, R_32x256_lds_wr_insts)
+     end
+
+     s_mov_b32  s_loop_idx, 0
+     s_waitcnt 0 //wait Z,D,DQ is ready
+
+  label_gemm2[cl_p]:
+     for var pi = 0; pi < 2; pi++
+        cl_gemm2(cl_p, pi)
+     
+        s_addk_i32        s_loop_idx,    gemm2_SUB_N
+        s_cmp_lt_i32      s_loop_idx,    s_loop_cnt
+        s_cbranch_scc0    label_aligned_exit     
+     end
+  s_branch label_gemm2[cl_p]
+end
+
+shader main
+  type(CS)
+
+  user_sgpr_count(2)
+  tgid_x_en(1)                                                  // s_tgid_x 
+  tgid_y_en(1)                                                  // s_tgid_y
+  tgid_z_en(1)                                                  // s_tgid_z 
+  tidig_comp_cnt(2)
+
+/////////////////////////////////////////////////////////////////
+/////////parameters load and process/////////////////////////////
+/////////////////////////////////////////////////////////////////
+
+//---------------user parameters load--------------------------
+
+  //SW could change source sgpr (s[0:1]) and offset to get correctly loading, please keep the dest vreg/sreg unchange.
+
+  s_and_b32           s1,       s1,     0xffff            // address is 48bits, so mask not-used bits 
+  
+  s_load_dwordx2    s_regs(_s_R_buf, 0),    s[0:1], 0x0                 // get buffer R address  
+  s_load_dwordx2    s_regs(_s_X_buf, 0),    s[0:1], 0x10                // get buffer X address 
+  s_load_dwordx2    s_regs(_s_G_buf, 0),    s[0:1], 0x20                // get buffer G address
+  s_load_dwordx2    s_regs(_s_Xc_buf, 0),   s[0:1], 0x30                // get buffer XC address--reserved
+  s_load_dwordx2    s_regs(_s_D_buf, 0),    s[0:1], 0x40                // get buffer D address
+  s_load_dwordx2    s_regs(_s_XQ_buf, 0),   s[0:1], 0x50                // get buffer X-quant address 
+  s_load_dwordx2    s_regs(_s_GQ_buf, 0),   s[0:1], 0x60                // get buffer G-quant address
+  s_load_dwordx2    s_regs(_s_DQ_buf, 0),   s[0:1], 0x70                // get buffer D-quant address
+  s_load_dwordx2    s_regs(_s_GsmQ_buf, 0), s[0:1], 0x80                // get buffer smooth quant address
+  s_load_dwordx2    s_regs(_s_STP_buf, 0),  s[0:1], 0x90                // get buffer STP address
+  s_load_dwordx2    s_regs(_s_SW_buf, 0),   s[0:1], 0xA0                // get buffer SW  address
+  s_load_dwordx2    s_regs(_s_SEP_buf, 0),  s[0:1], 0xB0                // get buffer SEP address
+
+  s_load_dword      s_dim_len,              s[0:1], 0xC0                // get   dim_len
+  s_load_dword      s_hidden_len,           s[0:1], 0xD0                // get   hidden_dim
+  s_load_dword      s_token_cnt,            s[0:1], 0xE0                // get   token cnt
+  s_load_dword      s_eprt_cnt,             s[0:1], 0xF0                // get   expert cnt
+  s_load_dword      s_Xs,                   s[0:1], 0x100               // get   X stride in bytes
+  s_load_dword      s_GUs,                  s[0:1], 0x110               // get   GU stride in bytes
+  s_load_dword      s_Ds,                   s[0:1], 0x120               // get   D stride in bytes
+  s_load_dword      s_Rs,                   s[0:1], 0x130               // get   R stride in bytes
+  s_load_dword      s_eGUs,                 s[0:1], 0x140               // get   one expert GU stride in bytes
+  s_load_dword      s_eDs,                  s[0:1], 0x150               // get   one expert D  stride in bytes
+  s_load_dword      s_eGUQs,                s[0:1], 0x160               // get   one expert GU-quant stride in bytes
+  s_load_dword      s_eDQs,                 s[0:1], 0x170               // get   one expert D-quant stride in bytes
+  s_load_dword      s_eGsmQs,               s[0:1], 0x180               // get   one expert smooth-quant stride in bytes
+
+ //---------------user parameters load end--------------------------//
+
+//---------------spi parameters process--------------------------
+  //SW could change this code segment but make sure following:
+  //1. make sure v0 has the correct thread_idx.
+  //2. make sure _s_wave_id has the correct wave_id.
+  //3. make sure _s_tgid_x has the correct thread_group idx.
+  //4. make sure _s_tgid_y has the correct thread_group idy.
+
+  //spi in MI200 packed thread_idx/y/z into v0,
+  //unpack v0 to get thread_idx/y/z and stored them into v0,v1,v2
+  v_lshrrev_b32    v1,         10,                     v0
+  v_lshrrev_b32    v2,         10,                     v1
+  v_and_b32        v2,         0x3ff,                  v2
+  v_and_b32        v1,         0x3ff,                  v1
+  v_and_b32        v0,         0x3ff,                  v0
+  v_lshrrev_b32    v3,         6,                      v0
+  v_and_b32        v0,         0x3f,                   v0  //change vo to 0-63
+
+  // from now, use _s_tg_idx/y/z as the thread_groupx/y/z
+  s_mov_b32        s_tg_idx, s2
+  s_mov_b32        s_tg_idy, s3
+  s_mov_b32        s_tg_idz, s4
+
+  //in fact, v2 is the waveid in a thread group, move it into _s_wave_id, 
+  //after that, v2 is not used any longer.
+  v_readfirstlane_b32   s_wave_id,   v3                
+
+//--------------spi input process end-------------------------
+
+/////////normally, from now, no code should be changed.//////////////////
+  s_waitcnt        lgkmcnt(0)                                   
+
+  s_and_b32       s_regs(_s_Xc_buf, 1),     s_regs(_s_Xc_buf, 1),      0xffff
+  s_load_dword    s_regs(_s_Xc_buf, 0),     s_regs(_s_Xc_buf, 0),      0x0 
+
+  s_and_b32       s_regs(_s_STP_buf,  1),   s_regs(_s_STP_buf,  1),    0xffff
+  s_and_b32       s_regs(_s_SEP_buf,  1),   s_regs(_s_SEP_buf,  1),    0xffff
+  s_and_b32       s_regs(_s_R_buf,  1),     s_regs(_s_R_buf,  1),      0xffff
+
+  s_mul_i32       s_tmp0,  s_token_cnt,   s_Xs
+  s_mul_i32       s_tmp1,  s_token_cnt,   4
+
+  // construct V# reg for future use 
+  s_mov_b32       s_regs(_s_X_buf,   2),   s_tmp0     //inorder to oob ---without idx_en
+  s_mov_b32       s_regs(_s_G_buf,   2),   Vsrc95_64
+  s_mov_b32       s_regs(_s_D_buf,   2),   Vsrc95_64
+  s_mov_b32       s_regs(_s_SW_buf,  2),   Vsrc95_64
+  s_mov_b32       s_regs(_s_XQ_buf,  2),   s_tmp1     //inorder to oob ---without idx_en
+  s_mov_b32       s_regs(_s_GQ_buf,  2),   SUB_GU*4   //in order to oob ---without idx_en
+  s_mov_b32       s_regs(_s_GsmQ_buf,2),   SUB_GU*4   //in order to oob ---without idx_en
+  s_mov_b32       s_regs(_s_DQ_buf,  2),   Vsrc95_64
+
+  s_mov_b32       s_regs(_s_X_buf,   3),   Vsrc127_96
+  s_mov_b32       s_regs(_s_G_buf,   3),   Vsrc127_96
+  s_mov_b32       s_regs(_s_D_buf,   3),   Vsrc127_96
+  s_mov_b32       s_regs(_s_SW_buf,  3),   Vsrc127_96
+  s_mov_b32       s_regs(_s_XQ_buf,  3),   Vsrc127_96
+  s_mov_b32       s_regs(_s_GQ_buf,  3),   Vsrc127_96
+  s_mov_b32       s_regs(_s_GsmQ_buf,3),   Vsrc127_96
+  s_mov_b32       s_regs(_s_DQ_buf,  3),   Vsrc127_96
+ 
+  s_and_b32       s_regs(_s_X_buf,   1),   s_regs(_s_X_buf,   1),    0xffff
+  s_and_b32       s_regs(_s_G_buf,   1),   s_regs(_s_G_buf,   1),    0xffff
+  s_and_b32       s_regs(_s_D_buf,   1),   s_regs(_s_D_buf,   1),    0xffff
+  s_and_b32       s_regs(_s_SW_buf,  1),   s_regs(_s_SW_buf,  1),    0xffff
+  s_and_b32       s_regs(_s_XQ_buf,  1),   s_regs(_s_XQ_buf,  1),    0xffff
+  s_and_b32       s_regs(_s_GQ_buf,  1),   s_regs(_s_GQ_buf,  1),    0xffff
+  s_and_b32       s_regs(_s_GsmQ_buf,1),   s_regs(_s_GsmQ_buf,1),    0xffff
+  s_and_b32       s_regs(_s_DQ_buf,  1),   s_regs(_s_DQ_buf,  1),    0xffff
+
+  s_or_b32        s_regs(_s_X_buf,   1),   s_regs(_s_X_buf,   1),    Vsrc63_48
+  s_or_b32        s_regs(_s_G_buf,   1),   s_regs(_s_G_buf,   1),    Vsrc63_48
+  s_or_b32        s_regs(_s_D_buf,   1),   s_regs(_s_D_buf,   1),    Vsrc63_48
+  s_or_b32        s_regs(_s_SW_buf,  1),   s_regs(_s_SW_buf,  1),    Vsrc63_48
+  s_or_b32        s_regs(_s_XQ_buf,  1),   s_regs(_s_XQ_buf,  1),    Vsrc63_48
+  s_or_b32        s_regs(_s_GQ_buf,  1),   s_regs(_s_GQ_buf,  1),    Vsrc63_48
+  s_or_b32        s_regs(_s_GsmQ_buf,1),   s_regs(_s_GsmQ_buf,1),    Vsrc63_48
+  s_or_b32        s_regs(_s_DQ_buf,  1),   s_regs(_s_DQ_buf,  1),    Vsrc63_48
+  
+  v_accvgpr_write   acc_regs(_v_acc_end, 0), 0
+  v_mov_b32         v_regs(_v_arc_end, 0), 0
+/////////////////////////////////////////////////////////////////
+/////////parameter process end///////////////////////////////////
+////////////////////////////////////////////////////////////////
+  s_waitcnt       lgkmcnt(0)
+  s_mul_i32       s_tmp0,    s_tg_idy,     SUB_X
+  s_cmp_lt_i32    s_tmp0,    s_regs(_s_Xc_buf, 0)
+  s_cbranch_scc0  code_exit
+
+  //////////////////////////////////////////////////////
+  ////macro range check/////////////////////////////////
+  //////////////////////////////////////////////////////
+    print "ArchV_size:" ,_v_arc_end + 1
+    print "AccV_size:" ,_v_acc_end + 1
+    print "USE_VSKIP, GEMM2_OPT", USE_VSKIP, "", GEMM2_OPT
+    print "GELU:", USE_GELU 
+    print "DO_SMOOTH:", DO_SMOOTH 
+    print "DO_UP:", DO_UP 
+    print "SUB_GU", SUB_GU
+    print "_v_Max, _v_tmp", _v_Max, " " , _v_tmp
+    //print "_v_dKV_lds_wr:", _v_dKV_lds_wr
+    print "lds size used in DW[<=16384]:",max_lds/4
+  //////////////////////////////////////////////////////
+
+  s_mov_b32  s_loop_idx, 0
+  s_mov_b32  s_loop_cnt, s_dim_len
+
+  ///////////load the experts_idx/topk_idx by the indirect way/////////////////
+  //get the experts_idx////
+  expert_idx_s_load(_s_SEP_buf)
+
+  //load token_idx into VGPR, each wave get same
+  token_idx_load(_s_token_idx, _v_XQ_addr, _s_STP_buf)
+
+  //wait expert_idx and s_token_idx is ready
+  s_waitcnt       lgkmcnt(0) 
+
+  //////////////X/R mem_load address///////////////
+  v_lshlrev_b32    v_regs(_v_tmp, 0),      2,                           v0 //each thread take 4 bytes
+  for var i=0; i < SUB_X/4; i++
+    s_and_b32      s_regs(_s_token_idx, i),s_regs(_s_token_idx, i),     0x00ffffff
+    s_mul_i32      s_tmp0,                 s_regs(_s_token_idx, i),     s_Xs 
+    v_add_u32      v_regs(_v_X_addr, i),   v_regs(_v_tmp, 0),           s_tmp0
+  end
+  R_32x256_mem_store_addr_gen(_v_R_addr)
+
+  ///X lds write address///////////////
+  s_mul_i32        s_tmp0,        s_wave_id,  blk_32x256_size/4  //each wave has 8dw padding
+  s_add_u32        s_regs(_s_X_lds_wr_base_m0, 0),      LDS_X_BASE,        s_tmp0
+  for var i=1; i<PF_Bs; i++
+     s_add_u32     s_regs(_s_X_lds_wr_base_m0, i),      blk_32x256_size,   s_regs(_s_X_lds_wr_base_m0, i-1)
+  end
+  
+  ///X lds read address///////////////
+  blk_32x256k_lds_rd_addr_gen(_v_X_lds_rd)
+  
+  /////Gate address//////////////
+  s_mul_i32       s_tmp0,                  s_tg_idx,     SUB_GU
+  s_mul_i32       s_tmp0,                  s_tmp0,       s_GUs
+  s_mul_i32       s_tmp1,                  s_eprt_idx,   s_eGUs
+  s_add_u32       s_tmp0,                  s_tmp1,       s_tmp0
+  
+  s_add_u32       s_regs(_s_G_buf, 0),     s_tmp0,       s_regs(_s_G_buf, 0)
+  s_addc_u32      s_regs(_s_G_buf, 1),     0,            s_regs(_s_G_buf, 1)
+  
+  s_mul_i32       s_tmp0,                  s_wave_id,    16
+  s_mul_i32       s_tmp0,                  s_tmp0,       s_GUs
+  
+  v_lshlrev_b32   v_regs(_v_GU_addr, 0),   4,            v0 //each thread take 16 bytes
+  v_add_u32       v_regs(_v_GU_addr, 0),   s_tmp0,       v_regs(_v_GU_addr, 0)
+  s_mul_i32       s_tmp0,                  64,           s_GUs
+  
+  for var i = 1; i < CNT_GU_ADDR; i++
+     v_add_u32     v_regs(_v_GU_addr, i),  s_tmp0,       v_regs(_v_GU_addr, i-1)
+  end
+  /////Up address/////////////
+  for var i=0; i<4; i++
+    s_mov_b32     s_regs(_s_U_buf,i),      s_regs(_s_G_buf,i)
+  end
+  s_mul_i32       s_tmp0,                  s_GUs,        s_hidden_len
+  s_add_u32       s_regs(_s_U_buf, 0),     s_tmp0,       s_regs(_s_U_buf, 0)
+  s_addc_u32      s_regs(_s_U_buf, 1),     0,            s_regs(_s_U_buf, 1)
+
+  /////D address//////////////
+  s_mul_i32       s_tmp0,                  s_tg_idx,     SUB_GU*16*Bpp
+  s_mul_i32       s_tmp1,                  s_eprt_idx,   s_eDs
+  s_add_u32       s_tmp0,                  s_tmp1,       s_tmp0
+  s_add_u32       s_regs(_s_D_buf, 0),     s_tmp0,       s_regs(_s_D_buf, 0)
+  s_addc_u32      s_regs(_s_D_buf, 1),     0,            s_regs(_s_D_buf, 1)
+  
+  s_mul_i32       s_tmp0,                  s_wave_id,    16
+  s_mul_i32       s_tmp0,                  s_tmp0,       s_Ds
+  v_lshlrev_b32   v_regs(_v_D_addr, 0),    4,            v0 //each thread take 16 bytes
+  v_add_u32       v_regs(_v_D_addr, 0),    s_tmp0,       v_regs(_v_D_addr, 0)
+  
+  s_mul_i32       s_tmp0,                  64,           s_Ds
+  for var i=1; i<SUB_D/64; i++
+     v_add_u32     v_regs(_v_D_addr, i),  s_tmp0,        v_regs(_v_D_addr, i-1)
+  end
+  
+  s_mul_i32       s_tmp0,                  s_Ds,         SUB_D
+  s_mov_b32       s_D_hf_buf_inc,          256*4
+  s_mul_i32       s_tmp1,                  s_D_hf_buf_inc,  CNT_D_HDIM_BLKS-1
+  s_sub_u32       s_D_buf_inc,             s_tmp0,       s_tmp1
+ 
+  //////experts weight addr////////
+  s_mul_i32       s_tmp0,                   s_tg_idy,     SUB_X
+  s_mul_i32       s_tmp0,                   4,            s_tmp0
+  s_add_u32       s_regs(_s_SW_buf, 0),     s_tmp0,       s_regs(_s_SW_buf, 0)
+  s_addc_u32      s_regs(_s_SW_buf, 1),     0,            s_regs(_s_SW_buf, 1)
+  
+  //each row has same data
+  v_and_b32       v_regs(_v_tmp, 0),       0xf,          v0 //r_id
+  v_lshlrev_b32   v_regs(_v_W_addr, 0),    2,            v_regs(_v_tmp, 0) //each thread take 4 bytes
+  v_add_u32       v_regs(_v_W_addr, 1),    64,           v_regs(_v_W_addr, 0) //next 16 weights
+  
+  ////////GQ/DQ/GsmQ_addr////////////////
+  GDQ_mem_load_addr_gen(_v_GQ_addr, _v_DQ_addr)
+  s_mul_i32       s_tmp0,                  s_tg_idx,     SUB_GU
+  s_mul_i32       s_tmp0,                  s_tmp0,       4
+
+  s_mul_i32       s_tmp1,                  s_eprt_idx,   s_eGUQs
+  s_add_u32       s_tmp1,                  s_tmp1,       s_tmp0
+
+  s_mul_i32       s_tmp2,                  s_eprt_idx,   s_eGsmQs
+  s_add_u32       s_tmp2,                  s_tmp2,       s_tmp0 
+
+  s_add_u32       s_regs(_s_GQ_buf, 0),    s_tmp1,       s_regs(_s_GQ_buf, 0)
+  s_addc_u32      s_regs(_s_GQ_buf, 1),    0,            s_regs(_s_GQ_buf, 1)
+
+  s_add_u32       s_regs(_s_GsmQ_buf, 0),  s_tmp2,       s_regs(_s_GsmQ_buf, 0)
+  s_addc_u32      s_regs(_s_GsmQ_buf, 1),  0,            s_regs(_s_GsmQ_buf, 1)
+ 
+  s_mul_i32       s_tmp0,                  s_eprt_idx,   s_eDQs
+  s_add_u32       s_regs(_s_DQ_buf, 0),    s_tmp0,       s_regs(_s_DQ_buf, 0)
+  s_addc_u32      s_regs(_s_DQ_buf, 1),    0,            s_regs(_s_DQ_buf, 1)
+
+  //////////////////////////
+  s_mov_b32       s_X_buf_inc,   256
+  s_mov_b32       s_G_buf_inc,   16*256
+  s_mov_b32       s_DQ_buf_inc,  4*256
+  if GEMM2_OPT == 0
+      s_mov_b32       s_R_buf_inc,   4*256      // 2x for INT32 full
+  else
+      s_mov_b32       s_R_buf_inc,   0
+  end
+
+  s_mov_b32       s_regs(_s_U_buf_inc,0), s_G_buf_inc
+
+  s_mov_b32       s_perm0,       0x7060302
+  s_mov_b32       s_perm1,       0x00000400
+  s_mov_b32       s_perm2,       0x00040100
+  s_mov_b32       s_perm3,       0x04020100
+
+  s_mov_b32       s_log2e,       0x3fb8aa3b
+  s_mov_b32       s_c1,          0xbd92220c
+  s_mov_b32       m0,            s_regs(_s_X_lds_wr_base_m0, 0)
+
+  v_mov_b32       v_regs(_v_c2, 0),       0xbfcc4231
+  v_mov_b32       v_regs(_v_bf16_cvt, 1), 0xffff0000
+  v_mov_b32       v_regs(_v_bf16_cvt, 2), 0x7fff0000
+  v_mov_b32       v_regs(_v_bf16_cvt, 3), 0x7fff
+
+  s_waitcnt       0  //XQ addr ready
+
+  for var i=0; i<2; i++
+    v_and_b32        v_regs(_v_XQ_addr, i),       0x00ffffff,         v_regs(_v_XQ_addr, i)
+  end
+
+  v_lshlrev_b32    v_regs(_v_XQ_addr, 0),   2,            v_regs(_v_XQ_addr, 0)
+  v_lshlrev_b32    v_regs(_v_XQ_addr, 1),   2,            v_regs(_v_XQ_addr, 1)
+
+   //XQ load 
+  buffer_load_dword  v_regs(_v_XQ, 0),  v_regs(_v_XQ_addr, 0),  s_regs(_s_XQ_buf, 0), 0 offen:1
+  buffer_load_dword  v_regs(_v_XQ, 1),  v_regs(_v_XQ_addr, 1),  s_regs(_s_XQ_buf, 0), 0 offen:1
+
+  //GQ load 
+  buffer_load_dword  v_regs(_v_GQ, 0),  v_regs(_v_GQ_addr, 0),  s_regs(_s_GQ_buf, 0), 0 offen:1
+  buffer_load_dword  v_regs(_v_GQ, 1),  v_regs(_v_GQ_addr, 1),  s_regs(_s_GQ_buf, 0), 0 offen:1
+
+  //UQ load
+  s_mul_i32          s_tmp0,                  4,                s_hidden_len
+  s_add_u32          s_regs(_s_GQ_buf, 0),    s_tmp0,           s_regs(_s_GQ_buf, 0)
+  s_addc_u32         s_regs(_s_GQ_buf, 1),    0,                s_regs(_s_GQ_buf, 1)
+  buffer_load_dword  v_regs(_v_UQ, 0),  v_regs(_v_GQ_addr, 0),  s_regs(_s_GQ_buf, 0), 0 offen:1
+  buffer_load_dword  v_regs(_v_UQ, 1),  v_regs(_v_GQ_addr, 1),  s_regs(_s_GQ_buf, 0), 0 offen:1
+
+if DO_SMOOTH == 1
+  //GsmQ load 
+  buffer_load_dword  v_regs(_v_GsmQ, 0),  v_regs(_v_GQ_addr, 0),  s_regs(_s_GsmQ_buf, 0), 0 offen:1
+  buffer_load_dword  v_regs(_v_GsmQ, 1),  v_regs(_v_GQ_addr, 1),  s_regs(_s_GsmQ_buf, 0), 0 offen:1
+end
+
+  //Weight load 
+  buffer_load_dword  v_regs(_v_W, 0),  v_regs(_v_W_addr, 0),  s_regs(_s_SW_buf, 0), 0 offen:1
+  buffer_load_dword  v_regs(_v_W, 1),  v_regs(_v_W_addr, 1),  s_regs(_s_SW_buf, 0), 0 offen:1
+ 
+  X_mem_load(0, 0, blk_32x256_mem_ld_insts)
+  X_mem_sa_upd()
+if DO_UP == 0
+  X_mem_load(1, 0, blk_32x256_mem_ld_insts)
+  X_mem_sa_upd()
+end
+  G_mem_load(0, 0, GU_256xSUB_GU_mem_ld_insts)
+  G_mem_sa_upd()
+ 
+  for var k = 0; k < _v_Z_reg_size; k++
+     v_mov_b32   v_regs(_v_Z, k), 0
+if DO_UP == 1
+     v_mov_b32   v_regs(_v_GM1, k),0
+end
+  end
+
+  R_32x256_lds_wr_addr_gen(_v_R_lds_wr)
+  R_32x256_lds_rd_addr_gen(_v_R_lds_rd)
+
+if DO_UP == 0
+  s_waitcnt  vmcnt(GU_256xSUB_GU_mem_ld_insts+blk_32x256_mem_ld_insts) //wait X.blk[0] is ready
+else
+  s_waitcnt  vmcnt(GU_256xSUB_GU_mem_ld_insts) //wait X.blk[0] is ready
+end
+  s_barrier
+
+  X_lds_rd(0, 0, 0, blk_32x256_lds_rd_insts)
+  
+  s_cmp_lt_i32 s_wave_id, 2
+  s_cbranch_scc0 label_gemm0[1]
+  
+  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////wave0_3 main_loop/////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  core_loop(0)
+
+label_aligned_exit:
+  for var k = 0; k < 2; k++
+    s_nop 0
+  end
+s_branch label_main_loops_exit
+  
+  core_loop(1)
+
+label_main_loops_exit: 
+  if GEMM2_OPT == 1
+    s_cmp_ge_u32    s_R_buf_inc,    0           //dim is small, like 512, can cause this happen
+    s_cselect_b32   s_R_buf_inc,    1024,             s_R_buf_inc   // 2x for INT32 full
+
+    s_waitcnt lgkmcnt(0) //reshape wr ready
+    s_barrier
+
+    s_cmp_eq_u32    s_dim_len, 256
+    s_cbranch_scc0   label_nonedim256
+  
+    //special handling for dim256
+    R_reshape_wr(0, 0, R_32x256_lds_wr_insts)
+    s_waitcnt lgkmcnt(0) //reshape wr ready
+    s_barrier
+    R_reshape_rd(0, 0, R_32x256_lds_rd_insts)
+    s_waitcnt lgkmcnt(0) //reshape wr ready
+    R_mem_store(0, R_32x256_mem_atomic_insts)
+    s_branch code_exit
+label_nonedim256:   
+    R_reshape_rd(0, 0, R_32x256_lds_rd_insts)
+    s_waitcnt lgkmcnt(0) //reshape wr ready
+    R_mem_store(0, R_32x256_mem_atomic_insts)
+    R_mem_va_upd()
+    R_reshape_wr(1, 0, R_32x256_lds_wr_insts)
+    s_waitcnt lgkmcnt(0) //reshape wr ready
+    s_barrier
+    R_reshape_rd(1,0, R_32x256_lds_rd_insts)
+    s_waitcnt lgkmcnt(0) //reshape wr ready
+    R_mem_store(0, R_32x256_mem_atomic_insts)
+  end
+
+code_exit:
+
+  s_waitcnt        0  
+
+  s_endpgm                                          
+end

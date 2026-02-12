@@ -1549,8 +1549,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000002618: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000002620: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002624: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9] // 000000002628: DD088000 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4 // 000000002630: DD088004 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000002638: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "0"], raw_text = "  s_setvskip    s20, 0                                  // 00000000263C: BF108014"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v65"], raw_text = "  v_and_b32     v44, 0x0000ffff, v65                    // 000000002640: 265882FF 0000FFFF"}
@@ -1560,8 +1560,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000265C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000002664: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002668: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512 // 00000000266C: DD088200 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516 // 000000002674: DD088204 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000267C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 000000002680: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v66"], raw_text = "  v_and_b32     v44, 0x0000ffff, v66                    // 000000002684: 265884FF 0000FFFF"}
@@ -1571,8 +1571,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000026A0: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000026A8: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000026AC: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9] // 0000000026B0: DD088000 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4 // 0000000026B8: DD088004 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000026C0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 0000000026C4: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v67"], raw_text = "  v_and_b32     v44, 0x0000ffff, v67                    // 0000000026C8: 265886FF 0000FFFF"}
@@ -1582,8 +1582,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000026E4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000026EC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000026F0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512 // 0000000026F4: DD088200 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516 // 0000000026FC: DD088204 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000002704: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 000000002708: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v68"], raw_text = "  v_and_b32     v44, 0x0000ffff, v68                    // 00000000270C: 265888FF 0000FFFF"}
@@ -1593,8 +1593,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000002728: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000002730: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002734: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9] // 000000002738: DD088000 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4 // 000000002740: DD088004 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000002748: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 00000000274C: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v69"], raw_text = "  v_and_b32     v44, 0x0000ffff, v69                    // 000000002750: 26588AFF 0000FFFF"}
@@ -1604,8 +1604,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000276C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000002774: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002778: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512 // 00000000277C: DD088200 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516 // 000000002784: DD088204 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000278C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 000000002790: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v70"], raw_text = "  v_and_b32     v44, 0x0000ffff, v70                    // 000000002794: 26588CFF 0000FFFF"}
@@ -1615,8 +1615,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000027B0: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000027B8: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000027BC: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9] // 0000000027C0: DD088000 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4 // 0000000027C8: DD088004 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000027D0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 0000000027D4: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v71"], raw_text = "  v_and_b32     v44, 0x0000ffff, v71                    // 0000000027D8: 26588EFF 0000FFFF"}
@@ -1626,8 +1626,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000027F4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000027FC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002800: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512 // 000000002804: DD088200 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516 // 00000000280C: DD088204 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000002814: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 000000002818: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v72"], raw_text = "  v_and_b32     v44, 0x0000ffff, v72                    // 00000000281C: 265890FF 0000FFFF"}
@@ -1637,8 +1637,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000002838: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000002840: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002844: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9] // 000000002848: DD088000 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4 // 000000002850: DD088004 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000002858: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 00000000285C: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v73"], raw_text = "  v_and_b32     v44, 0x0000ffff, v73                    // 000000002860: 265892FF 0000FFFF"}
@@ -1648,8 +1648,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000287C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000002884: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002888: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512 // 00000000288C: DD088200 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516 // 000000002894: DD088204 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000289C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 0000000028A0: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v74"], raw_text = "  v_and_b32     v44, 0x0000ffff, v74                    // 0000000028A4: 265894FF 0000FFFF"}
@@ -1659,8 +1659,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000028C0: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000028C8: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000028CC: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9] // 0000000028D0: DD088000 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4 // 0000000028D8: DD088004 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000028E0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 0000000028E4: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v75"], raw_text = "  v_and_b32     v44, 0x0000ffff, v75                    // 0000000028E8: 265896FF 0000FFFF"}
@@ -1670,8 +1670,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000002904: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000290C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002910: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512 // 000000002914: DD088200 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516 // 00000000291C: DD088204 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000002924: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 000000002928: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v76"], raw_text = "  v_and_b32     v44, 0x0000ffff, v76                    // 00000000292C: 265898FF 0000FFFF"}
@@ -1681,8 +1681,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000002948: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000002950: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002954: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9] // 000000002958: DD088000 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4 // 000000002960: DD088004 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000002968: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 00000000296C: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v77"], raw_text = "  v_and_b32     v44, 0x0000ffff, v77                    // 000000002970: 26589AFF 0000FFFF"}
@@ -1692,8 +1692,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000298C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000002994: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002998: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512 // 00000000299C: DD088200 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516 // 0000000029A4: DD088204 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000029AC: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 0000000029B0: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v78"], raw_text = "  v_and_b32     v44, 0x0000ffff, v78                    // 0000000029B4: 26589CFF 0000FFFF"}
@@ -1703,8 +1703,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000029D0: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000029D8: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000029DC: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9] // 0000000029E0: DD088000 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4 // 0000000029E8: DD088004 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000029F0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 0000000029F4: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v79"], raw_text = "  v_and_b32     v44, 0x0000ffff, v79                    // 0000000029F8: 26589EFF 0000FFFF"}
@@ -1714,8 +1714,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000002A14: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000002A1C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000002A20: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512 // 000000002A24: DD088200 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516 // 000000002A2C: DD088204 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000002A34: BF108080"}
     amdisa.inst {mnemonic = "s_add_u32", operands = ["s8", "s59", "s8"], raw_text = "  s_add_u32     s8, s59, s8                             // 000000002A38: 8008083B"}
     amdisa.inst {mnemonic = "s_addc_u32", operands = ["s9", "0", "s9"], raw_text = "  s_addc_u32    s9, 0, s9                               // 000000002A3C: 82090980"}
@@ -2042,8 +2042,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000032EC: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000032F4: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000032F8: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9] // 0000000032FC: DD088000 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4 // 000000003304: DD088004 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000330C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "0"], raw_text = "  s_setvskip    s20, 0                                  // 000000003310: BF108014"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v65"], raw_text = "  v_and_b32     v44, 0x0000ffff, v65                    // 000000003314: 265882FF 0000FFFF"}
@@ -2053,8 +2053,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000003330: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000003338: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000333C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512 // 000000003340: DD088200 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516 // 000000003348: DD088204 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000003350: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 000000003354: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v66"], raw_text = "  v_and_b32     v44, 0x0000ffff, v66                    // 000000003358: 265884FF 0000FFFF"}
@@ -2064,8 +2064,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000003374: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000337C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000003380: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9] // 000000003384: DD088000 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4 // 00000000338C: DD088004 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000003394: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 000000003398: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v67"], raw_text = "  v_and_b32     v44, 0x0000ffff, v67                    // 00000000339C: 265886FF 0000FFFF"}
@@ -2075,8 +2075,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000033B8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000033C0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000033C4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512 // 0000000033C8: DD088200 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516 // 0000000033D0: DD088204 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000033D8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 0000000033DC: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v68"], raw_text = "  v_and_b32     v44, 0x0000ffff, v68                    // 0000000033E0: 265888FF 0000FFFF"}
@@ -2086,8 +2086,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000033FC: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000003404: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000003408: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9] // 00000000340C: DD088000 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4 // 000000003414: DD088004 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000341C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 000000003420: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v69"], raw_text = "  v_and_b32     v44, 0x0000ffff, v69                    // 000000003424: 26588AFF 0000FFFF"}
@@ -2097,8 +2097,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000003440: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000003448: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000344C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512 // 000000003450: DD088200 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516 // 000000003458: DD088204 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000003460: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 000000003464: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v70"], raw_text = "  v_and_b32     v44, 0x0000ffff, v70                    // 000000003468: 26588CFF 0000FFFF"}
@@ -2108,8 +2108,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000003484: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000348C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000003490: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9] // 000000003494: DD088000 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4 // 00000000349C: DD088004 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000034A4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 0000000034A8: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v71"], raw_text = "  v_and_b32     v44, 0x0000ffff, v71                    // 0000000034AC: 26588EFF 0000FFFF"}
@@ -2119,8 +2119,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000034C8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000034D0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000034D4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512 // 0000000034D8: DD088200 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516 // 0000000034E0: DD088204 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000034E8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 0000000034EC: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v72"], raw_text = "  v_and_b32     v44, 0x0000ffff, v72                    // 0000000034F0: 265890FF 0000FFFF"}
@@ -2130,8 +2130,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000350C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000003514: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000003518: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9] // 00000000351C: DD088000 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4 // 000000003524: DD088004 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000352C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 000000003530: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v73"], raw_text = "  v_and_b32     v44, 0x0000ffff, v73                    // 000000003534: 265892FF 0000FFFF"}
@@ -2141,8 +2141,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000003550: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000003558: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000355C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512 // 000000003560: DD088200 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516 // 000000003568: DD088204 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000003570: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 000000003574: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v74"], raw_text = "  v_and_b32     v44, 0x0000ffff, v74                    // 000000003578: 265894FF 0000FFFF"}
@@ -2152,8 +2152,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000003594: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000359C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000035A0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9] // 0000000035A4: DD088000 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4 // 0000000035AC: DD088004 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000035B4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 0000000035B8: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v75"], raw_text = "  v_and_b32     v44, 0x0000ffff, v75                    // 0000000035BC: 265896FF 0000FFFF"}
@@ -2163,8 +2163,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000035D8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000035E0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000035E4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512 // 0000000035E8: DD088200 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516 // 0000000035F0: DD088204 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000035F8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 0000000035FC: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v76"], raw_text = "  v_and_b32     v44, 0x0000ffff, v76                    // 000000003600: 265898FF 0000FFFF"}
@@ -2174,8 +2174,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000361C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000003624: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000003628: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9] // 00000000362C: DD088000 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4 // 000000003634: DD088004 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000363C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 000000003640: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v77"], raw_text = "  v_and_b32     v44, 0x0000ffff, v77                    // 000000003644: 26589AFF 0000FFFF"}
@@ -2185,8 +2185,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000003660: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000003668: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000366C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512 // 000000003670: DD088200 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516 // 000000003678: DD088204 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000003680: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 000000003684: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v78"], raw_text = "  v_and_b32     v44, 0x0000ffff, v78                    // 000000003688: 26589CFF 0000FFFF"}
@@ -2196,8 +2196,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000036A4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000036AC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000036B0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9] // 0000000036B4: DD088000 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4 // 0000000036BC: DD088004 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000036C4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 0000000036C8: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v79"], raw_text = "  v_and_b32     v44, 0x0000ffff, v79                    // 0000000036CC: 26589EFF 0000FFFF"}
@@ -2207,8 +2207,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000036E8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000036F0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000036F4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512 // 0000000036F8: DD088200 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516 // 000000003700: DD088204 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000003708: BF108080"}
     amdisa.inst {mnemonic = "s_add_u32", operands = ["s8", "s59", "s8"], raw_text = "  s_add_u32     s8, s59, s8                             // 00000000370C: 8008083B"}
     amdisa.inst {mnemonic = "s_addc_u32", operands = ["s9", "0", "s9"], raw_text = "  s_addc_u32    s9, 0, s9                               // 000000003710: 82090980"}
@@ -3375,8 +3375,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000005490: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000005498: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000549C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9] // 0000000054A0: DD088000 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4 // 0000000054A8: DD088004 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000054B0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "0"], raw_text = "  s_setvskip    s20, 0                                  // 0000000054B4: BF108014"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v65"], raw_text = "  v_and_b32     v44, 0x0000ffff, v65                    // 0000000054B8: 265882FF 0000FFFF"}
@@ -3386,8 +3386,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000054D4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000054DC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000054E0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512 // 0000000054E4: DD088200 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516 // 0000000054EC: DD088204 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000054F4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 0000000054F8: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v66"], raw_text = "  v_and_b32     v44, 0x0000ffff, v66                    // 0000000054FC: 265884FF 0000FFFF"}
@@ -3397,8 +3397,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000005518: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000005520: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000005524: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9] // 000000005528: DD088000 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4 // 000000005530: DD088004 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000005538: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 00000000553C: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v67"], raw_text = "  v_and_b32     v44, 0x0000ffff, v67                    // 000000005540: 265886FF 0000FFFF"}
@@ -3408,8 +3408,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000555C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000005564: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000005568: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512 // 00000000556C: DD088200 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516 // 000000005574: DD088204 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000557C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 000000005580: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v68"], raw_text = "  v_and_b32     v44, 0x0000ffff, v68                    // 000000005584: 265888FF 0000FFFF"}
@@ -3419,8 +3419,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000055A0: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000055A8: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000055AC: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9] // 0000000055B0: DD088000 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4 // 0000000055B8: DD088004 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000055C0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 0000000055C4: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v69"], raw_text = "  v_and_b32     v44, 0x0000ffff, v69                    // 0000000055C8: 26588AFF 0000FFFF"}
@@ -3430,8 +3430,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000055E4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000055EC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000055F0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512 // 0000000055F4: DD088200 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516 // 0000000055FC: DD088204 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000005604: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 000000005608: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v70"], raw_text = "  v_and_b32     v44, 0x0000ffff, v70                    // 00000000560C: 26588CFF 0000FFFF"}
@@ -3441,8 +3441,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000005628: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000005630: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000005634: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9] // 000000005638: DD088000 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4 // 000000005640: DD088004 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000005648: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 00000000564C: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v71"], raw_text = "  v_and_b32     v44, 0x0000ffff, v71                    // 000000005650: 26588EFF 0000FFFF"}
@@ -3452,8 +3452,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000566C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000005674: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000005678: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512 // 00000000567C: DD088200 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516 // 000000005684: DD088204 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000568C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 000000005690: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v72"], raw_text = "  v_and_b32     v44, 0x0000ffff, v72                    // 000000005694: 265890FF 0000FFFF"}
@@ -3463,8 +3463,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000056B0: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000056B8: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000056BC: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9] // 0000000056C0: DD088000 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4 // 0000000056C8: DD088004 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000056D0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 0000000056D4: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v73"], raw_text = "  v_and_b32     v44, 0x0000ffff, v73                    // 0000000056D8: 265892FF 0000FFFF"}
@@ -3474,8 +3474,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000056F4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000056FC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000005700: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512 // 000000005704: DD088200 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516 // 00000000570C: DD088204 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000005714: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 000000005718: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v74"], raw_text = "  v_and_b32     v44, 0x0000ffff, v74                    // 00000000571C: 265894FF 0000FFFF"}
@@ -3485,8 +3485,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000005738: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000005740: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000005744: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9] // 000000005748: DD088000 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4 // 000000005750: DD088004 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000005758: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 00000000575C: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v75"], raw_text = "  v_and_b32     v44, 0x0000ffff, v75                    // 000000005760: 265896FF 0000FFFF"}
@@ -3496,8 +3496,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000577C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000005784: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000005788: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512 // 00000000578C: DD088200 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516 // 000000005794: DD088204 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000579C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 0000000057A0: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v76"], raw_text = "  v_and_b32     v44, 0x0000ffff, v76                    // 0000000057A4: 265898FF 0000FFFF"}
@@ -3507,8 +3507,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000057C0: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000057C8: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000057CC: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9] // 0000000057D0: DD088000 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4 // 0000000057D8: DD088004 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000057E0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 0000000057E4: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v77"], raw_text = "  v_and_b32     v44, 0x0000ffff, v77                    // 0000000057E8: 26589AFF 0000FFFF"}
@@ -3518,8 +3518,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000005804: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000580C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000005810: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512 // 000000005814: DD088200 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516 // 00000000581C: DD088204 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000005824: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 000000005828: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v78"], raw_text = "  v_and_b32     v44, 0x0000ffff, v78                    // 00000000582C: 26589CFF 0000FFFF"}
@@ -3529,8 +3529,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000005848: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000005850: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000005854: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9] // 000000005858: DD088000 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4 // 000000005860: DD088004 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000005868: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 00000000586C: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v79"], raw_text = "  v_and_b32     v44, 0x0000ffff, v79                    // 000000005870: 26589EFF 0000FFFF"}
@@ -3540,8 +3540,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000588C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000005894: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000005898: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512 // 00000000589C: DD088200 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516 // 0000000058A4: DD088204 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000058AC: BF108080"}
     amdisa.inst {mnemonic = "s_add_u32", operands = ["s8", "s59", "s8"], raw_text = "  s_add_u32     s8, s59, s8                             // 0000000058B0: 8008083B"}
     amdisa.inst {mnemonic = "s_addc_u32", operands = ["s9", "0", "s9"], raw_text = "  s_addc_u32    s9, 0, s9                               // 0000000058B4: 82090980"}
@@ -3868,8 +3868,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006164: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000616C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006170: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9] // 000000006174: DD088000 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4 // 00000000617C: DD088004 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006184: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "0"], raw_text = "  s_setvskip    s20, 0                                  // 000000006188: BF108014"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v65"], raw_text = "  v_and_b32     v44, 0x0000ffff, v65                    // 00000000618C: 265882FF 0000FFFF"}
@@ -3879,8 +3879,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000061A8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000061B0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000061B4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512 // 0000000061B8: DD088200 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516 // 0000000061C0: DD088204 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000061C8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 0000000061CC: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v66"], raw_text = "  v_and_b32     v44, 0x0000ffff, v66                    // 0000000061D0: 265884FF 0000FFFF"}
@@ -3890,8 +3890,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000061EC: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000061F4: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000061F8: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9] // 0000000061FC: DD088000 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4 // 000000006204: DD088004 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000620C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 000000006210: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v67"], raw_text = "  v_and_b32     v44, 0x0000ffff, v67                    // 000000006214: 265886FF 0000FFFF"}
@@ -3901,8 +3901,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006230: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006238: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000623C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512 // 000000006240: DD088200 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516 // 000000006248: DD088204 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006250: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 000000006254: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v68"], raw_text = "  v_and_b32     v44, 0x0000ffff, v68                    // 000000006258: 265888FF 0000FFFF"}
@@ -3912,8 +3912,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006274: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000627C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006280: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9] // 000000006284: DD088000 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4 // 00000000628C: DD088004 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006294: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 000000006298: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v69"], raw_text = "  v_and_b32     v44, 0x0000ffff, v69                    // 00000000629C: 26588AFF 0000FFFF"}
@@ -3923,8 +3923,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000062B8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000062C0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000062C4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512 // 0000000062C8: DD088200 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516 // 0000000062D0: DD088204 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000062D8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 0000000062DC: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v70"], raw_text = "  v_and_b32     v44, 0x0000ffff, v70                    // 0000000062E0: 26588CFF 0000FFFF"}
@@ -3934,8 +3934,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000062FC: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006304: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006308: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9] // 00000000630C: DD088000 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4 // 000000006314: DD088004 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000631C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 000000006320: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v71"], raw_text = "  v_and_b32     v44, 0x0000ffff, v71                    // 000000006324: 26588EFF 0000FFFF"}
@@ -3945,8 +3945,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006340: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006348: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000634C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512 // 000000006350: DD088200 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516 // 000000006358: DD088204 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006360: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 000000006364: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v72"], raw_text = "  v_and_b32     v44, 0x0000ffff, v72                    // 000000006368: 265890FF 0000FFFF"}
@@ -3956,8 +3956,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006384: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000638C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006390: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9] // 000000006394: DD088000 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4 // 00000000639C: DD088004 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000063A4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 0000000063A8: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v73"], raw_text = "  v_and_b32     v44, 0x0000ffff, v73                    // 0000000063AC: 265892FF 0000FFFF"}
@@ -3967,8 +3967,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000063C8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000063D0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000063D4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512 // 0000000063D8: DD088200 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516 // 0000000063E0: DD088204 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000063E8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 0000000063EC: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v74"], raw_text = "  v_and_b32     v44, 0x0000ffff, v74                    // 0000000063F0: 265894FF 0000FFFF"}
@@ -3978,8 +3978,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000640C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006414: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006418: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9] // 00000000641C: DD088000 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4 // 000000006424: DD088004 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000642C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 000000006430: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v75"], raw_text = "  v_and_b32     v44, 0x0000ffff, v75                    // 000000006434: 265896FF 0000FFFF"}
@@ -3989,8 +3989,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006450: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006458: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000645C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512 // 000000006460: DD088200 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516 // 000000006468: DD088204 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006470: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 000000006474: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v76"], raw_text = "  v_and_b32     v44, 0x0000ffff, v76                    // 000000006478: 265898FF 0000FFFF"}
@@ -4000,8 +4000,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006494: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000649C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000064A0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9] // 0000000064A4: DD088000 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4 // 0000000064AC: DD088004 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000064B4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 0000000064B8: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v77"], raw_text = "  v_and_b32     v44, 0x0000ffff, v77                    // 0000000064BC: 26589AFF 0000FFFF"}
@@ -4011,8 +4011,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000064D8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000064E0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000064E4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512 // 0000000064E8: DD088200 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516 // 0000000064F0: DD088204 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000064F8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 0000000064FC: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v78"], raw_text = "  v_and_b32     v44, 0x0000ffff, v78                    // 000000006500: 26589CFF 0000FFFF"}
@@ -4022,8 +4022,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000651C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006524: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006528: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9] // 00000000652C: DD088000 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4 // 000000006534: DD088004 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000653C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 000000006540: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v79"], raw_text = "  v_and_b32     v44, 0x0000ffff, v79                    // 000000006544: 26589EFF 0000FFFF"}
@@ -4033,8 +4033,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006560: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006568: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000656C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512 // 000000006570: DD088200 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516 // 000000006578: DD088204 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006580: BF108080"}
     amdisa.inst {mnemonic = "s_add_u32", operands = ["s8", "s59", "s8"], raw_text = "  s_add_u32     s8, s59, s8                             // 000000006584: 8008083B"}
     amdisa.inst {mnemonic = "s_addc_u32", operands = ["s9", "0", "s9"], raw_text = "  s_addc_u32    s9, 0, s9                               // 000000006588: 82090980"}
@@ -4084,8 +4084,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000066A8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000066B0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000066B4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9] // 0000000066B8: DD088000 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4 // 0000000066C0: DD088004 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000066C8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "0"], raw_text = "  s_setvskip    s20, 0                                  // 0000000066CC: BF108014"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v65"], raw_text = "  v_and_b32     v44, 0x0000ffff, v65                    // 0000000066D0: 265882FF 0000FFFF"}
@@ -4095,8 +4095,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000066EC: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000066F4: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000066F8: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512 // 0000000066FC: DD088200 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516 // 000000006704: DD088204 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000670C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 000000006710: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v66"], raw_text = "  v_and_b32     v44, 0x0000ffff, v66                    // 000000006714: 265884FF 0000FFFF"}
@@ -4106,8 +4106,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006730: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006738: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000673C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9] // 000000006740: DD088000 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4 // 000000006748: DD088004 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006750: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 000000006754: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v67"], raw_text = "  v_and_b32     v44, 0x0000ffff, v67                    // 000000006758: 265886FF 0000FFFF"}
@@ -4117,8 +4117,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006774: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000677C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006780: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512 // 000000006784: DD088200 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516 // 00000000678C: DD088204 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006794: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 000000006798: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v68"], raw_text = "  v_and_b32     v44, 0x0000ffff, v68                    // 00000000679C: 265888FF 0000FFFF"}
@@ -4128,8 +4128,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000067B8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000067C0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000067C4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9] // 0000000067C8: DD088000 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4 // 0000000067D0: DD088004 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000067D8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 0000000067DC: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v69"], raw_text = "  v_and_b32     v44, 0x0000ffff, v69                    // 0000000067E0: 26588AFF 0000FFFF"}
@@ -4139,8 +4139,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000067FC: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006804: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006808: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512 // 00000000680C: DD088200 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516 // 000000006814: DD088204 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000681C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 000000006820: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v70"], raw_text = "  v_and_b32     v44, 0x0000ffff, v70                    // 000000006824: 26588CFF 0000FFFF"}
@@ -4150,8 +4150,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006840: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006848: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000684C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9] // 000000006850: DD088000 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4 // 000000006858: DD088004 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006860: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 000000006864: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v71"], raw_text = "  v_and_b32     v44, 0x0000ffff, v71                    // 000000006868: 26588EFF 0000FFFF"}
@@ -4161,8 +4161,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006884: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000688C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006890: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512 // 000000006894: DD088200 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516 // 00000000689C: DD088204 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000068A4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 0000000068A8: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v72"], raw_text = "  v_and_b32     v44, 0x0000ffff, v72                    // 0000000068AC: 265890FF 0000FFFF"}
@@ -4172,8 +4172,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000068C8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000068D0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000068D4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9] // 0000000068D8: DD088000 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4 // 0000000068E0: DD088004 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000068E8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 0000000068EC: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v73"], raw_text = "  v_and_b32     v44, 0x0000ffff, v73                    // 0000000068F0: 265892FF 0000FFFF"}
@@ -4183,8 +4183,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000690C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006914: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006918: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512 // 00000000691C: DD088200 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516 // 000000006924: DD088204 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000692C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 000000006930: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v74"], raw_text = "  v_and_b32     v44, 0x0000ffff, v74                    // 000000006934: 265894FF 0000FFFF"}
@@ -4194,8 +4194,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006950: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006958: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000695C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9] // 000000006960: DD088000 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4 // 000000006968: DD088004 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006970: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 000000006974: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v75"], raw_text = "  v_and_b32     v44, 0x0000ffff, v75                    // 000000006978: 265896FF 0000FFFF"}
@@ -4205,8 +4205,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006994: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000699C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000069A0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512 // 0000000069A4: DD088200 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516 // 0000000069AC: DD088204 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000069B4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 0000000069B8: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v76"], raw_text = "  v_and_b32     v44, 0x0000ffff, v76                    // 0000000069BC: 265898FF 0000FFFF"}
@@ -4216,8 +4216,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000069D8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000069E0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000069E4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9] // 0000000069E8: DD088000 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4 // 0000000069F0: DD088004 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000069F8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 0000000069FC: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v77"], raw_text = "  v_and_b32     v44, 0x0000ffff, v77                    // 000000006A00: 26589AFF 0000FFFF"}
@@ -4227,8 +4227,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006A1C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006A24: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006A28: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512 // 000000006A2C: DD088200 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516 // 000000006A34: DD088204 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006A3C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 000000006A40: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v78"], raw_text = "  v_and_b32     v44, 0x0000ffff, v78                    // 000000006A44: 26589CFF 0000FFFF"}
@@ -4238,8 +4238,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006A60: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006A68: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006A6C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9] // 000000006A70: DD088000 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4 // 000000006A78: DD088004 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006A80: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 000000006A84: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v79"], raw_text = "  v_and_b32     v44, 0x0000ffff, v79                    // 000000006A88: 26589EFF 0000FFFF"}
@@ -4249,8 +4249,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006AA4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006AAC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006AB0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512 // 000000006AB4: DD088200 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516 // 000000006ABC: DD088204 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006AC4: BF108080"}
     amdisa.inst {mnemonic = "s_branch", operands = ["label_1D29"], raw_text = "  s_branch      label_1D29                              // 000000006AC8: BF820276"}
     amdisa.label {name = "label_1AB3"}
@@ -4279,8 +4279,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006B70: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006B78: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006B7C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9] // 000000006B80: DD088000 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4 // 000000006B88: DD088004 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006B90: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "0"], raw_text = "  s_setvskip    s20, 0                                  // 000000006B94: BF108014"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v65"], raw_text = "  v_and_b32     v44, 0x0000ffff, v65                    // 000000006B98: 265882FF 0000FFFF"}
@@ -4290,8 +4290,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006BB4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006BBC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006BC0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512 // 000000006BC4: DD088200 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516 // 000000006BCC: DD088204 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006BD4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 000000006BD8: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v66"], raw_text = "  v_and_b32     v44, 0x0000ffff, v66                    // 000000006BDC: 265884FF 0000FFFF"}
@@ -4301,8 +4301,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006BF8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006C00: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006C04: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9] // 000000006C08: DD088000 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4 // 000000006C10: DD088004 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006C18: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 000000006C1C: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v67"], raw_text = "  v_and_b32     v44, 0x0000ffff, v67                    // 000000006C20: 265886FF 0000FFFF"}
@@ -4312,8 +4312,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006C3C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006C44: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006C48: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512 // 000000006C4C: DD088200 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516 // 000000006C54: DD088204 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006C5C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 000000006C60: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v68"], raw_text = "  v_and_b32     v44, 0x0000ffff, v68                    // 000000006C64: 265888FF 0000FFFF"}
@@ -4323,8 +4323,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006C80: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006C88: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006C8C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9] // 000000006C90: DD088000 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4 // 000000006C98: DD088004 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006CA0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 000000006CA4: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v69"], raw_text = "  v_and_b32     v44, 0x0000ffff, v69                    // 000000006CA8: 26588AFF 0000FFFF"}
@@ -4334,8 +4334,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006CC4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006CCC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006CD0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512 // 000000006CD4: DD088200 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516 // 000000006CDC: DD088204 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006CE4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 000000006CE8: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v70"], raw_text = "  v_and_b32     v44, 0x0000ffff, v70                    // 000000006CEC: 26588CFF 0000FFFF"}
@@ -4345,8 +4345,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006D08: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006D10: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006D14: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9] // 000000006D18: DD088000 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4 // 000000006D20: DD088004 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006D28: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 000000006D2C: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v71"], raw_text = "  v_and_b32     v44, 0x0000ffff, v71                    // 000000006D30: 26588EFF 0000FFFF"}
@@ -4356,8 +4356,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006D4C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006D54: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006D58: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512 // 000000006D5C: DD088200 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516 // 000000006D64: DD088204 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006D6C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 000000006D70: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v72"], raw_text = "  v_and_b32     v44, 0x0000ffff, v72                    // 000000006D74: 265890FF 0000FFFF"}
@@ -4367,8 +4367,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006D90: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006D98: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006D9C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9] // 000000006DA0: DD088000 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4 // 000000006DA8: DD088004 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006DB0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 000000006DB4: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v73"], raw_text = "  v_and_b32     v44, 0x0000ffff, v73                    // 000000006DB8: 265892FF 0000FFFF"}
@@ -4378,8 +4378,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006DD4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006DDC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006DE0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512 // 000000006DE4: DD088200 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516 // 000000006DEC: DD088204 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006DF4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 000000006DF8: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v74"], raw_text = "  v_and_b32     v44, 0x0000ffff, v74                    // 000000006DFC: 265894FF 0000FFFF"}
@@ -4389,8 +4389,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006E18: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006E20: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006E24: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9] // 000000006E28: DD088000 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4 // 000000006E30: DD088004 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006E38: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 000000006E3C: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v75"], raw_text = "  v_and_b32     v44, 0x0000ffff, v75                    // 000000006E40: 265896FF 0000FFFF"}
@@ -4400,8 +4400,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006E5C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006E64: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006E68: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512 // 000000006E6C: DD088200 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516 // 000000006E74: DD088204 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006E7C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 000000006E80: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v76"], raw_text = "  v_and_b32     v44, 0x0000ffff, v76                    // 000000006E84: 265898FF 0000FFFF"}
@@ -4411,8 +4411,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006EA0: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006EA8: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006EAC: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9] // 000000006EB0: DD088000 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4 // 000000006EB8: DD088004 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006EC0: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 000000006EC4: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v77"], raw_text = "  v_and_b32     v44, 0x0000ffff, v77                    // 000000006EC8: 26589AFF 0000FFFF"}
@@ -4422,8 +4422,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006EE4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006EEC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006EF0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512 // 000000006EF4: DD088200 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516 // 000000006EFC: DD088204 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006F04: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 000000006F08: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v78"], raw_text = "  v_and_b32     v44, 0x0000ffff, v78                    // 000000006F0C: 26589CFF 0000FFFF"}
@@ -4433,8 +4433,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006F28: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006F30: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006F34: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9] // 000000006F38: DD088000 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4 // 000000006F40: DD088004 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006F48: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 000000006F4C: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v79"], raw_text = "  v_and_b32     v44, 0x0000ffff, v79                    // 000000006F50: 26589EFF 0000FFFF"}
@@ -4444,8 +4444,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000006F6C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000006F74: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000006F78: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512 // 000000006F7C: DD088200 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516 // 000000006F84: DD088204 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000006F8C: BF108080"}
     amdisa.inst {mnemonic = "s_add_u32", operands = ["s8", "s59", "s8"], raw_text = "  s_add_u32     s8, s59, s8                             // 000000006F90: 8008083B"}
     amdisa.inst {mnemonic = "s_addc_u32", operands = ["s9", "0", "s9"], raw_text = "  s_addc_u32    s9, 0, s9                               // 000000006F94: 82090980"}
@@ -4484,8 +4484,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000007084: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000708C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000007090: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9] // 000000007094: DD088000 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4 // 00000000709C: DD088004 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v80, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000070A4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "0"], raw_text = "  s_setvskip    s20, 0                                  // 0000000070A8: BF108014"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v65"], raw_text = "  v_and_b32     v44, 0x0000ffff, v65                    // 0000000070AC: 265882FF 0000FFFF"}
@@ -4495,8 +4495,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000070C8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000070D0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000070D4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512 // 0000000070D8: DD088200 00082C50"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516 // 0000000070E0: DD088204 00082D50"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v80, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v80", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v80, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000070E8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 0000000070EC: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v66"], raw_text = "  v_and_b32     v44, 0x0000ffff, v66                    // 0000000070F0: 265884FF 0000FFFF"}
@@ -4506,8 +4506,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000710C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000007114: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000007118: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9] // 00000000711C: DD088000 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4 // 000000007124: DD088004 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v82, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000712C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "1"], raw_text = "  s_setvskip    s20, 1                                  // 000000007130: BF108114"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v67"], raw_text = "  v_and_b32     v44, 0x0000ffff, v67                    // 000000007134: 265886FF 0000FFFF"}
@@ -4517,8 +4517,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000007150: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000007158: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000715C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512 // 000000007160: DD088200 00082C52"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516 // 000000007168: DD088204 00082D52"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v82, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v82", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v82, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000007170: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 000000007174: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v68"], raw_text = "  v_and_b32     v44, 0x0000ffff, v68                    // 000000007178: 265888FF 0000FFFF"}
@@ -4528,8 +4528,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000007194: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 00000000719C: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000071A0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9] // 0000000071A4: DD088000 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4 // 0000000071AC: DD088004 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v84, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000071B4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "2"], raw_text = "  s_setvskip    s20, 2                                  // 0000000071B8: BF108214"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v69"], raw_text = "  v_and_b32     v44, 0x0000ffff, v69                    // 0000000071BC: 26588AFF 0000FFFF"}
@@ -4539,8 +4539,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000071D8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000071E0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000071E4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512 // 0000000071E8: DD088200 00082C54"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516 // 0000000071F0: DD088204 00082D54"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v84, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v84", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v84, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000071F8: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 0000000071FC: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v70"], raw_text = "  v_and_b32     v44, 0x0000ffff, v70                    // 000000007200: 26588CFF 0000FFFF"}
@@ -4550,8 +4550,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000721C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000007224: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000007228: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9] // 00000000722C: DD088000 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4 // 000000007234: DD088004 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v86, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000723C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "3"], raw_text = "  s_setvskip    s20, 3                                  // 000000007240: BF108314"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v71"], raw_text = "  v_and_b32     v44, 0x0000ffff, v71                    // 000000007244: 26588EFF 0000FFFF"}
@@ -4561,8 +4561,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000007260: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000007268: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000726C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512 // 000000007270: DD088200 00082C56"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516 // 000000007278: DD088204 00082D56"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v86, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v86", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v86, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000007280: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 000000007284: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v72"], raw_text = "  v_and_b32     v44, 0x0000ffff, v72                    // 000000007288: 265890FF 0000FFFF"}
@@ -4572,8 +4572,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000072A4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000072AC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000072B0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9] // 0000000072B4: DD088000 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4 // 0000000072BC: DD088004 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v88, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000072C4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "4"], raw_text = "  s_setvskip    s20, 4                                  // 0000000072C8: BF108414"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v73"], raw_text = "  v_and_b32     v44, 0x0000ffff, v73                    // 0000000072CC: 265892FF 0000FFFF"}
@@ -4583,8 +4583,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000072E8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000072F0: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000072F4: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512 // 0000000072F8: DD088200 00082C58"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516 // 000000007300: DD088204 00082D58"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v88, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v88", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v88, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000007308: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 00000000730C: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v74"], raw_text = "  v_and_b32     v44, 0x0000ffff, v74                    // 000000007310: 265894FF 0000FFFF"}
@@ -4594,8 +4594,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000732C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000007334: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000007338: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9] // 00000000733C: DD088000 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4 // 000000007344: DD088004 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v90, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000734C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "5"], raw_text = "  s_setvskip    s20, 5                                  // 000000007350: BF108514"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v75"], raw_text = "  v_and_b32     v44, 0x0000ffff, v75                    // 000000007354: 265896FF 0000FFFF"}
@@ -4605,8 +4605,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000007370: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000007378: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000737C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512 // 000000007380: DD088200 00082C5A"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516 // 000000007388: DD088204 00082D5A"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v90, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v90", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v90, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000007390: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 000000007394: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v76"], raw_text = "  v_and_b32     v44, 0x0000ffff, v76                    // 000000007398: 265898FF 0000FFFF"}
@@ -4616,8 +4616,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000073B4: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 0000000073BC: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 0000000073C0: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9] // 0000000073C4: DD088000 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4 // 0000000073CC: DD088004 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v92, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000073D4: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "6"], raw_text = "  s_setvskip    s20, 6                                  // 0000000073D8: BF108614"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v77"], raw_text = "  v_and_b32     v44, 0x0000ffff, v77                    // 0000000073DC: 26589AFF 0000FFFF"}
@@ -4627,8 +4627,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 0000000073F8: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000007400: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000007404: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512 // 000000007408: DD088200 00082C5C"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516 // 000000007410: DD088204 00082D5C"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v92, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v92", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v92, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 000000007418: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 00000000741C: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v78"], raw_text = "  v_and_b32     v44, 0x0000ffff, v78                    // 000000007420: 26589CFF 0000FFFF"}
@@ -4638,8 +4638,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 00000000743C: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000007444: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 000000007448: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9] // 00000000744C: DD088000 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4 // 000000007454: DD088004 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9]"], raw_text = "  global_atomic_add   v94, v44, s[8:9]"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:4"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:4"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 00000000745C: BF108080"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["s20", "7"], raw_text = "  s_setvskip    s20, 7                                  // 000000007460: BF108714"}
     amdisa.inst {mnemonic = "v_and_b32", operands = ["v44", "0xffff", "v79"], raw_text = "  v_and_b32     v44, 0x0000ffff, v79                    // 000000007464: 26589EFF 0000FFFF"}
@@ -4649,8 +4649,8 @@ module {
     amdisa.inst {mnemonic = "v_mul_f32", operands = ["v45", "0x47000000", "v45"], raw_text = "  v_mul_f32     v45, 0x47000000, v45                    // 000000007480: 0A5A5AFF 47000000"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v44", "v44"], raw_text = "  v_cvt_i32_f32  v44, v44                               // 000000007488: 7E58112C"}
     amdisa.inst {mnemonic = "v_cvt_i32_f32", operands = ["v45", "v45"], raw_text = "  v_cvt_i32_f32  v45, v45                               // 00000000748C: 7E5A112D"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512 // 000000007490: DD088200 00082C5E"}
-    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516 // 000000007498: DD088204 00082D5E"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v44", "s[8:9] offset:512"], raw_text = "  global_atomic_add   v94, v44, s[8:9] inst_offset:512"}
+    amdisa.inst {mnemonic = "global_atomic_add", operands = ["v94", "v45", "s[8:9] offset:516"], raw_text = "  global_atomic_add   v94, v45, s[8:9] inst_offset:516"}
     amdisa.inst {mnemonic = "s_setvskip", operands = ["0", "0"], raw_text = "  s_setvskip    0, 0                                    // 0000000074A0: BF108080"}
     amdisa.label {name = "label_1D29"}
     amdisa.inst {mnemonic = "s_waitcnt", operands = ["vmcnt(0) expcnt(0) lgkmcnt(0)"], raw_text = "  s_waitcnt     0x0000                                  // 0000000074A4: BF8C0000"}
