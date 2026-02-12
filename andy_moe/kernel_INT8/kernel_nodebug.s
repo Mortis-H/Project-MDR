@@ -1,11 +1,12 @@
 .text
-.global _ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E
+.global fmoe_kernel_func
 .p2align 8
-.type _ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E,@function
+.type fmoe_kernel_func,@function
 //Config:FMOE;INT8;G1U1;1TG;4W;32mx1;128nx4
 // Author: temp
 
-_ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E:
+fmoe_kernel_func:
+  type(CS)
 
   s_and_b32     s1, s1, 0x0000ffff                      // 000000000000: 8601FF01 0000FFFF
   s_load_dwordx2  s[8:9], s[0:1], 0x00                  // 000000000008: C0060200 00000000
@@ -119,7 +120,6 @@ _ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E:
   s_load_dword  s88, s[44:45], 0x60                     // 0000000002DC: C0021616 00000060
   s_load_dword  s89, s[44:45], 0x70                     // 0000000002E4: C0021656 00000070
   s_waitcnt     lgkmcnt(0)                              // 0000000002EC: BF8CC07F
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P1_PARAMS dim={s64:d} hidden={s65:d} tokens={s66:d} eprt={s5:d}"
   v_lshlrev_b32  v56, 2, v0                             // 0000000002F0: 24700082
   s_mul_i32     s60, s82, s68                           // 0000000002F4: 923C4452
   v_add_u32     v26, v56, s60                           // 0000000002F8: D134001A 00007938
@@ -261,7 +261,6 @@ _ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E:
   s_mov_b32     s54, 0x00040100                         // 000000000598: BEB600FF 00040100
   s_mov_b32     s55, 0x04020100                         // 0000000005A0: BEB700FF 04020100
   s_mov_b32     s6, 0x3fb8aa3b                          // 0000000005A8: BE8600FF 3FB8AA3B
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P2_CONSTS log2e={s6:x} perm0={s52:x}"
   s_mov_b32     s77, 0xbd92220c                         // 0000000005B0: BECD00FF BD92220C
   s_mov_b32     m0, s50                                 // 0000000005B8: BEFC0032
   v_mov_b32     v1, 0xbfcc4231                          // 0000000005BC: 7E0202FF BFCC4231
@@ -283,7 +282,6 @@ _ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E:
   buffer_load_dword  v18, v10, s[36:39], 0 offen        // 000000000624: E0501000 8009120A
   buffer_load_dword  v19, v11, s[36:39], 0 offen        // 00000000062C: E0501000 8009130B
   buffer_load_dword  v20, v8, s[40:43], 0 offen         // 000000000634: E0501000 800A1408
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P3_W_LOAD w_val={v20:x} w_addr={v8:d} sw_buf={s40:d}"
   buffer_load_dword  v21, v9, s[40:43], 0 offen         // 00000000063C: E0501000 800A1509
   buffer_load_dword   v26, s[20:23], 0 offen lds     // 000000000644: E0511000 8005001A
   s_add_u32     m0, 0x00000100, s50                     // 00000000064C: 807C32FF 00000100
@@ -482,7 +480,6 @@ _ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E:
   v_lshlrev_b32  v4, 2, v4                              // 000000000A0C: 24080882
   s_waitcnt     vmcnt(32)                               // 000000000A10: BF8C8F70
   s_barrier                                             // 000000000A14: BF8A0000
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P4_PRE_CORE wave={s7:d} loop_idx={s80:d} loop_cnt={s81:d}"
   ds_read_b128  v[192:195], v2                          // 000000000A18: D9FE0000 C0000002
   ds_read_b128  v[196:199], v2 offset:64                // 000000000A20: D9FE0040 C4000002
   ds_read_b128  v[200:203], v2 offset:128               // 000000000A28: D9FE0080 C8000002
@@ -554,7 +551,6 @@ label_0298:
   s_add_u32     m0, 0, s50                              // 000000000C20: 807C3280
   s_waitcnt     vmcnt(32)                               // 000000000C24: BF8C8F70
   v_mfma_i32_16x16x32_i8  v[144:147], acc[32:33], v[192:193], v[144:147] // 000000000C28: D3D70090 0E438120
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v144:x} G_acc={a32:x} X={v192:x}"
   v_mfma_i32_16x16x32_i8  v[144:147], acc[34:35], v[194:195], v[144:147] // 000000000C30: D3D70090 0E438522
   buffer_load_dwordx4  acc[160:163], v36, s[92:95], 0 offen // 000000000C38: E05C1000 8097A024
   v_mfma_i32_16x16x32_i8  v[144:147], acc[36:37], v[196:197], v[144:147] // 000000000C40: D3D70090 0E438924
@@ -596,7 +592,6 @@ label_0298:
   v_mfma_i32_16x16x32_i8  v[156:159], acc[62:63], v[222:223], v[156:159] // 000000000D60: D3D7009C 0E73BD3E
   s_waitcnt     vmcnt(32)                               // 000000000D68: BF8C8F70
   v_mfma_i32_16x16x32_i8  v[160:163], acc[64:65], v[192:193], v[160:163] // 000000000D6C: D3D700A0 0E838140
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v160:x} G_acc={a64:x} X={v192:x}"
   v_mfma_i32_16x16x32_i8  v[160:163], acc[66:67], v[194:195], v[160:163] // 000000000D74: D3D700A0 0E838542
   buffer_load_dwordx4  acc[192:195], v38, s[92:95], 0 offen // 000000000D7C: E05C1000 8097C026
   v_mfma_i32_16x16x32_i8  v[160:163], acc[68:69], v[196:197], v[160:163] // 000000000D84: D3D700A0 0E838944
@@ -638,7 +633,6 @@ label_0298:
   v_mfma_i32_16x16x32_i8  v[172:175], acc[94:95], v[222:223], v[172:175] // 000000000EA4: D3D700AC 0EB3BD5E
   s_waitcnt     vmcnt(32)                               // 000000000EAC: BF8C8F70
   v_mfma_i32_16x16x32_i8  v[176:179], acc[96:97], v[192:193], v[176:179] // 000000000EB0: D3D700B0 0EC38160
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v176:x} G_acc={a96:x} X={v192:x}"
   v_mfma_i32_16x16x32_i8  v[176:179], acc[98:99], v[194:195], v[176:179] // 000000000EB8: D3D700B0 0EC38562
   buffer_load_dwordx4  acc[224:227], v40, s[92:95], 0 offen // 000000000EC0: E05C1000 8097E028
   v_mfma_i32_16x16x32_i8  v[176:179], acc[100:101], v[196:197], v[176:179] // 000000000EC8: D3D700B0 0EC38964
@@ -722,7 +716,6 @@ label_0298:
   v_mfma_i32_16x16x32_i8  v[76:79], acc[158:159], v[222:223], v[76:79] // 000000001130: D3D7004C 0D33BD9E
   s_waitcnt     vmcnt(24)                               // 000000001138: BF8C4F78
   v_mfma_i32_16x16x32_i8  v[80:83], acc[160:161], v[192:193], v[80:83] // 00000000113C: D3D70050 0D4381A0
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v80:x} G_acc={a160:x} X={v192:x}"
   v_mfma_i32_16x16x32_i8  v[80:83], acc[162:163], v[194:195], v[80:83] // 000000001144: D3D70050 0D4385A2
   buffer_load_dwordx4  acc[32:35], v36, s[24:27], 0 offen // 00000000114C: E05C1000 80862024
   v_mfma_i32_16x16x32_i8  v[80:83], acc[164:165], v[196:197], v[80:83] // 000000001154: D3D70050 0D4389A4
@@ -772,7 +765,6 @@ label_0298:
   ds_read_b128  v[252:255], v2 offset:9536              // 0000000012B4: D9FE2540 FC000002
   s_waitcnt     vmcnt(24)                               // 0000000012BC: BF8C4F78
   v_mfma_i32_16x16x32_i8  v[96:99], acc[192:193], v[192:193], v[96:99] // 0000000012C0: D3D70060 0D8381C0
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v96:x} G_acc={a192:x} X={v192:x}"
   v_mfma_i32_16x16x32_i8  v[96:99], acc[194:195], v[194:195], v[96:99] // 0000000012C8: D3D70060 0D8385C2
   buffer_load_dwordx4  acc[64:67], v38, s[24:27], 0 offen // 0000000012D0: E05C1000 80864026
   v_mfma_i32_16x16x32_i8  v[96:99], acc[196:197], v[196:197], v[96:99] // 0000000012D8: D3D70060 0D8389C4
@@ -814,7 +806,6 @@ label_0298:
   v_mfma_i32_16x16x32_i8  v[108:111], acc[222:223], v[222:223], v[108:111] // 0000000013F8: D3D7006C 0DB3BDDE
   s_waitcnt     vmcnt(24)                               // 000000001400: BF8C4F78
   v_mfma_i32_16x16x32_i8  v[112:115], acc[224:225], v[192:193], v[112:115] // 000000001404: D3D70070 0DC381E0
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v112:x} G_acc={a224:x} X={v192:x}"
   v_mfma_i32_16x16x32_i8  v[112:115], acc[226:227], v[194:195], v[112:115] // 00000000140C: D3D70070 0DC385E2
   buffer_load_dwordx4  acc[96:99], v40, s[24:27], 0 offen // 000000001414: E05C1000 80866028
   v_mfma_i32_16x16x32_i8  v[112:115], acc[228:229], v[196:197], v[112:115] // 00000000141C: D3D70070 0DC389E4
@@ -929,7 +920,6 @@ label_0298:
   s_add_u32     m0, 0, s51                              // 000000001748: 807C3380
   s_waitcnt     vmcnt(32)                               // 00000000174C: BF8C8F70
   v_mfma_i32_16x16x32_i8  v[144:147], acc[32:33], v[224:225], v[144:147] // 000000001750: D3D70090 0E43C120
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v144:x} G_acc={a32:x} X={v224:x}"
   v_mfma_i32_16x16x32_i8  v[144:147], acc[34:35], v[226:227], v[144:147] // 000000001758: D3D70090 0E43C522
   buffer_load_dwordx4  acc[160:163], v36, s[92:95], 0 offen // 000000001760: E05C1000 8097A024
   v_mfma_i32_16x16x32_i8  v[144:147], acc[36:37], v[228:229], v[144:147] // 000000001768: D3D70090 0E43C924
@@ -971,7 +961,6 @@ label_0298:
   v_mfma_i32_16x16x32_i8  v[156:159], acc[62:63], v[254:255], v[156:159] // 000000001888: D3D7009C 0E73FD3E
   s_waitcnt     vmcnt(32)                               // 000000001890: BF8C8F70
   v_mfma_i32_16x16x32_i8  v[160:163], acc[64:65], v[224:225], v[160:163] // 000000001894: D3D700A0 0E83C140
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v160:x} G_acc={a64:x} X={v224:x}"
   v_mfma_i32_16x16x32_i8  v[160:163], acc[66:67], v[226:227], v[160:163] // 00000000189C: D3D700A0 0E83C542
   buffer_load_dwordx4  acc[192:195], v38, s[92:95], 0 offen // 0000000018A4: E05C1000 8097C026
   v_mfma_i32_16x16x32_i8  v[160:163], acc[68:69], v[228:229], v[160:163] // 0000000018AC: D3D700A0 0E83C944
@@ -1013,7 +1002,6 @@ label_0298:
   v_mfma_i32_16x16x32_i8  v[172:175], acc[94:95], v[254:255], v[172:175] // 0000000019CC: D3D700AC 0EB3FD5E
   s_waitcnt     vmcnt(32)                               // 0000000019D4: BF8C8F70
   v_mfma_i32_16x16x32_i8  v[176:179], acc[96:97], v[224:225], v[176:179] // 0000000019D8: D3D700B0 0EC3C160
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v176:x} G_acc={a96:x} X={v224:x}"
   v_mfma_i32_16x16x32_i8  v[176:179], acc[98:99], v[226:227], v[176:179] // 0000000019E0: D3D700B0 0EC3C562
   buffer_load_dwordx4  acc[224:227], v40, s[92:95], 0 offen // 0000000019E8: E05C1000 8097E028
   v_mfma_i32_16x16x32_i8  v[176:179], acc[100:101], v[228:229], v[176:179] // 0000000019F0: D3D700B0 0EC3C964
@@ -1097,7 +1085,6 @@ label_0298:
   v_mfma_i32_16x16x32_i8  v[76:79], acc[158:159], v[254:255], v[76:79] // 000000001C58: D3D7004C 0D33FD9E
   s_waitcnt     vmcnt(24)                               // 000000001C60: BF8C4F78
   v_mfma_i32_16x16x32_i8  v[80:83], acc[160:161], v[224:225], v[80:83] // 000000001C64: D3D70050 0D43C1A0
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v80:x} G_acc={a160:x} X={v224:x}"
   v_mfma_i32_16x16x32_i8  v[80:83], acc[162:163], v[226:227], v[80:83] // 000000001C6C: D3D70050 0D43C5A2
   buffer_load_dwordx4  acc[32:35], v36, s[24:27], 0 offen // 000000001C74: E05C1000 80862024
   v_mfma_i32_16x16x32_i8  v[80:83], acc[164:165], v[228:229], v[80:83] // 000000001C7C: D3D70050 0D43C9A4
@@ -1147,7 +1134,6 @@ label_0298:
   ds_read_b128  v[220:223], v2 offset:1216              // 000000001DDC: D9FE04C0 DC000002
   s_waitcnt     vmcnt(24)                               // 000000001DE4: BF8C4F78
   v_mfma_i32_16x16x32_i8  v[96:99], acc[192:193], v[224:225], v[96:99] // 000000001DE8: D3D70060 0D83C1C0
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v96:x} G_acc={a192:x} X={v224:x}"
   v_mfma_i32_16x16x32_i8  v[96:99], acc[194:195], v[226:227], v[96:99] // 000000001DF0: D3D70060 0D83C5C2
   buffer_load_dwordx4  acc[64:67], v38, s[24:27], 0 offen // 000000001DF8: E05C1000 80864026
   v_mfma_i32_16x16x32_i8  v[96:99], acc[196:197], v[228:229], v[96:99] // 000000001E00: D3D70060 0D83C9C4
@@ -1189,7 +1175,6 @@ label_0298:
   v_mfma_i32_16x16x32_i8  v[108:111], acc[222:223], v[254:255], v[108:111] // 000000001F20: D3D7006C 0DB3FDDE
   s_waitcnt     vmcnt(24)                               // 000000001F28: BF8C4F78
   v_mfma_i32_16x16x32_i8  v[112:115], acc[224:225], v[224:225], v[112:115] // 000000001F2C: D3D70070 0DC3C1E0
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v112:x} G_acc={a224:x} X={v224:x}"
   v_mfma_i32_16x16x32_i8  v[112:115], acc[226:227], v[226:227], v[112:115] // 000000001F34: D3D70070 0DC3C5E2
   buffer_load_dwordx4  acc[96:99], v40, s[24:27], 0 offen // 000000001F3C: E05C1000 80866028
   v_mfma_i32_16x16x32_i8  v[112:115], acc[228:229], v[228:229], v[112:115] // 000000001F44: D3D70070 0DC3C9E4
@@ -2354,7 +2339,6 @@ label_082D:
   v_perm_b32    v143, v191, v143, s55                   // 000000003870: D1ED008F 00DF1FBF
   v_rcp_f32     v24, v22                                // 000000003878: 7E304516
   v_rcp_f32     v25, v23                                // 00000000387C: 7E324517
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P5_DYN_QUANT zdynQ0={v24:x} zdynQ1={v25:x}"
   v_lshrrev_b32  v56, 5, v0                             // 000000003880: 20700085
   v_lshlrev_b32  v57, 5, v56                            // 000000003884: 24727085
   v_and_b32     v56, 31, v0                             // 000000003888: 2670009F
@@ -2384,7 +2368,6 @@ label_082D:
   ds_write_b32  v56, v143 offset:34048                  // 00000000392C: D81A8500 00008F38
   s_waitcnt     lgkmcnt(0)                              // 000000003934: BF8CC07F
   s_barrier                                             // 000000003938: BF8A0000
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P6_ACTV_DONE zdynQ0={v24:x}"
   v_lshrrev_b32  v56, 4, v0                             // 00000000393C: 20700084
   v_lshlrev_b32  v57, 6, v56                            // 000000003940: 24727086
   v_and_b32     v56, 15, v0                             // 000000003944: 2670008F
@@ -2517,7 +2500,6 @@ label_0E9B:
   v_mfma_i32_16x16x32_i8  v[220:223], acc[62:63], v[174:175], v[220:223] // 000000003CF8: D3D700DC 0F735D3E
   s_waitcnt     vmcnt(41)                               // 000000003D00: BF8C8F79
   v_mfma_i32_16x16x32_i8  v[192:195], acc[64:65], v[144:145], v[192:195] // 000000003D04: D3D700C0 0F032140
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v192:x} G_acc={a64:x} X={v144:x}"
   v_mfma_i32_16x16x32_i8  v[192:195], acc[66:67], v[146:147], v[192:195] // 000000003D0C: D3D700C0 0F032542
   buffer_load_dwordx4  acc[192:195], v42, s[12:15], 0 offen // 000000003D14: E05C1000 8083C02A
   v_mfma_i32_16x16x32_i8  v[192:195], acc[68:69], v[148:149], v[192:195] // 000000003D1C: D3D700C0 0F032944
@@ -2559,7 +2541,6 @@ label_0E9B:
   v_mfma_i32_16x16x32_i8  v[204:207], acc[94:95], v[190:191], v[204:207] // 000000003E3C: D3D700CC 0F337D5E
   s_waitcnt     vmcnt(40)                               // 000000003E44: BF8C8F78
   v_mfma_i32_16x16x32_i8  v[208:211], acc[96:97], v[144:145], v[208:211] // 000000003E48: D3D700D0 0F432160
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v208:x} G_acc={a96:x} X={v144:x}"
   v_mfma_i32_16x16x32_i8  v[208:211], acc[98:99], v[146:147], v[208:211] // 000000003E50: D3D700D0 0F432562
   buffer_load_dwordx4  acc[224:227], v44, s[12:15], 0 offen // 000000003E58: E05C1000 8083E02C
   v_mfma_i32_16x16x32_i8  v[208:211], acc[100:101], v[148:149], v[208:211] // 000000003E60: D3D700D0 0F432964
@@ -3016,7 +2997,6 @@ label_0E9B:
   v_mfma_i32_16x16x32_i8  v[252:255], acc[190:191], v[174:175], v[252:255] // 000000004A24: D3D700FC 0FF35DBE
   s_waitcnt     vmcnt(41)                               // 000000004A2C: BF8C8F79
   v_mfma_i32_16x16x32_i8  v[224:227], acc[192:193], v[144:145], v[224:227] // 000000004A30: D3D700E0 0F8321C0
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v224:x} G_acc={a192:x} X={v144:x}"
   v_mfma_i32_16x16x32_i8  v[224:227], acc[194:195], v[146:147], v[224:227] // 000000004A38: D3D700E0 0F8325C2
   buffer_load_dwordx4  acc[64:67], v42, s[12:15], 0 offen // 000000004A40: E05C1000 8083402A
   v_mfma_i32_16x16x32_i8  v[224:227], acc[196:197], v[148:149], v[224:227] // 000000004A48: D3D700E0 0F8329C4
@@ -3058,7 +3038,6 @@ label_0E9B:
   v_mfma_i32_16x16x32_i8  v[236:239], acc[222:223], v[190:191], v[236:239] // 000000004B68: D3D700EC 0FB37DDE
   s_waitcnt     vmcnt(40)                               // 000000004B70: BF8C8F78
   v_mfma_i32_16x16x32_i8  v[240:243], acc[224:225], v[144:145], v[240:243] // 000000004B74: D3D700F0 0FC321E0
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v240:x} G_acc={a224:x} X={v144:x}"
   v_mfma_i32_16x16x32_i8  v[240:243], acc[226:227], v[146:147], v[240:243] // 000000004B7C: D3D700F0 0FC325E2
   buffer_load_dwordx4  acc[96:99], v44, s[12:15], 0 offen // 000000004B84: E05C1000 8083602C
   v_mfma_i32_16x16x32_i8  v[240:243], acc[228:229], v[148:149], v[240:243] // 000000004B8C: D3D700F0 0FC329E4
@@ -5282,7 +5261,6 @@ label_1ACA:
   v_perm_b32    v143, v191, v143, s55                   // 0000000082E4: D1ED008F 00DF1FBF
   v_rcp_f32     v24, v22                                // 0000000082EC: 7E304516
   v_rcp_f32     v25, v23                                // 0000000082F0: 7E324517
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P5_DYN_QUANT zdynQ0={v24:x} zdynQ1={v25:x}"
   v_lshrrev_b32  v56, 5, v0                             // 0000000082F4: 20700085
   v_lshlrev_b32  v57, 5, v56                            // 0000000082F8: 24727085
   v_and_b32     v56, 31, v0                             // 0000000082FC: 2670009F
@@ -5312,7 +5290,6 @@ label_1ACA:
   ds_write_b32  v56, v143 offset:34048                  // 0000000083A0: D81A8500 00008F38
   s_waitcnt     lgkmcnt(0)                              // 0000000083A8: BF8CC07F
   s_barrier                                             // 0000000083AC: BF8A0000
-  ; @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P6_ACTV_DONE zdynQ0={v24:x}"
   v_lshrrev_b32  v56, 4, v0                             // 0000000083B0: 20700084
   v_lshlrev_b32  v57, 6, v56                            // 0000000083B4: 24727086
   v_and_b32     v56, 15, v0                             // 0000000083B8: 2670008F
@@ -6359,7 +6336,7 @@ label_27CF:
 
 .rodata
 .p2align 6
-.amdhsa_kernel _ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E
+.amdhsa_kernel fmoe_kernel_func
     .amdhsa_group_segment_fixed_size 65536
     .amdhsa_user_sgpr_kernarg_segment_ptr 1
     .amdhsa_system_sgpr_workgroup_id_x 1
@@ -6377,8 +6354,8 @@ label_27CF:
 ---
 amdhsa.version: [ 1, 0 ]
 amdhsa.kernels:
-  - .name: _ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E
-    .symbol: _ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E.kd
+  - .name: fmoe_kernel_func
+    .symbol: fmoe_kernel_func.kd
     .sgpr_count: 96
     .vgpr_count: 512
     .kernarg_segment_align: 4

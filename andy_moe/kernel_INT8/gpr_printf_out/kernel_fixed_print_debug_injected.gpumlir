@@ -3,14 +3,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
     gpu.func @_ZN5aiter45fmoe_bf16_pertokenFp8_g1u1_vs_silu_1tg_32x192E(%kernarg_pad: !llvm.array<416 x i8>) kernel {
               // === Kernarg Backup Start ===
               // Save kernarg pointer for printf (to scratch memory)
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s0\0Ascratch_store_dword off, v0, off offset:52\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s1\0Ascratch_store_dword off, v0, off offset:56\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
-              // === Built-in variable: $tid (local thread ID) -> scratch[36] ===
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:36", ""  : () -> ()
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s0\0Ascratch_store_dword off, v0, off offset:284\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s1\0Ascratch_store_dword off, v0, off offset:288\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // === Built-in variable: $tid (local thread ID) -> scratch[268] ===
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:268", ""  : () -> ()
               // === Built-in variable: $tgid_x/$tgid_y/$tgid_z (workgroup ID) -> scratch ===
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s2\0Ascratch_store_dword off, v0, off offset:40\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s3\0Ascratch_store_dword off, v0, off offset:44\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s4\0Ascratch_store_dword off, v0, off offset:48\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s2\0Ascratch_store_dword off, v0, off offset:272\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s3\0Ascratch_store_dword off, v0, off offset:276\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s4\0Ascratch_store_dword off, v0, off offset:280\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
               // === Kernarg Backup End ===
 
       llvm.inline_asm has_side_effects "  s_and_b32     s1, s1, 0x0000ffff                      // 000000000000: 8601FF01 0000FFFF", ""  : () -> ()
@@ -125,6 +125,16 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  s_load_dword  s88, s[44:45], 0x60                     // 0000000002DC: C0021616 00000060", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_load_dword  s89, s[44:45], 0x70                     // 0000000002E4: C0021656 00000070", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     lgkmcnt(0)                              // 0000000002EC: BF8CC07F", ""  : () -> ()
+              // === Snapshot for @PRINT at line 122 ===
+              // Scratch snapshot (SGPR): s64 -> scratch[228]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s64\0Ascratch_store_dword off, v0, off offset:228\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot (SGPR): s65 -> scratch[232]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s65\0Ascratch_store_dword off, v0, off offset:232\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot (SGPR): s66 -> scratch[236]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s66\0Ascratch_store_dword off, v0, off offset:236\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot (SGPR): s5 -> scratch[240]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s5\0Ascratch_store_dword off, v0, off offset:240\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_lshlrev_b32  v56, 2, v0                             // 0000000002F0: 24700082", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_mul_i32     s60, s82, s68                           // 0000000002F4: 923C4452", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_add_u32     v26, v56, s60                           // 0000000002F8: D134001A 00007938", ""  : () -> ()
@@ -266,6 +276,12 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  s_mov_b32     s54, 0x00040100                         // 000000000598: BEB600FF 00040100", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_mov_b32     s55, 0x04020100                         // 0000000005A0: BEB700FF 04020100", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_mov_b32     s6, 0x3fb8aa3b                          // 0000000005A8: BE8600FF 3FB8AA3B", ""  : () -> ()
+              // === Snapshot for @PRINT at line 264 ===
+              // Scratch snapshot (SGPR): s6 -> scratch[244]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s6\0Ascratch_store_dword off, v0, off offset:244\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot (SGPR): s52 -> scratch[248]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s52\0Ascratch_store_dword off, v0, off offset:248\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  s_mov_b32     s77, 0xbd92220c                         // 0000000005B0: BECD00FF BD92220C", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_mov_b32     m0, s50                                 // 0000000005B8: BEFC0032", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mov_b32     v1, 0xbfcc4231                          // 0000000005BC: 7E0202FF BFCC4231", ""  : () -> ()
@@ -287,54 +303,30 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  buffer_load_dword  v18, v10, s[36:39], 0 offen        // 000000000624: E0501000 8009120A", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dword  v19, v11, s[36:39], 0 offen        // 00000000062C: E0501000 8009130B", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dword  v20, v8, s[40:43], 0 offen         // 000000000634: E0501000 800A1408", ""  : () -> ()
+              // === Snapshot for @PRINT at line 286 ===
+              // Scratch snapshot: v20 -> scratch[4]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v20, off offset:4", ""  : () -> ()
+              // Scratch snapshot: v8 -> scratch[8]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v8, off offset:8", ""  : () -> ()
+              // Scratch snapshot (SGPR): s40 -> scratch[252]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s40\0Ascratch_store_dword off, v0, off offset:252\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  buffer_load_dword  v21, v9, s[40:43], 0 offen         // 00000000063C: E0501000 800A1509", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dword   v26, s[20:23], 0 offen lds     // 000000000644: E0511000 8005001A", ""  : () -> ()
-              // === Snapshot for @PRINT at line 286 ===
-              // Scratch snapshot: v26 -> scratch[4]
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v26, off offset:4", ""  : () -> ()
-              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  s_add_u32     m0, 0x00000100, s50                     // 00000000064C: 807C32FF 00000100", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dword   v27, s[20:23], 0 offen lds     // 000000000654: E0511000 8005001B", ""  : () -> ()
-              // === Snapshot for @PRINT at line 289 ===
-              // Scratch snapshot: v27 -> scratch[8]
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v27, off offset:8", ""  : () -> ()
-              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  s_add_u32     m0, 0x00000200, s50                     // 00000000065C: 807C32FF 00000200", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dword   v28, s[20:23], 0 offen lds     // 000000000664: E0511000 8005001C", ""  : () -> ()
-              // === Snapshot for @PRINT at line 292 ===
-              // Scratch snapshot: v28 -> scratch[12]
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v28, off offset:12", ""  : () -> ()
-              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  s_add_u32     m0, 0x00000300, s50                     // 00000000066C: 807C32FF 00000300", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dword   v29, s[20:23], 0 offen lds     // 000000000674: E0511000 8005001D", ""  : () -> ()
-              // === Snapshot for @PRINT at line 295 ===
-              // Scratch snapshot: v29 -> scratch[16]
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v29, off offset:16", ""  : () -> ()
-              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  s_add_u32     m0, 0x00000400, s50                     // 00000000067C: 807C32FF 00000400", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dword   v30, s[20:23], 0 offen lds     // 000000000684: E0511000 8005001E", ""  : () -> ()
-              // === Snapshot for @PRINT at line 298 ===
-              // Scratch snapshot: v30 -> scratch[20]
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v30, off offset:20", ""  : () -> ()
-              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  s_add_u32     m0, 0x00000500, s50                     // 00000000068C: 807C32FF 00000500", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dword   v31, s[20:23], 0 offen lds     // 000000000694: E0511000 8005001F", ""  : () -> ()
-              // === Snapshot for @PRINT at line 301 ===
-              // Scratch snapshot: v31 -> scratch[24]
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v31, off offset:24", ""  : () -> ()
-              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  s_add_u32     m0, 0x00000600, s50                     // 00000000069C: 807C32FF 00000600", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dword   v32, s[20:23], 0 offen lds     // 0000000006A4: E0511000 80050020", ""  : () -> ()
-              // === Snapshot for @PRINT at line 304 ===
-              // Scratch snapshot: v32 -> scratch[28]
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v32, off offset:28", ""  : () -> ()
-              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  s_add_u32     m0, 0x00000700, s50                     // 0000000006AC: 807C32FF 00000700", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dword   v33, s[20:23], 0 offen lds     // 0000000006B4: E0511000 80050021", ""  : () -> ()
-              // === Snapshot for @PRINT at line 307 ===
-              // Scratch snapshot: v33 -> scratch[32]
-              llvm.inline_asm has_side_effects "scratch_store_dword off, v33, off offset:32", ""  : () -> ()
-              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  s_add_u32     m0, 0, s51                              // 0000000006BC: 807C3380", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_add_u32     s20, s57, s20                           // 0000000006C0: 80141439", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_addc_u32    s21, 0, s21                             // 0000000006C4: 82151580", ""  : () -> ()
@@ -517,6 +509,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_lshlrev_b32  v4, 2, v4                              // 000000000A0C: 24080882", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(32)                               // 000000000A10: BF8C8F70", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_barrier                                             // 000000000A14: BF8A0000", ""  : () -> ()
+              // === Snapshot for @PRINT at line 485 ===
+              // Scratch snapshot (SGPR): s7 -> scratch[256]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s7\0Ascratch_store_dword off, v0, off offset:256\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot (SGPR): s80 -> scratch[260]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s80\0Ascratch_store_dword off, v0, off offset:260\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot (SGPR): s81 -> scratch[264]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_mov_b32 v0, s81\0Ascratch_store_dword off, v0, off offset:264\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  ds_read_b128  v[192:195], v2                          // 000000000A18: D9FE0000 C0000002", ""  : () -> ()
       llvm.inline_asm has_side_effects "  ds_read_b128  v[196:199], v2 offset:64                // 000000000A20: D9FE0040 C4000002", ""  : () -> ()
       llvm.inline_asm has_side_effects "  ds_read_b128  v[200:203], v2 offset:128               // 000000000A28: D9FE0080 C8000002", ""  : () -> ()
@@ -588,6 +588,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  s_add_u32     m0, 0, s50                              // 000000000C20: 807C3280", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(32)                               // 000000000C24: BF8C8F70", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[144:147], acc[32:33], v[192:193], v[144:147] // 000000000C28: D3D70090 0E438120", ""  : () -> ()
+              // === Snapshot for @PRINT at line 557 ===
+              // Scratch snapshot: v144 -> scratch[12]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v144, off offset:12", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a32 -> scratch[16]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a32\0Ascratch_store_dword off, v0, off offset:16\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v192 -> scratch[20]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v192, off offset:20", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[144:147], acc[34:35], v[194:195], v[144:147] // 000000000C30: D3D70090 0E438522", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[160:163], v36, s[92:95], 0 offen // 000000000C38: E05C1000 8097A024", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[144:147], acc[36:37], v[196:197], v[144:147] // 000000000C40: D3D70090 0E438924", ""  : () -> ()
@@ -629,6 +637,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[156:159], acc[62:63], v[222:223], v[156:159] // 000000000D60: D3D7009C 0E73BD3E", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(32)                               // 000000000D68: BF8C8F70", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[160:163], acc[64:65], v[192:193], v[160:163] // 000000000D6C: D3D700A0 0E838140", ""  : () -> ()
+              // === Snapshot for @PRINT at line 599 ===
+              // Scratch snapshot: v160 -> scratch[24]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v160, off offset:24", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a64 -> scratch[28]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a64\0Ascratch_store_dword off, v0, off offset:28\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v192 -> scratch[32]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v192, off offset:32", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[160:163], acc[66:67], v[194:195], v[160:163] // 000000000D74: D3D700A0 0E838542", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[192:195], v38, s[92:95], 0 offen // 000000000D7C: E05C1000 8097C026", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[160:163], acc[68:69], v[196:197], v[160:163] // 000000000D84: D3D700A0 0E838944", ""  : () -> ()
@@ -670,6 +686,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[172:175], acc[94:95], v[222:223], v[172:175] // 000000000EA4: D3D700AC 0EB3BD5E", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(32)                               // 000000000EAC: BF8C8F70", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[176:179], acc[96:97], v[192:193], v[176:179] // 000000000EB0: D3D700B0 0EC38160", ""  : () -> ()
+              // === Snapshot for @PRINT at line 641 ===
+              // Scratch snapshot: v176 -> scratch[36]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v176, off offset:36", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a96 -> scratch[40]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a96\0Ascratch_store_dword off, v0, off offset:40\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v192 -> scratch[44]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v192, off offset:44", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[176:179], acc[98:99], v[194:195], v[176:179] // 000000000EB8: D3D700B0 0EC38562", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[224:227], v40, s[92:95], 0 offen // 000000000EC0: E05C1000 8097E028", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[176:179], acc[100:101], v[196:197], v[176:179] // 000000000EC8: D3D700B0 0EC38964", ""  : () -> ()
@@ -753,6 +777,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[76:79], acc[158:159], v[222:223], v[76:79] // 000000001130: D3D7004C 0D33BD9E", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(24)                               // 000000001138: BF8C4F78", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[80:83], acc[160:161], v[192:193], v[80:83] // 00000000113C: D3D70050 0D4381A0", ""  : () -> ()
+              // === Snapshot for @PRINT at line 725 ===
+              // Scratch snapshot: v80 -> scratch[48]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v80, off offset:48", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a160 -> scratch[52]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a160\0Ascratch_store_dword off, v0, off offset:52\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v192 -> scratch[56]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v192, off offset:56", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[80:83], acc[162:163], v[194:195], v[80:83] // 000000001144: D3D70050 0D4385A2", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[32:35], v36, s[24:27], 0 offen // 00000000114C: E05C1000 80862024", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[80:83], acc[164:165], v[196:197], v[80:83] // 000000001154: D3D70050 0D4389A4", ""  : () -> ()
@@ -802,6 +834,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  ds_read_b128  v[252:255], v2 offset:9536              // 0000000012B4: D9FE2540 FC000002", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(24)                               // 0000000012BC: BF8C4F78", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[96:99], acc[192:193], v[192:193], v[96:99] // 0000000012C0: D3D70060 0D8381C0", ""  : () -> ()
+              // === Snapshot for @PRINT at line 775 ===
+              // Scratch snapshot: v96 -> scratch[60]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v96, off offset:60", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a192 -> scratch[64]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a192\0Ascratch_store_dword off, v0, off offset:64\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v192 -> scratch[68]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v192, off offset:68", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[96:99], acc[194:195], v[194:195], v[96:99] // 0000000012C8: D3D70060 0D8385C2", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[64:67], v38, s[24:27], 0 offen // 0000000012D0: E05C1000 80864026", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[96:99], acc[196:197], v[196:197], v[96:99] // 0000000012D8: D3D70060 0D8389C4", ""  : () -> ()
@@ -843,6 +883,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[108:111], acc[222:223], v[222:223], v[108:111] // 0000000013F8: D3D7006C 0DB3BDDE", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(24)                               // 000000001400: BF8C4F78", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[112:115], acc[224:225], v[192:193], v[112:115] // 000000001404: D3D70070 0DC381E0", ""  : () -> ()
+              // === Snapshot for @PRINT at line 817 ===
+              // Scratch snapshot: v112 -> scratch[72]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v112, off offset:72", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a224 -> scratch[76]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a224\0Ascratch_store_dword off, v0, off offset:76\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v192 -> scratch[80]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v192, off offset:80", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[112:115], acc[226:227], v[194:195], v[112:115] // 00000000140C: D3D70070 0DC385E2", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[96:99], v40, s[24:27], 0 offen // 000000001414: E05C1000 80866028", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[112:115], acc[228:229], v[196:197], v[112:115] // 00000000141C: D3D70070 0DC389E4", ""  : () -> ()
@@ -957,6 +1005,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  s_add_u32     m0, 0, s51                              // 000000001748: 807C3380", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(32)                               // 00000000174C: BF8C8F70", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[144:147], acc[32:33], v[224:225], v[144:147] // 000000001750: D3D70090 0E43C120", ""  : () -> ()
+              // === Snapshot for @PRINT at line 932 ===
+              // Scratch snapshot: v144 -> scratch[84]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v144, off offset:84", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a32 -> scratch[88]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a32\0Ascratch_store_dword off, v0, off offset:88\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v224 -> scratch[92]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v224, off offset:92", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[144:147], acc[34:35], v[226:227], v[144:147] // 000000001758: D3D70090 0E43C522", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[160:163], v36, s[92:95], 0 offen // 000000001760: E05C1000 8097A024", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[144:147], acc[36:37], v[228:229], v[144:147] // 000000001768: D3D70090 0E43C924", ""  : () -> ()
@@ -998,6 +1054,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[156:159], acc[62:63], v[254:255], v[156:159] // 000000001888: D3D7009C 0E73FD3E", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(32)                               // 000000001890: BF8C8F70", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[160:163], acc[64:65], v[224:225], v[160:163] // 000000001894: D3D700A0 0E83C140", ""  : () -> ()
+              // === Snapshot for @PRINT at line 974 ===
+              // Scratch snapshot: v160 -> scratch[96]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v160, off offset:96", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a64 -> scratch[100]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a64\0Ascratch_store_dword off, v0, off offset:100\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v224 -> scratch[104]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v224, off offset:104", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[160:163], acc[66:67], v[226:227], v[160:163] // 00000000189C: D3D700A0 0E83C542", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[192:195], v38, s[92:95], 0 offen // 0000000018A4: E05C1000 8097C026", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[160:163], acc[68:69], v[228:229], v[160:163] // 0000000018AC: D3D700A0 0E83C944", ""  : () -> ()
@@ -1039,6 +1103,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[172:175], acc[94:95], v[254:255], v[172:175] // 0000000019CC: D3D700AC 0EB3FD5E", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(32)                               // 0000000019D4: BF8C8F70", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[176:179], acc[96:97], v[224:225], v[176:179] // 0000000019D8: D3D700B0 0EC3C160", ""  : () -> ()
+              // === Snapshot for @PRINT at line 1016 ===
+              // Scratch snapshot: v176 -> scratch[108]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v176, off offset:108", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a96 -> scratch[112]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a96\0Ascratch_store_dword off, v0, off offset:112\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v224 -> scratch[116]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v224, off offset:116", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[176:179], acc[98:99], v[226:227], v[176:179] // 0000000019E0: D3D700B0 0EC3C562", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[224:227], v40, s[92:95], 0 offen // 0000000019E8: E05C1000 8097E028", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[176:179], acc[100:101], v[228:229], v[176:179] // 0000000019F0: D3D700B0 0EC3C964", ""  : () -> ()
@@ -1122,6 +1194,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[76:79], acc[158:159], v[254:255], v[76:79] // 000000001C58: D3D7004C 0D33FD9E", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(24)                               // 000000001C60: BF8C4F78", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[80:83], acc[160:161], v[224:225], v[80:83] // 000000001C64: D3D70050 0D43C1A0", ""  : () -> ()
+              // === Snapshot for @PRINT at line 1100 ===
+              // Scratch snapshot: v80 -> scratch[120]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v80, off offset:120", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a160 -> scratch[124]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a160\0Ascratch_store_dword off, v0, off offset:124\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v224 -> scratch[128]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v224, off offset:128", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[80:83], acc[162:163], v[226:227], v[80:83] // 000000001C6C: D3D70050 0D43C5A2", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[32:35], v36, s[24:27], 0 offen // 000000001C74: E05C1000 80862024", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[80:83], acc[164:165], v[228:229], v[80:83] // 000000001C7C: D3D70050 0D43C9A4", ""  : () -> ()
@@ -1171,6 +1251,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  ds_read_b128  v[220:223], v2 offset:1216              // 000000001DDC: D9FE04C0 DC000002", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(24)                               // 000000001DE4: BF8C4F78", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[96:99], acc[192:193], v[224:225], v[96:99] // 000000001DE8: D3D70060 0D83C1C0", ""  : () -> ()
+              // === Snapshot for @PRINT at line 1150 ===
+              // Scratch snapshot: v96 -> scratch[132]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v96, off offset:132", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a192 -> scratch[136]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a192\0Ascratch_store_dword off, v0, off offset:136\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v224 -> scratch[140]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v224, off offset:140", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[96:99], acc[194:195], v[226:227], v[96:99] // 000000001DF0: D3D70060 0D83C5C2", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[64:67], v38, s[24:27], 0 offen // 000000001DF8: E05C1000 80864026", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[96:99], acc[196:197], v[228:229], v[96:99] // 000000001E00: D3D70060 0D83C9C4", ""  : () -> ()
@@ -1212,6 +1300,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[108:111], acc[222:223], v[254:255], v[108:111] // 000000001F20: D3D7006C 0DB3FDDE", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(24)                               // 000000001F28: BF8C4F78", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[112:115], acc[224:225], v[224:225], v[112:115] // 000000001F2C: D3D70070 0DC3C1E0", ""  : () -> ()
+              // === Snapshot for @PRINT at line 1192 ===
+              // Scratch snapshot: v112 -> scratch[144]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v112, off offset:144", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a224 -> scratch[148]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a224\0Ascratch_store_dword off, v0, off offset:148\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v224 -> scratch[152]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v224, off offset:152", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[112:115], acc[226:227], v[226:227], v[112:115] // 000000001F34: D3D70070 0DC3C5E2", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[96:99], v40, s[24:27], 0 offen // 000000001F3C: E05C1000 80866028", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[112:115], acc[228:229], v[228:229], v[112:115] // 000000001F44: D3D70070 0DC3C9E4", ""  : () -> ()
@@ -2376,6 +2472,12 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_perm_b32    v143, v191, v143, s55                   // 000000003870: D1ED008F 00DF1FBF", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_rcp_f32     v24, v22                                // 000000003878: 7E304516", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_rcp_f32     v25, v23                                // 00000000387C: 7E324517", ""  : () -> ()
+              // === Snapshot for @PRINT at line 2357 ===
+              // Scratch snapshot: v24 -> scratch[156]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v24, off offset:156", ""  : () -> ()
+              // Scratch snapshot: v25 -> scratch[160]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v25, off offset:160", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_lshrrev_b32  v56, 5, v0                             // 000000003880: 20700085", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_lshlrev_b32  v57, 5, v56                            // 000000003884: 24727085", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_and_b32     v56, 31, v0                             // 000000003888: 2670009F", ""  : () -> ()
@@ -2405,6 +2507,10 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  ds_write_b32  v56, v143 offset:34048                  // 00000000392C: D81A8500 00008F38", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     lgkmcnt(0)                              // 000000003934: BF8CC07F", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_barrier                                             // 000000003938: BF8A0000", ""  : () -> ()
+              // === Snapshot for @PRINT at line 2387 ===
+              // Scratch snapshot: v24 -> scratch[164]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v24, off offset:164", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_lshrrev_b32  v56, 4, v0                             // 00000000393C: 20700084", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_lshlrev_b32  v57, 6, v56                            // 000000003940: 24727086", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_and_b32     v56, 15, v0                             // 000000003944: 2670008F", ""  : () -> ()
@@ -2537,6 +2643,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[220:223], acc[62:63], v[174:175], v[220:223] // 000000003CF8: D3D700DC 0F735D3E", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(41)                               // 000000003D00: BF8C8F79", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[192:195], acc[64:65], v[144:145], v[192:195] // 000000003D04: D3D700C0 0F032140", ""  : () -> ()
+              // === Snapshot for @PRINT at line 2520 ===
+              // Scratch snapshot: v192 -> scratch[168]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v192, off offset:168", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a64 -> scratch[172]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a64\0Ascratch_store_dword off, v0, off offset:172\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v144 -> scratch[176]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v144, off offset:176", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[192:195], acc[66:67], v[146:147], v[192:195] // 000000003D0C: D3D700C0 0F032542", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[192:195], v42, s[12:15], 0 offen // 000000003D14: E05C1000 8083C02A", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[192:195], acc[68:69], v[148:149], v[192:195] // 000000003D1C: D3D700C0 0F032944", ""  : () -> ()
@@ -2578,6 +2692,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[204:207], acc[94:95], v[190:191], v[204:207] // 000000003E3C: D3D700CC 0F337D5E", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(40)                               // 000000003E44: BF8C8F78", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[208:211], acc[96:97], v[144:145], v[208:211] // 000000003E48: D3D700D0 0F432160", ""  : () -> ()
+              // === Snapshot for @PRINT at line 2562 ===
+              // Scratch snapshot: v208 -> scratch[180]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v208, off offset:180", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a96 -> scratch[184]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a96\0Ascratch_store_dword off, v0, off offset:184\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v144 -> scratch[188]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v144, off offset:188", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[208:211], acc[98:99], v[146:147], v[208:211] // 000000003E50: D3D700D0 0F432562", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[224:227], v44, s[12:15], 0 offen // 000000003E58: E05C1000 8083E02C", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[208:211], acc[100:101], v[148:149], v[208:211] // 000000003E60: D3D700D0 0F432964", ""  : () -> ()
@@ -3034,6 +3156,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[252:255], acc[190:191], v[174:175], v[252:255] // 000000004A24: D3D700FC 0FF35DBE", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(41)                               // 000000004A2C: BF8C8F79", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[224:227], acc[192:193], v[144:145], v[224:227] // 000000004A30: D3D700E0 0F8321C0", ""  : () -> ()
+              // === Snapshot for @PRINT at line 3019 ===
+              // Scratch snapshot: v224 -> scratch[192]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v224, off offset:192", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a192 -> scratch[196]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a192\0Ascratch_store_dword off, v0, off offset:196\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v144 -> scratch[200]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v144, off offset:200", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[224:227], acc[194:195], v[146:147], v[224:227] // 000000004A38: D3D700E0 0F8325C2", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[64:67], v42, s[12:15], 0 offen // 000000004A40: E05C1000 8083402A", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[224:227], acc[196:197], v[148:149], v[224:227] // 000000004A48: D3D700E0 0F8329C4", ""  : () -> ()
@@ -3075,6 +3205,14 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[236:239], acc[222:223], v[190:191], v[236:239] // 000000004B68: D3D700EC 0FB37DDE", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     vmcnt(40)                               // 000000004B70: BF8C8F78", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[240:243], acc[224:225], v[144:145], v[240:243] // 000000004B74: D3D700F0 0FC321E0", ""  : () -> ()
+              // === Snapshot for @PRINT at line 3061 ===
+              // Scratch snapshot: v240 -> scratch[204]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v240, off offset:204", ""  : () -> ()
+              // Scratch snapshot (AccVGPR): a224 -> scratch[208]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v0, off offset:0\0Av_accvgpr_read_b32 v0, a224\0Ascratch_store_dword off, v0, off offset:208\0Ascratch_load_dword v0, off, off offset:0\0As_waitcnt vmcnt(0)", ""  : () -> ()
+              // Scratch snapshot: v144 -> scratch[212]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v144, off offset:212", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[240:243], acc[226:227], v[146:147], v[240:243] // 000000004B7C: D3D700F0 0FC325E2", ""  : () -> ()
       llvm.inline_asm has_side_effects "  buffer_load_dwordx4  acc[96:99], v44, s[12:15], 0 offen // 000000004B84: E05C1000 8083602C", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_mfma_i32_16x16x32_i8  v[240:243], acc[228:229], v[148:149], v[240:243] // 000000004B8C: D3D700F0 0FC329E4", ""  : () -> ()
@@ -5298,6 +5436,12 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  v_perm_b32    v143, v191, v143, s55                   // 0000000082E4: D1ED008F 00DF1FBF", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_rcp_f32     v24, v22                                // 0000000082EC: 7E304516", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_rcp_f32     v25, v23                                // 0000000082F0: 7E324517", ""  : () -> ()
+              // === Snapshot for @PRINT at line 5285 ===
+              // Scratch snapshot: v24 -> scratch[216]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v24, off offset:216", ""  : () -> ()
+              // Scratch snapshot: v25 -> scratch[220]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v25, off offset:220", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_lshrrev_b32  v56, 5, v0                             // 0000000082F4: 20700085", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_lshlrev_b32  v57, 5, v56                            // 0000000082F8: 24727085", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_and_b32     v56, 31, v0                             // 0000000082FC: 2670009F", ""  : () -> ()
@@ -5327,6 +5471,10 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "  ds_write_b32  v56, v143 offset:34048                  // 0000000083A0: D81A8500 00008F38", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     lgkmcnt(0)                              // 0000000083A8: BF8CC07F", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_barrier                                             // 0000000083AC: BF8A0000", ""  : () -> ()
+              // === Snapshot for @PRINT at line 5315 ===
+              // Scratch snapshot: v24 -> scratch[224]
+              llvm.inline_asm has_side_effects "scratch_store_dword off, v24, off offset:224", ""  : () -> ()
+              // === End Snapshot ===
       llvm.inline_asm has_side_effects "  v_lshrrev_b32  v56, 4, v0                             // 0000000083B0: 20700084", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_lshlrev_b32  v57, 6, v56                            // 0000000083B4: 24727086", ""  : () -> ()
       llvm.inline_asm has_side_effects "  v_and_b32     v56, 15, v0                             // 0000000083B8: 2670008F", ""  : () -> ()
@@ -6370,237 +6518,737 @@ module attributes {amdgpu.code_object_version = 6 : i32, llvm.target_triple = "a
       llvm.inline_asm has_side_effects "label_27CF:", ""  : () -> ()
       llvm.inline_asm has_side_effects "  s_waitcnt     0x0000                                  // 000000009F3C: BF8C0000", ""  : () -> ()
               // Restore kernarg pointer for printf (from scratch memory)
-              llvm.inline_asm has_side_effects "scratch_load_dword v0, off, off offset:52\0As_waitcnt vmcnt(0)\0Av_readfirstlane_b32 s0, v0\0Ascratch_load_dword v0, off, off offset:56\0As_waitcnt vmcnt(0)\0Av_readfirstlane_b32 s1, v0", ""  : () -> ()
-              // === @PRINT from line 286 (using snapshots) ===
-              // Conditional printf: read $tgid_x from scratch[40]
-              %cond_builtin_0_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:40\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              llvm.inline_asm has_side_effects "scratch_load_dword v0, off, off offset:284\0As_waitcnt vmcnt(0)\0Av_readfirstlane_b32 s0, v0\0Ascratch_load_dword v0, off, off offset:288\0As_waitcnt vmcnt(0)\0Av_readfirstlane_b32 s1, v0", ""  : () -> ()
+              // === @PRINT from line 122 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_0_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_0_0 = arith.constant 0 : i32
               %cond_0_0 = arith.cmpi eq, %cond_builtin_0_0, %cmp_val_0_0 : i32
-              // Conditional printf: read $tgid_y from scratch[44]
-              %cond_builtin_0_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:44\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_0_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_0_1 = arith.constant 0 : i32
               %cond_0_1 = arith.cmpi eq, %cond_builtin_0_1, %cmp_val_0_1 : i32
-              // Conditional printf: read $tgid_z from scratch[48]
-              %cond_builtin_0_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:48\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_0_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_0_2 = arith.constant 0 : i32
               %cond_0_2 = arith.cmpi eq, %cond_builtin_0_2, %cmp_val_0_2 : i32
-              // Conditional printf: read $tid from scratch[36]
-              %cond_builtin_0_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              %cmp_val_0_3 = arith.constant 129 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_0_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_0_3 = arith.constant 0 : i32
               %cond_0_3 = arith.cmpi eq, %cond_builtin_0_3, %cmp_val_0_3 : i32
               %cond_and_0_1 = arith.andi %cond_0_0, %cond_0_1 : i1
               %cond_and_0_2 = arith.andi %cond_and_0_1, %cond_0_2 : i1
               %cond_and_0_3 = arith.andi %cond_and_0_2, %cond_0_3 : i1
               scf.if %cond_and_0_3 {
                 // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
-              // Using scratch snapshot [4] for v26
-              %print_val_0_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:4\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              // Built-in $tid: read from scratch[36]
-              %print_val_0_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-                gpu.printf "X_mem_load v26=%d tid=%d\0A", %print_val_0_0, %print_val_0_1 : i32, i32
+              // Using scratch snapshot [228] for s64
+              %print_val_0_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:228\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [232] for s65
+              %print_val_0_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:232\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [236] for s66
+              %print_val_0_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:236\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [240] for s5
+              %print_val_0_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:240\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "P1_PARAMS dim=%d hidden=%d tokens=%d eprt=%d\0A", %print_val_0_0, %print_val_0_1, %print_val_0_2, %print_val_0_3 : i32, i32, i32, i32
               }
               // === End @PRINT ===
-              // === @PRINT from line 289 (using snapshots) ===
-              // Conditional printf: read $tgid_x from scratch[40]
-              %cond_builtin_1_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:40\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // === @PRINT from line 264 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_1_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_1_0 = arith.constant 0 : i32
               %cond_1_0 = arith.cmpi eq, %cond_builtin_1_0, %cmp_val_1_0 : i32
-              // Conditional printf: read $tgid_y from scratch[44]
-              %cond_builtin_1_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:44\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_1_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_1_1 = arith.constant 0 : i32
               %cond_1_1 = arith.cmpi eq, %cond_builtin_1_1, %cmp_val_1_1 : i32
-              // Conditional printf: read $tgid_z from scratch[48]
-              %cond_builtin_1_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:48\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_1_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_1_2 = arith.constant 0 : i32
               %cond_1_2 = arith.cmpi eq, %cond_builtin_1_2, %cmp_val_1_2 : i32
-              // Conditional printf: read $tid from scratch[36]
-              %cond_builtin_1_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              %cmp_val_1_3 = arith.constant 129 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_1_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_1_3 = arith.constant 0 : i32
               %cond_1_3 = arith.cmpi eq, %cond_builtin_1_3, %cmp_val_1_3 : i32
               %cond_and_1_1 = arith.andi %cond_1_0, %cond_1_1 : i1
               %cond_and_1_2 = arith.andi %cond_and_1_1, %cond_1_2 : i1
               %cond_and_1_3 = arith.andi %cond_and_1_2, %cond_1_3 : i1
               scf.if %cond_and_1_3 {
                 // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
-              // Using scratch snapshot [8] for v27
-              %print_val_1_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:8\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              // Built-in $tid: read from scratch[36]
-              %print_val_1_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-                gpu.printf "X_mem_load v27=%d tid=%d\0A", %print_val_1_0, %print_val_1_1 : i32, i32
+              // Using scratch snapshot [244] for s6
+              %print_val_1_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:244\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [248] for s52
+              %print_val_1_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:248\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "P2_CONSTS log2e=%x perm0=%x\0A", %print_val_1_0, %print_val_1_1 : i32, i32
               }
               // === End @PRINT ===
-              // === @PRINT from line 292 (using snapshots) ===
-              // Conditional printf: read $tgid_x from scratch[40]
-              %cond_builtin_2_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:40\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // === @PRINT from line 286 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_2_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_2_0 = arith.constant 0 : i32
               %cond_2_0 = arith.cmpi eq, %cond_builtin_2_0, %cmp_val_2_0 : i32
-              // Conditional printf: read $tgid_y from scratch[44]
-              %cond_builtin_2_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:44\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_2_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_2_1 = arith.constant 0 : i32
               %cond_2_1 = arith.cmpi eq, %cond_builtin_2_1, %cmp_val_2_1 : i32
-              // Conditional printf: read $tgid_z from scratch[48]
-              %cond_builtin_2_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:48\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_2_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_2_2 = arith.constant 0 : i32
               %cond_2_2 = arith.cmpi eq, %cond_builtin_2_2, %cmp_val_2_2 : i32
-              // Conditional printf: read $tid from scratch[36]
-              %cond_builtin_2_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              %cmp_val_2_3 = arith.constant 129 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_2_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_2_3 = arith.constant 0 : i32
               %cond_2_3 = arith.cmpi eq, %cond_builtin_2_3, %cmp_val_2_3 : i32
               %cond_and_2_1 = arith.andi %cond_2_0, %cond_2_1 : i1
               %cond_and_2_2 = arith.andi %cond_and_2_1, %cond_2_2 : i1
               %cond_and_2_3 = arith.andi %cond_and_2_2, %cond_2_3 : i1
               scf.if %cond_and_2_3 {
                 // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
-              // Using scratch snapshot [12] for v28
-              %print_val_2_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:12\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              // Built-in $tid: read from scratch[36]
-              %print_val_2_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-                gpu.printf "X_mem_load v28=%d tid=%d\0A", %print_val_2_0, %print_val_2_1 : i32, i32
+              // Using scratch snapshot [4] for v20
+              %print_val_2_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:4\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [8] for v8
+              %print_val_2_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:8\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [252] for s40
+              %print_val_2_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:252\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "P3_W_LOAD w_val=%x w_addr=%d sw_buf=%d\0A", %print_val_2_0, %print_val_2_1, %print_val_2_2 : i32, i32, i32
               }
               // === End @PRINT ===
-              // === @PRINT from line 295 (using snapshots) ===
-              // Conditional printf: read $tgid_x from scratch[40]
-              %cond_builtin_3_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:40\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // === @PRINT from line 485 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_3_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_3_0 = arith.constant 0 : i32
               %cond_3_0 = arith.cmpi eq, %cond_builtin_3_0, %cmp_val_3_0 : i32
-              // Conditional printf: read $tgid_y from scratch[44]
-              %cond_builtin_3_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:44\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_3_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_3_1 = arith.constant 0 : i32
               %cond_3_1 = arith.cmpi eq, %cond_builtin_3_1, %cmp_val_3_1 : i32
-              // Conditional printf: read $tgid_z from scratch[48]
-              %cond_builtin_3_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:48\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_3_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_3_2 = arith.constant 0 : i32
               %cond_3_2 = arith.cmpi eq, %cond_builtin_3_2, %cmp_val_3_2 : i32
-              // Conditional printf: read $tid from scratch[36]
-              %cond_builtin_3_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              %cmp_val_3_3 = arith.constant 129 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_3_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_3_3 = arith.constant 0 : i32
               %cond_3_3 = arith.cmpi eq, %cond_builtin_3_3, %cmp_val_3_3 : i32
               %cond_and_3_1 = arith.andi %cond_3_0, %cond_3_1 : i1
               %cond_and_3_2 = arith.andi %cond_and_3_1, %cond_3_2 : i1
               %cond_and_3_3 = arith.andi %cond_and_3_2, %cond_3_3 : i1
               scf.if %cond_and_3_3 {
                 // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
-              // Using scratch snapshot [16] for v29
-              %print_val_3_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:16\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              // Built-in $tid: read from scratch[36]
-              %print_val_3_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-                gpu.printf "X_mem_load v29=%d tid=%d\0A", %print_val_3_0, %print_val_3_1 : i32, i32
+              // Using scratch snapshot [256] for s7
+              %print_val_3_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:256\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [260] for s80
+              %print_val_3_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:260\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [264] for s81
+              %print_val_3_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:264\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "P4_PRE_CORE wave=%d loop_idx=%d loop_cnt=%d\0A", %print_val_3_0, %print_val_3_1, %print_val_3_2 : i32, i32, i32
               }
               // === End @PRINT ===
-              // === @PRINT from line 298 (using snapshots) ===
-              // Conditional printf: read $tgid_x from scratch[40]
-              %cond_builtin_4_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:40\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // === @PRINT from line 557 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_4_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_4_0 = arith.constant 0 : i32
               %cond_4_0 = arith.cmpi eq, %cond_builtin_4_0, %cmp_val_4_0 : i32
-              // Conditional printf: read $tgid_y from scratch[44]
-              %cond_builtin_4_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:44\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_4_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_4_1 = arith.constant 0 : i32
               %cond_4_1 = arith.cmpi eq, %cond_builtin_4_1, %cmp_val_4_1 : i32
-              // Conditional printf: read $tgid_z from scratch[48]
-              %cond_builtin_4_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:48\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_4_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_4_2 = arith.constant 0 : i32
               %cond_4_2 = arith.cmpi eq, %cond_builtin_4_2, %cmp_val_4_2 : i32
-              // Conditional printf: read $tid from scratch[36]
-              %cond_builtin_4_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              %cmp_val_4_3 = arith.constant 129 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_4_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_4_3 = arith.constant 0 : i32
               %cond_4_3 = arith.cmpi eq, %cond_builtin_4_3, %cmp_val_4_3 : i32
               %cond_and_4_1 = arith.andi %cond_4_0, %cond_4_1 : i1
               %cond_and_4_2 = arith.andi %cond_and_4_1, %cond_4_2 : i1
               %cond_and_4_3 = arith.andi %cond_and_4_2, %cond_4_3 : i1
               scf.if %cond_and_4_3 {
                 // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
-              // Using scratch snapshot [20] for v30
-              %print_val_4_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:20\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              // Built-in $tid: read from scratch[36]
-              %print_val_4_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-                gpu.printf "X_mem_load v30=%d tid=%d\0A", %print_val_4_0, %print_val_4_1 : i32, i32
+              // Using scratch snapshot [12] for v144
+              %print_val_4_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:12\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [16] for a32
+              %print_val_4_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:16\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [20] for v192
+              %print_val_4_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:20\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_4_0, %print_val_4_1, %print_val_4_2 : i32, i32, i32
               }
               // === End @PRINT ===
-              // === @PRINT from line 301 (using snapshots) ===
-              // Conditional printf: read $tgid_x from scratch[40]
-              %cond_builtin_5_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:40\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // === @PRINT from line 599 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_5_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_5_0 = arith.constant 0 : i32
               %cond_5_0 = arith.cmpi eq, %cond_builtin_5_0, %cmp_val_5_0 : i32
-              // Conditional printf: read $tgid_y from scratch[44]
-              %cond_builtin_5_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:44\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_5_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_5_1 = arith.constant 0 : i32
               %cond_5_1 = arith.cmpi eq, %cond_builtin_5_1, %cmp_val_5_1 : i32
-              // Conditional printf: read $tgid_z from scratch[48]
-              %cond_builtin_5_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:48\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_5_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_5_2 = arith.constant 0 : i32
               %cond_5_2 = arith.cmpi eq, %cond_builtin_5_2, %cmp_val_5_2 : i32
-              // Conditional printf: read $tid from scratch[36]
-              %cond_builtin_5_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              %cmp_val_5_3 = arith.constant 129 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_5_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_5_3 = arith.constant 0 : i32
               %cond_5_3 = arith.cmpi eq, %cond_builtin_5_3, %cmp_val_5_3 : i32
               %cond_and_5_1 = arith.andi %cond_5_0, %cond_5_1 : i1
               %cond_and_5_2 = arith.andi %cond_and_5_1, %cond_5_2 : i1
               %cond_and_5_3 = arith.andi %cond_and_5_2, %cond_5_3 : i1
               scf.if %cond_and_5_3 {
                 // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
-              // Using scratch snapshot [24] for v31
+              // Using scratch snapshot [24] for v160
               %print_val_5_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:24\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              // Built-in $tid: read from scratch[36]
-              %print_val_5_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-                gpu.printf "X_mem_load v31=%d tid=%d\0A", %print_val_5_0, %print_val_5_1 : i32, i32
+              // Using scratch snapshot [28] for a64
+              %print_val_5_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:28\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [32] for v192
+              %print_val_5_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:32\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_5_0, %print_val_5_1, %print_val_5_2 : i32, i32, i32
               }
               // === End @PRINT ===
-              // === @PRINT from line 304 (using snapshots) ===
-              // Conditional printf: read $tgid_x from scratch[40]
-              %cond_builtin_6_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:40\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // === @PRINT from line 641 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_6_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_6_0 = arith.constant 0 : i32
               %cond_6_0 = arith.cmpi eq, %cond_builtin_6_0, %cmp_val_6_0 : i32
-              // Conditional printf: read $tgid_y from scratch[44]
-              %cond_builtin_6_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:44\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_6_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_6_1 = arith.constant 0 : i32
               %cond_6_1 = arith.cmpi eq, %cond_builtin_6_1, %cmp_val_6_1 : i32
-              // Conditional printf: read $tgid_z from scratch[48]
-              %cond_builtin_6_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:48\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_6_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_6_2 = arith.constant 0 : i32
               %cond_6_2 = arith.cmpi eq, %cond_builtin_6_2, %cmp_val_6_2 : i32
-              // Conditional printf: read $tid from scratch[36]
-              %cond_builtin_6_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              %cmp_val_6_3 = arith.constant 129 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_6_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_6_3 = arith.constant 0 : i32
               %cond_6_3 = arith.cmpi eq, %cond_builtin_6_3, %cmp_val_6_3 : i32
               %cond_and_6_1 = arith.andi %cond_6_0, %cond_6_1 : i1
               %cond_and_6_2 = arith.andi %cond_and_6_1, %cond_6_2 : i1
               %cond_and_6_3 = arith.andi %cond_and_6_2, %cond_6_3 : i1
               scf.if %cond_and_6_3 {
                 // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
-              // Using scratch snapshot [28] for v32
-              %print_val_6_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:28\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              // Built-in $tid: read from scratch[36]
-              %print_val_6_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-                gpu.printf "X_mem_load v32=%d tid=%d\0A", %print_val_6_0, %print_val_6_1 : i32, i32
+              // Using scratch snapshot [36] for v176
+              %print_val_6_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [40] for a96
+              %print_val_6_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:40\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [44] for v192
+              %print_val_6_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:44\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_6_0, %print_val_6_1, %print_val_6_2 : i32, i32, i32
               }
               // === End @PRINT ===
-              // === @PRINT from line 307 (using snapshots) ===
-              // Conditional printf: read $tgid_x from scratch[40]
-              %cond_builtin_7_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:40\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // === @PRINT from line 725 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_7_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_7_0 = arith.constant 0 : i32
               %cond_7_0 = arith.cmpi eq, %cond_builtin_7_0, %cmp_val_7_0 : i32
-              // Conditional printf: read $tgid_y from scratch[44]
-              %cond_builtin_7_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:44\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_7_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_7_1 = arith.constant 0 : i32
               %cond_7_1 = arith.cmpi eq, %cond_builtin_7_1, %cmp_val_7_1 : i32
-              // Conditional printf: read $tgid_z from scratch[48]
-              %cond_builtin_7_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:48\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_7_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
               %cmp_val_7_2 = arith.constant 0 : i32
               %cond_7_2 = arith.cmpi eq, %cond_builtin_7_2, %cmp_val_7_2 : i32
-              // Conditional printf: read $tid from scratch[36]
-              %cond_builtin_7_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              %cmp_val_7_3 = arith.constant 129 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_7_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_7_3 = arith.constant 0 : i32
               %cond_7_3 = arith.cmpi eq, %cond_builtin_7_3, %cmp_val_7_3 : i32
               %cond_and_7_1 = arith.andi %cond_7_0, %cond_7_1 : i1
               %cond_and_7_2 = arith.andi %cond_and_7_1, %cond_7_2 : i1
               %cond_and_7_3 = arith.andi %cond_and_7_2, %cond_7_3 : i1
               scf.if %cond_and_7_3 {
                 // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
-              // Using scratch snapshot [32] for v33
-              %print_val_7_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:32\0As_waitcnt vmcnt(0)", "=v": () -> i32
-              // Built-in $tid: read from scratch[36]
-              %print_val_7_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:36\0As_waitcnt vmcnt(0)", "=v": () -> i32
-                gpu.printf "X_mem_load v33=%d tid=%d\0A", %print_val_7_0, %print_val_7_1 : i32, i32
+              // Using scratch snapshot [48] for v80
+              %print_val_7_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:48\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [52] for a160
+              %print_val_7_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:52\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [56] for v192
+              %print_val_7_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:56\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_7_0, %print_val_7_1, %print_val_7_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 775 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_8_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_8_0 = arith.constant 0 : i32
+              %cond_8_0 = arith.cmpi eq, %cond_builtin_8_0, %cmp_val_8_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_8_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_8_1 = arith.constant 0 : i32
+              %cond_8_1 = arith.cmpi eq, %cond_builtin_8_1, %cmp_val_8_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_8_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_8_2 = arith.constant 0 : i32
+              %cond_8_2 = arith.cmpi eq, %cond_builtin_8_2, %cmp_val_8_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_8_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_8_3 = arith.constant 0 : i32
+              %cond_8_3 = arith.cmpi eq, %cond_builtin_8_3, %cmp_val_8_3 : i32
+              %cond_and_8_1 = arith.andi %cond_8_0, %cond_8_1 : i1
+              %cond_and_8_2 = arith.andi %cond_and_8_1, %cond_8_2 : i1
+              %cond_and_8_3 = arith.andi %cond_and_8_2, %cond_8_3 : i1
+              scf.if %cond_and_8_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [60] for v96
+              %print_val_8_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:60\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [64] for a192
+              %print_val_8_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:64\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [68] for v192
+              %print_val_8_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:68\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_8_0, %print_val_8_1, %print_val_8_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 817 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_9_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_9_0 = arith.constant 0 : i32
+              %cond_9_0 = arith.cmpi eq, %cond_builtin_9_0, %cmp_val_9_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_9_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_9_1 = arith.constant 0 : i32
+              %cond_9_1 = arith.cmpi eq, %cond_builtin_9_1, %cmp_val_9_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_9_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_9_2 = arith.constant 0 : i32
+              %cond_9_2 = arith.cmpi eq, %cond_builtin_9_2, %cmp_val_9_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_9_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_9_3 = arith.constant 0 : i32
+              %cond_9_3 = arith.cmpi eq, %cond_builtin_9_3, %cmp_val_9_3 : i32
+              %cond_and_9_1 = arith.andi %cond_9_0, %cond_9_1 : i1
+              %cond_and_9_2 = arith.andi %cond_and_9_1, %cond_9_2 : i1
+              %cond_and_9_3 = arith.andi %cond_and_9_2, %cond_9_3 : i1
+              scf.if %cond_and_9_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [72] for v112
+              %print_val_9_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:72\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [76] for a224
+              %print_val_9_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:76\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [80] for v192
+              %print_val_9_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:80\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_9_0, %print_val_9_1, %print_val_9_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 932 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_10_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_10_0 = arith.constant 0 : i32
+              %cond_10_0 = arith.cmpi eq, %cond_builtin_10_0, %cmp_val_10_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_10_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_10_1 = arith.constant 0 : i32
+              %cond_10_1 = arith.cmpi eq, %cond_builtin_10_1, %cmp_val_10_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_10_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_10_2 = arith.constant 0 : i32
+              %cond_10_2 = arith.cmpi eq, %cond_builtin_10_2, %cmp_val_10_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_10_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_10_3 = arith.constant 0 : i32
+              %cond_10_3 = arith.cmpi eq, %cond_builtin_10_3, %cmp_val_10_3 : i32
+              %cond_and_10_1 = arith.andi %cond_10_0, %cond_10_1 : i1
+              %cond_and_10_2 = arith.andi %cond_and_10_1, %cond_10_2 : i1
+              %cond_and_10_3 = arith.andi %cond_and_10_2, %cond_10_3 : i1
+              scf.if %cond_and_10_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [84] for v144
+              %print_val_10_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:84\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [88] for a32
+              %print_val_10_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:88\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [92] for v224
+              %print_val_10_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:92\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_10_0, %print_val_10_1, %print_val_10_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 974 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_11_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_11_0 = arith.constant 0 : i32
+              %cond_11_0 = arith.cmpi eq, %cond_builtin_11_0, %cmp_val_11_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_11_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_11_1 = arith.constant 0 : i32
+              %cond_11_1 = arith.cmpi eq, %cond_builtin_11_1, %cmp_val_11_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_11_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_11_2 = arith.constant 0 : i32
+              %cond_11_2 = arith.cmpi eq, %cond_builtin_11_2, %cmp_val_11_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_11_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_11_3 = arith.constant 0 : i32
+              %cond_11_3 = arith.cmpi eq, %cond_builtin_11_3, %cmp_val_11_3 : i32
+              %cond_and_11_1 = arith.andi %cond_11_0, %cond_11_1 : i1
+              %cond_and_11_2 = arith.andi %cond_and_11_1, %cond_11_2 : i1
+              %cond_and_11_3 = arith.andi %cond_and_11_2, %cond_11_3 : i1
+              scf.if %cond_and_11_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [96] for v160
+              %print_val_11_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:96\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [100] for a64
+              %print_val_11_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:100\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [104] for v224
+              %print_val_11_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:104\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_11_0, %print_val_11_1, %print_val_11_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 1016 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_12_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_12_0 = arith.constant 0 : i32
+              %cond_12_0 = arith.cmpi eq, %cond_builtin_12_0, %cmp_val_12_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_12_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_12_1 = arith.constant 0 : i32
+              %cond_12_1 = arith.cmpi eq, %cond_builtin_12_1, %cmp_val_12_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_12_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_12_2 = arith.constant 0 : i32
+              %cond_12_2 = arith.cmpi eq, %cond_builtin_12_2, %cmp_val_12_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_12_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_12_3 = arith.constant 0 : i32
+              %cond_12_3 = arith.cmpi eq, %cond_builtin_12_3, %cmp_val_12_3 : i32
+              %cond_and_12_1 = arith.andi %cond_12_0, %cond_12_1 : i1
+              %cond_and_12_2 = arith.andi %cond_and_12_1, %cond_12_2 : i1
+              %cond_and_12_3 = arith.andi %cond_and_12_2, %cond_12_3 : i1
+              scf.if %cond_and_12_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [108] for v176
+              %print_val_12_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:108\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [112] for a96
+              %print_val_12_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:112\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [116] for v224
+              %print_val_12_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:116\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_12_0, %print_val_12_1, %print_val_12_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 1100 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_13_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_13_0 = arith.constant 0 : i32
+              %cond_13_0 = arith.cmpi eq, %cond_builtin_13_0, %cmp_val_13_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_13_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_13_1 = arith.constant 0 : i32
+              %cond_13_1 = arith.cmpi eq, %cond_builtin_13_1, %cmp_val_13_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_13_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_13_2 = arith.constant 0 : i32
+              %cond_13_2 = arith.cmpi eq, %cond_builtin_13_2, %cmp_val_13_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_13_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_13_3 = arith.constant 0 : i32
+              %cond_13_3 = arith.cmpi eq, %cond_builtin_13_3, %cmp_val_13_3 : i32
+              %cond_and_13_1 = arith.andi %cond_13_0, %cond_13_1 : i1
+              %cond_and_13_2 = arith.andi %cond_and_13_1, %cond_13_2 : i1
+              %cond_and_13_3 = arith.andi %cond_and_13_2, %cond_13_3 : i1
+              scf.if %cond_and_13_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [120] for v80
+              %print_val_13_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:120\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [124] for a160
+              %print_val_13_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:124\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [128] for v224
+              %print_val_13_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:128\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_13_0, %print_val_13_1, %print_val_13_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 1150 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_14_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_14_0 = arith.constant 0 : i32
+              %cond_14_0 = arith.cmpi eq, %cond_builtin_14_0, %cmp_val_14_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_14_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_14_1 = arith.constant 0 : i32
+              %cond_14_1 = arith.cmpi eq, %cond_builtin_14_1, %cmp_val_14_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_14_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_14_2 = arith.constant 0 : i32
+              %cond_14_2 = arith.cmpi eq, %cond_builtin_14_2, %cmp_val_14_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_14_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_14_3 = arith.constant 0 : i32
+              %cond_14_3 = arith.cmpi eq, %cond_builtin_14_3, %cmp_val_14_3 : i32
+              %cond_and_14_1 = arith.andi %cond_14_0, %cond_14_1 : i1
+              %cond_and_14_2 = arith.andi %cond_and_14_1, %cond_14_2 : i1
+              %cond_and_14_3 = arith.andi %cond_and_14_2, %cond_14_3 : i1
+              scf.if %cond_and_14_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [132] for v96
+              %print_val_14_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:132\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [136] for a192
+              %print_val_14_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:136\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [140] for v224
+              %print_val_14_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:140\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_14_0, %print_val_14_1, %print_val_14_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 1192 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_15_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_15_0 = arith.constant 0 : i32
+              %cond_15_0 = arith.cmpi eq, %cond_builtin_15_0, %cmp_val_15_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_15_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_15_1 = arith.constant 0 : i32
+              %cond_15_1 = arith.cmpi eq, %cond_builtin_15_1, %cmp_val_15_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_15_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_15_2 = arith.constant 0 : i32
+              %cond_15_2 = arith.cmpi eq, %cond_builtin_15_2, %cmp_val_15_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_15_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_15_3 = arith.constant 0 : i32
+              %cond_15_3 = arith.cmpi eq, %cond_builtin_15_3, %cmp_val_15_3 : i32
+              %cond_and_15_1 = arith.andi %cond_15_0, %cond_15_1 : i1
+              %cond_and_15_2 = arith.andi %cond_and_15_1, %cond_15_2 : i1
+              %cond_and_15_3 = arith.andi %cond_and_15_2, %cond_15_3 : i1
+              scf.if %cond_and_15_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [144] for v112
+              %print_val_15_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:144\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [148] for a224
+              %print_val_15_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:148\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [152] for v224
+              %print_val_15_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:152\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_15_0, %print_val_15_1, %print_val_15_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 2357 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_16_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_16_0 = arith.constant 0 : i32
+              %cond_16_0 = arith.cmpi eq, %cond_builtin_16_0, %cmp_val_16_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_16_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_16_1 = arith.constant 0 : i32
+              %cond_16_1 = arith.cmpi eq, %cond_builtin_16_1, %cmp_val_16_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_16_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_16_2 = arith.constant 0 : i32
+              %cond_16_2 = arith.cmpi eq, %cond_builtin_16_2, %cmp_val_16_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_16_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_16_3 = arith.constant 0 : i32
+              %cond_16_3 = arith.cmpi eq, %cond_builtin_16_3, %cmp_val_16_3 : i32
+              %cond_and_16_1 = arith.andi %cond_16_0, %cond_16_1 : i1
+              %cond_and_16_2 = arith.andi %cond_and_16_1, %cond_16_2 : i1
+              %cond_and_16_3 = arith.andi %cond_and_16_2, %cond_16_3 : i1
+              scf.if %cond_and_16_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [156] for v24
+              %print_val_16_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:156\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [160] for v25
+              %print_val_16_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:160\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "P5_DYN_QUANT zdynQ0=%x zdynQ1=%x\0A", %print_val_16_0, %print_val_16_1 : i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 2387 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_17_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_17_0 = arith.constant 0 : i32
+              %cond_17_0 = arith.cmpi eq, %cond_builtin_17_0, %cmp_val_17_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_17_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_17_1 = arith.constant 0 : i32
+              %cond_17_1 = arith.cmpi eq, %cond_builtin_17_1, %cmp_val_17_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_17_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_17_2 = arith.constant 0 : i32
+              %cond_17_2 = arith.cmpi eq, %cond_builtin_17_2, %cmp_val_17_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_17_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_17_3 = arith.constant 0 : i32
+              %cond_17_3 = arith.cmpi eq, %cond_builtin_17_3, %cmp_val_17_3 : i32
+              %cond_and_17_1 = arith.andi %cond_17_0, %cond_17_1 : i1
+              %cond_and_17_2 = arith.andi %cond_and_17_1, %cond_17_2 : i1
+              %cond_and_17_3 = arith.andi %cond_and_17_2, %cond_17_3 : i1
+              scf.if %cond_and_17_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [164] for v24
+              %print_val_17_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:164\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "P6_ACTV_DONE zdynQ0=%x\0A", %print_val_17_0 : i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 2520 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_18_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_18_0 = arith.constant 0 : i32
+              %cond_18_0 = arith.cmpi eq, %cond_builtin_18_0, %cmp_val_18_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_18_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_18_1 = arith.constant 0 : i32
+              %cond_18_1 = arith.cmpi eq, %cond_builtin_18_1, %cmp_val_18_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_18_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_18_2 = arith.constant 0 : i32
+              %cond_18_2 = arith.cmpi eq, %cond_builtin_18_2, %cmp_val_18_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_18_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_18_3 = arith.constant 0 : i32
+              %cond_18_3 = arith.cmpi eq, %cond_builtin_18_3, %cmp_val_18_3 : i32
+              %cond_and_18_1 = arith.andi %cond_18_0, %cond_18_1 : i1
+              %cond_and_18_2 = arith.andi %cond_and_18_1, %cond_18_2 : i1
+              %cond_and_18_3 = arith.andi %cond_and_18_2, %cond_18_3 : i1
+              scf.if %cond_and_18_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [168] for v192
+              %print_val_18_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:168\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [172] for a64
+              %print_val_18_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:172\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [176] for v144
+              %print_val_18_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:176\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_18_0, %print_val_18_1, %print_val_18_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 2562 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_19_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_19_0 = arith.constant 0 : i32
+              %cond_19_0 = arith.cmpi eq, %cond_builtin_19_0, %cmp_val_19_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_19_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_19_1 = arith.constant 0 : i32
+              %cond_19_1 = arith.cmpi eq, %cond_builtin_19_1, %cmp_val_19_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_19_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_19_2 = arith.constant 0 : i32
+              %cond_19_2 = arith.cmpi eq, %cond_builtin_19_2, %cmp_val_19_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_19_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_19_3 = arith.constant 0 : i32
+              %cond_19_3 = arith.cmpi eq, %cond_builtin_19_3, %cmp_val_19_3 : i32
+              %cond_and_19_1 = arith.andi %cond_19_0, %cond_19_1 : i1
+              %cond_and_19_2 = arith.andi %cond_and_19_1, %cond_19_2 : i1
+              %cond_and_19_3 = arith.andi %cond_and_19_2, %cond_19_3 : i1
+              scf.if %cond_and_19_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [180] for v208
+              %print_val_19_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:180\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [184] for a96
+              %print_val_19_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:184\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [188] for v144
+              %print_val_19_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:188\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_19_0, %print_val_19_1, %print_val_19_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 3019 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_20_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_20_0 = arith.constant 0 : i32
+              %cond_20_0 = arith.cmpi eq, %cond_builtin_20_0, %cmp_val_20_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_20_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_20_1 = arith.constant 0 : i32
+              %cond_20_1 = arith.cmpi eq, %cond_builtin_20_1, %cmp_val_20_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_20_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_20_2 = arith.constant 0 : i32
+              %cond_20_2 = arith.cmpi eq, %cond_builtin_20_2, %cmp_val_20_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_20_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_20_3 = arith.constant 0 : i32
+              %cond_20_3 = arith.cmpi eq, %cond_builtin_20_3, %cmp_val_20_3 : i32
+              %cond_and_20_1 = arith.andi %cond_20_0, %cond_20_1 : i1
+              %cond_and_20_2 = arith.andi %cond_and_20_1, %cond_20_2 : i1
+              %cond_and_20_3 = arith.andi %cond_and_20_2, %cond_20_3 : i1
+              scf.if %cond_and_20_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [192] for v224
+              %print_val_20_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:192\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [196] for a192
+              %print_val_20_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:196\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [200] for v144
+              %print_val_20_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:200\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_20_0, %print_val_20_1, %print_val_20_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 3061 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_21_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_21_0 = arith.constant 0 : i32
+              %cond_21_0 = arith.cmpi eq, %cond_builtin_21_0, %cmp_val_21_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_21_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_21_1 = arith.constant 0 : i32
+              %cond_21_1 = arith.cmpi eq, %cond_builtin_21_1, %cmp_val_21_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_21_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_21_2 = arith.constant 0 : i32
+              %cond_21_2 = arith.cmpi eq, %cond_builtin_21_2, %cmp_val_21_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_21_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_21_3 = arith.constant 0 : i32
+              %cond_21_3 = arith.cmpi eq, %cond_builtin_21_3, %cmp_val_21_3 : i32
+              %cond_and_21_1 = arith.andi %cond_21_0, %cond_21_1 : i1
+              %cond_and_21_2 = arith.andi %cond_and_21_1, %cond_21_2 : i1
+              %cond_and_21_3 = arith.andi %cond_and_21_2, %cond_21_3 : i1
+              scf.if %cond_and_21_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [204] for v240
+              %print_val_21_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:204\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [208] for a224
+              %print_val_21_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:208\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [212] for v144
+              %print_val_21_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:212\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "GEMM0_mfma Z=%x G_acc=%x X=%x\0A", %print_val_21_0, %print_val_21_1, %print_val_21_2 : i32, i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 5285 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_22_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_22_0 = arith.constant 0 : i32
+              %cond_22_0 = arith.cmpi eq, %cond_builtin_22_0, %cmp_val_22_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_22_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_22_1 = arith.constant 0 : i32
+              %cond_22_1 = arith.cmpi eq, %cond_builtin_22_1, %cmp_val_22_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_22_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_22_2 = arith.constant 0 : i32
+              %cond_22_2 = arith.cmpi eq, %cond_builtin_22_2, %cmp_val_22_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_22_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_22_3 = arith.constant 0 : i32
+              %cond_22_3 = arith.cmpi eq, %cond_builtin_22_3, %cmp_val_22_3 : i32
+              %cond_and_22_1 = arith.andi %cond_22_0, %cond_22_1 : i1
+              %cond_and_22_2 = arith.andi %cond_and_22_1, %cond_22_2 : i1
+              %cond_and_22_3 = arith.andi %cond_and_22_2, %cond_22_3 : i1
+              scf.if %cond_and_22_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [216] for v24
+              %print_val_22_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:216\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              // Using scratch snapshot [220] for v25
+              %print_val_22_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:220\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "P5_DYN_QUANT zdynQ0=%x zdynQ1=%x\0A", %print_val_22_0, %print_val_22_1 : i32, i32
+              }
+              // === End @PRINT ===
+              // === @PRINT from line 5315 (using snapshots) ===
+              // Conditional printf: read $tgid_x from scratch[272]
+              %cond_builtin_23_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:272\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_23_0 = arith.constant 0 : i32
+              %cond_23_0 = arith.cmpi eq, %cond_builtin_23_0, %cmp_val_23_0 : i32
+              // Conditional printf: read $tgid_y from scratch[276]
+              %cond_builtin_23_1 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:276\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_23_1 = arith.constant 0 : i32
+              %cond_23_1 = arith.cmpi eq, %cond_builtin_23_1, %cmp_val_23_1 : i32
+              // Conditional printf: read $tgid_z from scratch[280]
+              %cond_builtin_23_2 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:280\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_23_2 = arith.constant 0 : i32
+              %cond_23_2 = arith.cmpi eq, %cond_builtin_23_2, %cmp_val_23_2 : i32
+              // Conditional printf: read $tid from scratch[268]
+              %cond_builtin_23_3 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:268\0As_waitcnt vmcnt(0)", "=v": () -> i32
+              %cmp_val_23_3 = arith.constant 0 : i32
+              %cond_23_3 = arith.cmpi eq, %cond_builtin_23_3, %cmp_val_23_3 : i32
+              %cond_and_23_1 = arith.andi %cond_23_0, %cond_23_1 : i1
+              %cond_and_23_2 = arith.andi %cond_and_23_1, %cond_23_2 : i1
+              %cond_and_23_3 = arith.andi %cond_and_23_2, %cond_23_3 : i1
+              scf.if %cond_and_23_3 {
+                // --- deferred scratch loads (inside scf.if to reduce reg pressure) ---
+              // Using scratch snapshot [224] for v24
+              %print_val_23_0 = llvm.inline_asm has_side_effects asm_dialect = att "scratch_load_dword $0, off, off offset:224\0As_waitcnt vmcnt(0)", "=v": () -> i32
+                gpu.printf "P6_ACTV_DONE zdynQ0=%x\0A", %print_val_23_0 : i32
               }
               // === End @PRINT ===
               // === Printf Section End ===
