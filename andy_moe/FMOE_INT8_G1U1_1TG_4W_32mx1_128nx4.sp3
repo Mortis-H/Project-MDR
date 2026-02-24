@@ -378,7 +378,7 @@ function X_mem_load(fch_idx, s, n)
        for var i=0; i < inst_cnt; i++
            var i_idx = s+i
            buffer_load_dword  v0,  v_regs(_v_X_addr, i_idx),  s_regs(_s_X_buf, 0), 0 lds:1 offen:1 
-           // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 129: f"X_mem_load v_regs={v_regs:d} tid={$tid:d}"
+           // PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 129: f"X_mem_load v_regs={v_regs:d} tid={$tid:d}"
            
            if i_idx != blk_32x256_mem_ld_insts-1
               s_add_u32   m0, (i_idx+1)*256, s_regs(_s_X_lds_wr_base_m0, fch_idx)
@@ -993,6 +993,7 @@ function G_dyn_quant
    //save de-quant scale
    v_rcp_f32  v_regs(_v_ZdynQ, 0), v_regs(_v_Max, 0)
    v_rcp_f32  v_regs(_v_ZdynQ, 1), v_regs(_v_Max, 1)
+   // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P5_DYN_QUANT zdynQ0={v24:x} zdynQ1={v25:x}"
 end
 
 function G_reshape_wr
@@ -1149,6 +1150,7 @@ function cl_gemm0(cl_p, pi)
 
          for var k = 0; k < 256/32; k++  //dim(K)--8
             v_mfma_i32_16x16x32_i8   v_regs(_v_Z, vZ_idx), acc_regs(_v_G+vG_off, k*vs_AB), v_regs(_v_X+vX_off, k*vs_AB), v_regs(_v_Z, vZ_idx)
+            // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"GEMM0_mfma Z={v_regs(_v_Z, vZ_idx):x} G_acc={acc_regs(_v_G+vG_off, k*vs_AB):x} X={v_regs(_v_X+vX_off, k*vs_AB):x}"
 
             if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) < 2)
                 G_mem_load(1-pi, G_ml_idx, 1) //mem_rd_b128*32
@@ -1343,6 +1345,7 @@ end
     G_reshape_wr()
     s_waitcnt lgkmcnt(0)
     s_barrier
+    // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P6_ACTV_DONE zdynQ0={v24:x}"
     G_reshape_rd()
 end
 ////////////////////////////////////////////
@@ -1648,6 +1651,7 @@ shader main
 
   //wait expert_idx and s_token_idx is ready
   s_waitcnt       lgkmcnt(0) 
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P1_PARAMS dim={s_dim_len:d} hidden={s_hidden_len:d} tokens={s_token_cnt:d} eprt={s_eprt_idx:d}"
 
   //////////////X/R mem_load address///////////////
   v_lshlrev_b32    v_regs(_v_tmp, 0),      2,                           v0 //each thread take 4 bytes
@@ -1760,6 +1764,7 @@ shader main
   s_mov_b32       s_perm3,       0x04020100
 
   s_mov_b32       s_log2e,       0x3fb8aa3b
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P2_CONSTS log2e={s_log2e:x} perm0={s_perm0:x}"
   s_mov_b32       s_c1,          0xbd92220c
   s_mov_b32       m0,            s_regs(_s_X_lds_wr_base_m0, 0)
 
@@ -1794,6 +1799,7 @@ shader main
 
   //Weight load 
   buffer_load_dword  v_regs(_v_W, 0),  v_regs(_v_W_addr, 0),  s_regs(_s_SW_buf, 0), 0 offen:1
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P3_W_LOAD w_val={v_regs(_v_W, 0):x} w_addr={v_regs(_v_W_addr, 0):d} sw_buf={s_regs(_s_SW_buf, 0):d}"
   buffer_load_dword  v_regs(_v_W, 1),  v_regs(_v_W_addr, 1),  s_regs(_s_SW_buf, 0), 0 offen:1
  
   X_mem_load(0, 0, blk_32x256_mem_ld_insts)
@@ -1821,6 +1827,7 @@ else
   s_waitcnt  vmcnt(GU_256x512_mem_ld_insts) //wait X.blk[0] is ready
 end
   s_barrier
+  // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"P4_PRE_CORE wave={s_wave_id:d} loop_idx={s_loop_idx:d} loop_cnt={s_loop_cnt:d}"
 
   X_lds_rd(0, 0, 0, blk_32x256_lds_rd_insts)
   

@@ -27,7 +27,7 @@ DEFAULT_GPR_TOOL = str(PROJECT_ROOT / "gpr_printf_tool.py")
 
 DIRECTIVE_RE = re.compile(r"@PRINT\b|@TIMESTAMP_START\b|@TIMESTAMP_END\b")
 LABEL_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_\.\[\]]*):")
-REGISTER_RANGE_RE = re.compile(r"^([sv])\[\d+:\d+\]$")
+REGISTER_RANGE_RE = re.compile(r"^([a-z]+)\[\d+:\d+\]$")
 REGISTER_RE = re.compile(r"^([sv])\d+$")
 ACC_RE = re.compile(r"^acc\d+$")
 AREG_RE = re.compile(r"^a\d+$")
@@ -36,6 +36,9 @@ FLOAT_RE = re.compile(r"^-?\d*\.\d+([eE][-+]?\d+)?$")
 FUNC_CALL_RE = re.compile(r"^([A-Za-z_]\w*)\((.*)\)$")
 LABEL_TOKEN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_\.\[\]]*$")
 IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+VAR_REGISTER_RE = re.compile(
+    r'^\s*var\s+(\w+)\s*=\s*([svSV]\d+|acc\d+|[aA]\d+)\s*(?://.*)?$'
+)
 
 
 @dataclass
@@ -59,9 +62,9 @@ class Directive:
 # Regex to match SP3 macro references in @PRINT text:
 # - Full form: v_regs(_v_X_addr, i_idx) or s_regs(_s_X_buf, 0)
 # - Bare form: v_regs or s_regs (used as variable name in format string {v_regs:d})
-SP3_MACRO_RE = re.compile(r'[vs]_regs(?:\s*\([^)]*\))?')
+SP3_MACRO_RE = re.compile(r'(?:[vs]_regs|acc_regs)(?:\s*\([^)]*\))?')
 # Regex to find bare v_regs/s_regs inside format string placeholders like {v_regs:d}
-SP3_BARE_MACRO_IN_FMT_RE = re.compile(r'\{(v_regs|s_regs)(:[^}]*)?\}')
+SP3_BARE_MACRO_IN_FMT_RE = re.compile(r'\{(v_regs|s_regs|acc_regs)(:[^}]*)?\}')
 
 
 def run_cmd(cmd: List[str], env: Optional[Dict[str, str]] = None) -> None:
@@ -132,7 +135,7 @@ def normalize_operand(token: str) -> Optional[str]:
         return None
     range_match = REGISTER_RANGE_RE.match(tok)
     if range_match:
-        return f"{range_match.group(1)}[]"
+        return range_match.group(1)
     reg_match = REGISTER_RE.match(tok)
     if reg_match:
         return reg_match.group(1)
@@ -152,7 +155,7 @@ def normalize_operand(token: str) -> Optional[str]:
         if func in ("v_regs", "v_reg", "vreg"):
             return "v"
         if func in ("s_regs", "s_reg", "sreg"):
-            return "s[]"
+            return "s"
         if func in ("acc_regs", "acc_reg", "accreg"):
             return "acc"
         if func in ("a_regs", "a_reg", "areg"):
@@ -190,6 +193,20 @@ def extract_raw_operands(line: str) -> List[str]:
     if len(parts) < 2:
         return []
     return split_operands(parts[1])
+
+
+_REG_RANGE_SIMPLIFY_RE = re.compile(r'^([a-z]+)\[(\d+):\d+\]$')
+
+
+def _simplify_reg_range(operand: str) -> str:
+    """Convert register range like s[28:31] to s28, acc[0:1] to a0."""
+    m = _REG_RANGE_SIMPLIFY_RE.match(operand)
+    if m:
+        prefix = m.group(1)
+        if prefix == 'acc':
+            prefix = 'a'
+        return f"{prefix}{m.group(2)}"
+    return operand
 
 
 def resolve_sp3_macros(directive_text: str,
@@ -234,13 +251,20 @@ def resolve_sp3_macros(directive_text: str,
             clean_op = sp3_op.strip().replace(' ', '')
             call_match = FUNC_CALL_RE.match(clean_op)
             if call_match:
-                macro_map[clean_op] = dis_op.strip()
+                resolved = _simplify_reg_range(dis_op.strip())
+                macro_map[clean_op] = resolved
                 func_name = call_match.group(1).lower()
                 if func_name in ('v_regs', 'v_reg', 'vreg',
-                                 's_regs', 's_reg', 'sreg'):
-                    base_name = 'v_regs' if func_name.startswith('v') else 's_regs'
+                                 's_regs', 's_reg', 'sreg',
+                                 'acc_regs', 'acc_reg', 'accreg'):
+                    if func_name.startswith('acc'):
+                        base_name = 'acc_regs'
+                    elif func_name.startswith('v'):
+                        base_name = 'v_regs'
+                    else:
+                        base_name = 's_regs'
                     if base_name not in bare_macro_map:
-                        bare_macro_map[base_name] = dis_op.strip()
+                        bare_macro_map[base_name] = resolved
     else:
         # Different operand count (e.g., lds drops vdst in ISA disasm).
         # Match within each normalized-type group, only counting macro ops.
@@ -262,12 +286,18 @@ def resolve_sp3_macros(directive_text: str,
                 macro_idx_by_norm[norm] = idx + 1
                 candidates = dis_by_norm.get(norm, [])
                 if idx < len(candidates):
-                    concrete = candidates[idx]
+                    concrete = _simplify_reg_range(candidates[idx])
                     macro_map[clean_op] = concrete
                     func_name = call_match.group(1).lower()
                     if func_name in ('v_regs', 'v_reg', 'vreg',
-                                     's_regs', 's_reg', 'sreg'):
-                        base_name = 'v_regs' if func_name.startswith('v') else 's_regs'
+                                     's_regs', 's_reg', 'sreg',
+                                     'acc_regs', 'acc_reg', 'accreg'):
+                        if func_name.startswith('acc'):
+                            base_name = 'acc_regs'
+                        elif func_name.startswith('v'):
+                            base_name = 'v_regs'
+                        else:
+                            base_name = 's_regs'
                         if base_name not in bare_macro_map:
                             bare_macro_map[base_name] = concrete
 
@@ -418,6 +448,99 @@ def current_function(stack: List[Tuple[str, str]]) -> Optional[str]:
         if block_type in ("function", "shader"):
             return name
     return None
+
+
+def expand_thin_functions(
+    lines: List[str],
+    line_infos: List[LineInfo],
+    func_tokens: Dict[str, List[str]],
+    func_meta: Dict[str, Dict[str, List]],
+    directives: List["Directive"],
+    min_tokens_threshold: int = 10,
+) -> None:
+    """Inline called-function tokens for functions with few direct instructions.
+
+    When a function body is mostly function calls (e.g. cl_actv_reshape_D_load),
+    the token list is too short for reliable pattern matching.  By inlining the
+    called functions' tokens we provide enough surrounding context to
+    distinguish otherwise-identical instruction pairs (e.g. two s_barrier).
+    Modifies *func_tokens*, *func_meta* and directive anchor indices in place.
+    """
+    thin_funcs = set()
+    for d in directives:
+        if d.func in func_tokens and len(func_tokens[d.func]) < min_tokens_threshold:
+            thin_funcs.add(d.func)
+    if not thin_funcs:
+        return
+
+    for func_name in thin_funcs:
+        original_tokens = list(func_tokens[func_name])
+        expanded: List[str] = []
+        anchor_remap: Dict[int, int] = {}
+
+        for idx, line in enumerate(lines):
+            info = line_infos[idx]
+            if info.func != func_name:
+                continue
+
+            if info.opcode and info.instr_index is not None:
+                anchor_remap[info.instr_index] = len(expanded)
+                expanded.append(original_tokens[info.instr_index])
+            elif info.opcode and info.instr_index is None:
+                called = info.opcode.split("(")[0]
+                if called in func_tokens and called != func_name:
+                    expanded.extend(func_tokens[called])
+
+        if len(expanded) <= len(original_tokens):
+            continue
+
+        func_tokens[func_name] = expanded
+
+        labels_list: List[Optional[str]] = [None] * len(expanded)
+        bh, bp, bl = build_block_meta(expanded, labels_list)
+        func_meta[func_name] = {
+            "labels": labels_list,
+            "block_hashes": bh,
+            "block_pos": bp,
+            "block_len": bl,
+        }
+
+        for d in directives:
+            if d.func == func_name and d.anchor_index in anchor_remap:
+                d.anchor_index = anchor_remap[d.anchor_index]
+
+        print(
+            f"[Info] Expanded '{func_name}': "
+            f"{len(original_tokens)} -> {len(expanded)} tokens (inlined)"
+        )
+
+
+def parse_var_register_aliases(lines: List[str]) -> Dict[str, str]:
+    """Parse 'var NAME = sN/vN/accN' declarations to build symbolic -> physical register map."""
+    var_map: Dict[str, str] = {}
+    for line in lines:
+        m = VAR_REGISTER_RE.match(line)
+        if m:
+            var_map[m.group(1)] = m.group(2).lower()
+    return var_map
+
+
+def resolve_symbolic_registers(text: str, var_map: Dict[str, str]) -> str:
+    """Replace symbolic register names in {name:fmt} format placeholders with physical registers.
+
+    Example: var_map = {"s_log2e": "s6"} turns '{s_log2e:x}' into '{s6:x}'.
+    """
+    if not var_map:
+        return text
+
+    def _replace(m: re.Match) -> str:
+        name = m.group(1)
+        if name in var_map:
+            fmt = m.group(2) or ''
+            return '{' + var_map[name] + fmt + '}'
+        return m.group(0)
+
+    return re.sub(r'\{(\w+)(:[^}]*)?\}', _replace, text)
 
 
 def parse_sp3_source(
@@ -956,55 +1079,69 @@ def insert_directives_into_disasm(
                 if not cand_scores:
                     continue
                 candidates = list(cand_scores.items())
-                if candidates:
-                    max_score = max(score for _, score in candidates)
-                    base_candidates = [
-                        (idx, score)
-                        for idx, score in candidates
-                        if score >= max_score - insert_all_score_margin
-                    ]
-                    label_set = {
-                        dis_labels[idx]
-                        for idx, _score in base_candidates
-                        if idx < len(dis_labels)
-                    }
-                    if 0 <= d.anchor_index < len(tokens):
-                        anchor_token = tokens[d.anchor_index]
-                        if label_set and any(label is not None for label in label_set):
-                            for idx, tok in enumerate(dis_tokens):
-                                if tok == anchor_token and dis_labels[idx] in label_set:
-                                    cand_scores[idx] = max(cand_scores.get(idx, 0), max_score)
-                        else:
-                            top_idx, _top_score = max(
-                                candidates, key=lambda x: (x[1], -x[0])
-                            )
-                            if (
-                                0 <= top_idx < len(dis_block_pos)
-                                and 0 <= top_idx < len(dis_block_len)
-                            ):
-                                block_start = top_idx - dis_block_pos[top_idx]
-                                block_end = block_start + dis_block_len[top_idx] - 1
-                                if dis_block_len[top_idx] > 512:
-                                    window = 64
-                                    block_start = max(block_start, top_idx - window)
-                                    block_end = min(block_end, top_idx + window)
-                                for idx in range(block_start, block_end + 1):
-                                    if dis_tokens[idx] == anchor_token:
-                                        cand_scores[idx] = max(cand_scores.get(idx, 0), max_score)
-                    candidates = [
-                        (idx, score)
-                        for idx, score in cand_scores.items()
-                        if score >= max_score - insert_all_score_margin
-                    ]
-                candidates.sort(key=lambda x: (-x[1], x[0]))
-                if insert_all_max and insert_all_max > 0:
-                    candidates = candidates[:insert_all_max]
                 if not candidates:
+                    continue
+                max_score = max(score for _, score in candidates)
+
+                if d.func == "__shader_main__":
+                    best_idx = max(candidates, key=lambda x: (x[1], -x[0]))[0]
+                    insertions.setdefault(best_idx, []).append(
+                        (d.text, d.insert_after, d.anchor_raw_operands))
+                    continue
+
+                base_candidates = [
+                    (idx, score)
+                    for idx, score in candidates
+                    if score >= max_score - insert_all_score_margin
+                ]
+                if not base_candidates:
+                    continue
+
+                top_idx = max(base_candidates, key=lambda x: (x[1], -x[0]))[0]
+                anchor_token = (
+                    tokens[d.anchor_index]
+                    if 0 <= d.anchor_index < len(tokens)
+                    else None
+                )
+
+                expanded = {idx for idx, _ in base_candidates}
+
+                if anchor_token:
+                    best_ctx_positions: Optional[set] = None
+                    best_ctx_count = 0
+                    for ctx_w in range(6, 0, -1):
+                        ctx_start = max(0, top_idx - ctx_w)
+                        ctx_end = min(len(dis_tokens), top_idx + ctx_w + 1)
+                        ctx_pattern = dis_tokens[ctx_start:ctx_end]
+                        ctx_offset = top_idx - ctx_start
+                        ctx_matches = find_pattern_matches(dis_tokens, ctx_pattern)
+                        if not ctx_matches:
+                            continue
+                        new_positions = set()
+                        for m_start in ctx_matches:
+                            p = m_start + ctx_offset
+                            if 0 <= p < len(dis_tokens) and dis_tokens[p] == anchor_token:
+                                new_positions.add(p)
+                        if not new_positions:
+                            continue
+                        count = len(new_positions)
+                        if insert_all_max > 0 and count > insert_all_max:
+                            continue
+                        if count > best_ctx_count:
+                            best_ctx_count = count
+                            best_ctx_positions = new_positions
+                    if best_ctx_positions:
+                        expanded |= best_ctx_positions
+
+                expanded_list = sorted(expanded)
+                if insert_all_max and insert_all_max > 0:
+                    expanded_list = expanded_list[:insert_all_max]
+                if not expanded_list:
                     print(
                         f"[Warn] No candidates after filtering for directive (line {d.line_no}) from {d.func}."
                     )
                     continue
-                for dis_idx, _score in candidates:
+                for dis_idx in expanded_list:
                     insertions.setdefault(dis_idx, []).append(
                         (d.text, d.insert_after, d.anchor_raw_operands))
         else:
@@ -1148,6 +1285,18 @@ def main() -> int:
     print("=== Parse SP3 directives ===")
     src_lines, line_infos, func_tokens, func_meta = parse_sp3_source(input_sp3)
     directives = collect_directives(src_lines, line_infos)
+    expand_thin_functions(src_lines, line_infos, func_tokens, func_meta, directives)
+
+    var_register_map = parse_var_register_aliases(src_lines)
+    if var_register_map:
+        print(f"Found {len(var_register_map)} register alias(es)")
+        for d in directives:
+            resolved = resolve_symbolic_registers(d.text, var_register_map)
+            if resolved != d.text:
+                print(f"  [Resolve] L{d.line_no}: ...{d.text[-60:]}")
+                print(f"         -> ...{resolved[-60:]}")
+                d.text = resolved
+
     print(f"Found {len(directives)} directive(s)")
 
     print("\n=== Step 1: SP3 -> Binary ===")

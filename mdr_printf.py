@@ -211,14 +211,14 @@ def validate_variable(var_name: str, line_number: int = None) -> bool:
     if var_name in BUILTIN_VARS:
         return True
     
-    # 簡單暫存器 v\d+ 或 s\d+
-    if re.match(r'^[vs]\d+$', var_name):
+    # 簡單暫存器 v\d+, s\d+, or a\d+ (accumulator VGPR)
+    if re.match(r'^[vsa]\d+$', var_name):
         return True
     
     # 表達式：檢查是否包含運算符
     if any(op in var_name for op in ['+', '-', '*', '/', '(', ')']):
         # 提取表達式中的所有變數
-        tokens = re.findall(r'[vs]\d+|\$\w+', var_name)
+        tokens = re.findall(r'[vsa]\d+|\$\w+', var_name)
         for token in tokens:
             if token.startswith('$'):
                 if token not in BUILTIN_VARS:
@@ -228,9 +228,9 @@ def validate_variable(var_name: str, line_number: int = None) -> bool:
                         "Valid built-in variables are: $tid, $lane, $tgid_x/$tgid_y/$tgid_z "
                         "(aliases: $block_x/$block_y/$block_z, $blockidx_x/$blockidx_y/$blockidx_z)"
                     )
-            elif not re.match(r'^[vs]\d+$', token):
+            elif not re.match(r'^[vsa]\d+$', token):
                 line_info = f" (line {line_number + 1})" if line_number is not None else ""
-                raise ValueError(f"Invalid register '{token}'{line_info}. Expected format: v<N> or s<N>")
+                raise ValueError(f"Invalid register '{token}'{line_info}. Expected format: v<N>, s<N>, or a<N>")
         return True
     
     # 如果以 $ 開頭但不是已知的內建變數
@@ -298,7 +298,7 @@ def parse_fstring_format(fstring: str, line_number: int = None) -> Tuple[str, Li
             return '%d'
         
         # 判斷是暫存器還是表達式
-        is_simple_reg = re.match(r'^[vs]\d+$', reg_or_expr)
+        is_simple_reg = re.match(r'^[vsa]\d+$', reg_or_expr)
         
         registers.append(reg_or_expr)
         
@@ -310,6 +310,12 @@ def parse_fstring_format(fstring: str, line_number: int = None) -> Tuple[str, Li
             elif fmt_spec == 'ld':
                 types.append('i64')
                 return '%ld'
+            elif fmt_spec == 'x':
+                types.append('i32')
+                return '%x'
+            elif fmt_spec == 'u':
+                types.append('i32')
+                return '%u'
             elif fmt_spec == 'f' or fmt_spec == '.f':
                 types.append('f32')
                 return '%f'
@@ -515,7 +521,7 @@ def parse_print_directive(line: str, line_number: int) -> Optional[PrintDirectiv
                 expressions.append(reg_or_expr)
                 expr_types.append(typ)
             # 判斷是暫存器還是表達式
-            elif re.match(r'^[vs]\d+$', reg_or_expr):
+            elif re.match(r'^[vsa]\d+$', reg_or_expr):
                 registers.append(reg_or_expr)
                 reg_types.append(typ)
             else:
@@ -1039,14 +1045,16 @@ def generate_value_binding(reg: str, type_str: str, var_name: str) -> str:
     mlir_type = map_type_to_mlir(type_str)
     
     # 處理不同的暫存器格式
-    if reg.startswith('v'):
+    if reg.startswith('a') and not reg.startswith('acc'):
+        # AccVGPR (a0, a1, ...) — read via v_accvgpr_read_b32
+        asm_instr = f"v_accvgpr_read_b32 $0, {reg}"
+    elif reg.startswith('v'):
         # VGPR
         asm_instr = f"v_mov_b32 $0, {reg}"
     elif reg.startswith('s'):
         # SGPR - 需要先 mov 到 VGPR
         asm_instr = f"v_mov_b32 $0, {reg}"
     else:
-        # 預設
         asm_instr = f"v_mov_b32 $0, {reg}"
     
     return f'              %{var_name} = llvm.inline_asm has_side_effects asm_dialect = att "{asm_instr}", "=v": () -> {mlir_type}'
@@ -1203,8 +1211,8 @@ def generate_printf_with_snapshot(directive: PrintDirective, unique_id: int,
                         )
                 var_names.append(var_name)
             
-            elif re.match(r'^[vs]\d+$', value):
-                # 簡單暫存器
+            elif re.match(r'^[vsa]\d+$', value):
+                # 簡單暫存器 (v=VGPR, s=SGPR, a=AccVGPR)
                 if scratch_snapshot_map and value in scratch_snapshot_map.get('reg_snapshots', {}):
                     s_off = scratch_snapshot_map['reg_snapshots'][value]
                     _pv_target.append(f'              // Using scratch snapshot [{s_off}] for {value}')
@@ -1613,7 +1621,7 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     directive_expr_snapshots = {}
     
     # 用於從表達式中提取暫存器的正則表達式
-    reg_pattern = re.compile(r'[vs]\d+')
+    reg_pattern = re.compile(r'[vsa]\d+')
     
     for d_idx, directive in enumerate(directives):
         # 收集這個 directive 已經快照的暫存器
@@ -1623,6 +1631,12 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         for r_idx, reg in enumerate(directive.registers):
             if reg.startswith('v') and not reg.startswith('vcc'):
                 # VGPR 快照
+                snapshot_vgpr_num = snapshot_vgpr_start + vgpr_snapshot_idx
+                snapshot_vgprs.append((d_idx, r_idx, reg, snapshot_vgpr_num))
+                snapped_regs.add(reg)
+                vgpr_snapshot_idx += 1
+            elif reg.startswith('a') and not reg.startswith('acc'):
+                # AccVGPR (a0, a1, ...) — saved to VGPR snapshot slot
                 snapshot_vgpr_num = snapshot_vgpr_start + vgpr_snapshot_idx
                 snapshot_vgprs.append((d_idx, r_idx, reg, snapshot_vgpr_num))
                 snapped_regs.add(reg)
@@ -1643,6 +1657,11 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                         if reg.startswith('v') and not reg.startswith('vcc'):
                             snapshot_vgpr_num = snapshot_vgpr_start + vgpr_snapshot_idx
                             # 用特殊的 r_idx (-1) 標記這是表達式暫存器
+                            snapshot_vgprs.append((d_idx, -1, reg, snapshot_vgpr_num))
+                            expr_snap_map[reg] = f'v{snapshot_vgpr_num}'
+                            vgpr_snapshot_idx += 1
+                        elif reg.startswith('a') and not reg.startswith('acc'):
+                            snapshot_vgpr_num = snapshot_vgpr_start + vgpr_snapshot_idx
                             snapshot_vgprs.append((d_idx, -1, reg, snapshot_vgpr_num))
                             expr_snap_map[reg] = f'v{snapshot_vgpr_num}'
                             vgpr_snapshot_idx += 1
@@ -1751,7 +1770,10 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     
     # === 動態計算 clobber 範圍 ===
     MAX_VECTOR_SIZE = 32      # LLVM inline_asm vector 類型限制
-    SGPR_KERNARG_BACKUP = snapshot_sgpr_start + total_snapshot_sgprs
+    if use_scratch_snapshot:
+        SGPR_KERNARG_BACKUP = max(original_sgpr, SGPR_SNAPSHOT_START_MIN)
+    else:
+        SGPR_KERNARG_BACKUP = snapshot_sgpr_start + total_snapshot_sgprs
     if SGPR_KERNARG_BACKUP < SGPR_SNAPSHOT_START_MIN:
         SGPR_KERNARG_BACKUP = SGPR_SNAPSHOT_START_MIN
     SGPR_RESERVED_START = 4   # s[0:3] 是系統保留的，從 s4 開始保護
@@ -1779,8 +1801,12 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     # s[0:3] 系統保留, s[18:19] 用於 kernarg backup
     # SGPR 快照從 snapshot_sgpr_start 開始
     # 需要保護的範圍：s[4] 到 s[snapshot_sgpr_start + total_snapshot_sgprs - 1]
+    # 在 scratch snapshot mode 下，SGPR snapshot 已存入 scratch memory，不需要額外物理 SGPR
     sgpr_start = SGPR_RESERVED_START
-    sgpr_end_needed = snapshot_sgpr_start + total_snapshot_sgprs if total_snapshot_sgprs > 0 else max(original_sgpr, SGPR_SNAPSHOT_START_MIN)
+    if use_scratch_snapshot:
+        sgpr_end_needed = max(original_sgpr, SGPR_SNAPSHOT_START_MIN)
+    else:
+        sgpr_end_needed = snapshot_sgpr_start + total_snapshot_sgprs if total_snapshot_sgprs > 0 else max(original_sgpr, SGPR_SNAPSHOT_START_MIN)
     sgpr_end_needed = max(sgpr_end_needed, SGPR_KERNARG_BACKUP + 2)
     sgpr_count_needed = sgpr_end_needed - sgpr_start
     
@@ -2412,13 +2438,24 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             
             if use_scratch_snapshot:
                 # --- Scratch snapshot mode ---
-                # VGPR snapshots: directly store to scratch (no temp needed)
+                # VGPR/AccVGPR snapshots
                 if has_vgpr_snap:
                     for r_idx, orig_reg, _snap_vgpr in directive_vgpr_snapshots[d_idx]:
                         s_off = scratch_vgpr_map.get((d_idx, r_idx))
                         if s_off is not None:
-                            snap_lines.append(f'              // Scratch snapshot: {orig_reg} -> scratch[{s_off}]')
-                            snap_lines.append(f'              llvm.inline_asm has_side_effects "scratch_store_dword off, {orig_reg}, off offset:{s_off}", ""  : () -> ()')
+                            if orig_reg.startswith('a') and not orig_reg.startswith('acc'):
+                                snap_lines.append(f'              // Scratch snapshot (AccVGPR): {orig_reg} -> scratch[{s_off}]')
+                                snap_lines.append(
+                                    f'              llvm.inline_asm has_side_effects "'
+                                    f'scratch_store_dword off, v0, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                                    f'v_accvgpr_read_b32 v0, {orig_reg}\\0A'
+                                    f'scratch_store_dword off, v0, off offset:{s_off}\\0A'
+                                    f'scratch_load_dword v0, off, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                                    f's_waitcnt vmcnt(0)", ""  : () -> ()'
+                                )
+                            else:
+                                snap_lines.append(f'              // Scratch snapshot: {orig_reg} -> scratch[{s_off}]')
+                                snap_lines.append(f'              llvm.inline_asm has_side_effects "scratch_store_dword off, {orig_reg}, off offset:{s_off}", ""  : () -> ()')
                 
                 # SGPR snapshots: need v0 temp
                 if has_sgpr_snap:
@@ -2441,6 +2478,15 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                         snap_lines.append(f'              // Scratch expr snapshot: {orig_reg} -> scratch[{s_off}]')
                         if orig_reg.startswith('v'):
                             snap_lines.append(f'              llvm.inline_asm has_side_effects "scratch_store_dword off, {orig_reg}, off offset:{s_off}", ""  : () -> ()')
+                        elif orig_reg.startswith('a') and not orig_reg.startswith('acc'):
+                            snap_lines.append(
+                                f'              llvm.inline_asm has_side_effects "'
+                                f'scratch_store_dword off, v0, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                                f'v_accvgpr_read_b32 v0, {orig_reg}\\0A'
+                                f'scratch_store_dword off, v0, off offset:{s_off}\\0A'
+                                f'scratch_load_dword v0, off, off offset:{SCRATCH_V0_SPILL_OFFSET}\\0A'
+                                f's_waitcnt vmcnt(0)", ""  : () -> ()'
+                            )
                         else:
                             snap_lines.append(
                                 f'              llvm.inline_asm has_side_effects "'
@@ -2469,10 +2515,13 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                         )
             else:
                 # --- Original VGPR snapshot mode ---
-                # VGPR 快照：使用 v_mov_b32
+                # VGPR/AccVGPR 快照
                 if has_vgpr_snap:
                     for r_idx, orig_reg, snap_vgpr in directive_vgpr_snapshots[d_idx]:
-                        snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{snap_vgpr}, {orig_reg}", ""  : () -> ()')
+                        if orig_reg.startswith('a') and not orig_reg.startswith('acc'):
+                            snap_lines.append(f'              llvm.inline_asm has_side_effects "v_accvgpr_read_b32 v{snap_vgpr}, {orig_reg}", ""  : () -> ()')
+                        else:
+                            snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{snap_vgpr}, {orig_reg}", ""  : () -> ()')
                 
                 # SGPR 快照：使用 s_mov_b32
                 if has_sgpr_snap:
@@ -2482,7 +2531,10 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
                 # 表達式暫存器快照
                 if has_expr_snap:
                     for orig_reg, snap_reg in directive_expr_snapshots[d_idx].items():
-                        if snap_reg.startswith('v'):
+                        if orig_reg.startswith('a') and not orig_reg.startswith('acc'):
+                            snap_lines.append(f'              // Expression register snapshot (AccVGPR): {orig_reg} -> {snap_reg}')
+                            snap_lines.append(f'              llvm.inline_asm has_side_effects "v_accvgpr_read_b32 {snap_reg}, {orig_reg}", ""  : () -> ()')
+                        elif snap_reg.startswith('v'):
                             snap_lines.append(f'              // Expression register snapshot: {orig_reg} -> {snap_reg}')
                             snap_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 {snap_reg}, {orig_reg}", ""  : () -> ()')
                         else:
@@ -2747,7 +2799,10 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         required_vgpr = original_vgpr  # No extra VGPRs needed in scratch mode
     else:
         required_vgpr = next_builtin_vgpr
-    required_sgpr = max(snapshot_sgpr_start + total_snapshot_sgprs, SGPR_KERNARG_BACKUP + 2)
+    if use_scratch_snapshot:
+        required_sgpr = SGPR_KERNARG_BACKUP + 2
+    else:
+        required_sgpr = max(snapshot_sgpr_start + total_snapshot_sgprs, SGPR_KERNARG_BACKUP + 2)
     
     # Calculate required private segment size for scratch snapshots
     required_private_size = 0
@@ -3220,7 +3275,8 @@ def rename_conflicting_labels(isa_text: str, original_isa_file: pathlib.Path) ->
 
 
 def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf: bool = True,
-                     required_vgpr: int = 0, required_sgpr: int = 0) -> str:
+                     required_vgpr: int = 0, required_sgpr: int = 0,
+                     required_private_size: int = 0) -> str:
     """
     修復 ISA metadata：從原始 ISA 文件提取正確的 metadata
     
@@ -3236,6 +3292,7 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
         has_printf: 是否有 printf 注入（影響 args 合併策略）
         required_vgpr: printf 快照所需的 VGPR 數量（將更新 .amdhsa_next_free_vgpr）
         required_sgpr: printf 快照所需的 SGPR 數量（將更新 .amdhsa_next_free_sgpr）
+        required_private_size: scratch snapshot 所需的 private segment 大小（bytes）
     
     Returns:
         修復後的 ISA 文本
@@ -3698,12 +3755,37 @@ def fix_isa_metadata(isa_text: str, original_isa_file: pathlib.Path, has_printf:
                 )
                 print(f"[Info] Fixed .amdhsa_next_free_sgpr: {current_directive_sgpr} -> {needed_sgpr}")
     
+    # Ensure .amdhsa_private_segment_fixed_size is large enough for scratch snapshots
+    if required_private_size > 0:
+        priv_match = re.search(r'\.amdhsa_private_segment_fixed_size\s+(\d+)', fixed_isa)
+        if priv_match:
+            current_priv = int(priv_match.group(1))
+            needed_priv = max(current_priv, required_private_size)
+            if needed_priv > current_priv:
+                fixed_isa = re.sub(
+                    r'(\.amdhsa_private_segment_fixed_size)\s+\d+',
+                    rf'\1 {needed_priv}',
+                    fixed_isa
+                )
+                print(f"[Info] Fixed .amdhsa_private_segment_fixed_size: {current_priv} -> {needed_priv}")
+        
+        # Also ensure enable_private_segment is 1
+        enable_match = re.search(r'\.amdhsa_enable_private_segment\s+(\d+)', fixed_isa)
+        if enable_match and int(enable_match.group(1)) == 0:
+            fixed_isa = re.sub(
+                r'(\.amdhsa_enable_private_segment)\s+\d+',
+                rf'\1 1',
+                fixed_isa
+            )
+            print(f"[Info] Enabled .amdhsa_enable_private_segment for scratch snapshots")
+    
     return fixed_isa
 
 
 def build_debug_hsaco(gpumlir_path: pathlib.Path, chip: str, workdir: pathlib.Path, 
                       original_isa_file: pathlib.Path = None, has_printf: bool = False,
-                      required_vgpr: int = 0, required_sgpr: int = 0):
+                      required_vgpr: int = 0, required_sgpr: int = 0,
+                      required_private_size: int = 0):
     """
     從修改後的 GPU MLIR 生成 HSACO
     
@@ -3715,6 +3797,7 @@ def build_debug_hsaco(gpumlir_path: pathlib.Path, chip: str, workdir: pathlib.Pa
         has_printf: 是否有 printf 注入（影響 metadata 合併策略）
         required_vgpr: printf 快照所需的 VGPR 數量
         required_sgpr: printf 快照所需的 SGPR 數量
+        required_private_size: scratch snapshot 所需的 private segment 大小（bytes）
     """
     for tool in ["mlir-opt", "llvm-mc", "lld"]:
         ensure_tool(tool)
@@ -3772,7 +3855,8 @@ def build_debug_hsaco(gpumlir_path: pathlib.Path, chip: str, workdir: pathlib.Pa
     # 修復 ISA metadata（從原始 ISA 提取 kernel args 等）
     # 重要：如果有 printf，需要保留 hidden_hostcall_buffer
     if original_isa_file is not None:
-        isa_text = fix_isa_metadata(isa_text, original_isa_file, has_printf, required_vgpr, required_sgpr)
+        isa_text = fix_isa_metadata(isa_text, original_isa_file, has_printf, required_vgpr, required_sgpr,
+                                    required_private_size)
         # 重命名衝突的標籤（printf 生成的 .LBB* 與原始 ISA 衝突）
         isa_text = rename_conflicting_labels(isa_text, original_isa_file)
     
@@ -4064,7 +4148,7 @@ def main():
     
     # 6. 生成 HSACO
     hsaco_path = build_debug_hsaco(modified_path, args.chip, workdir, input_path, has_printf,
-                                    required_vgpr, required_sgpr)
+                                    required_vgpr, required_sgpr, required_private_size)
     
     print(f"\n=== Done ===")
     print(f"Debug HSACO: {hsaco_path}")

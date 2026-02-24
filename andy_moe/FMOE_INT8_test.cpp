@@ -277,6 +277,56 @@ int main(int argc, char **argv) {
         printf("SEP                 : %p  (%zu bytes)\n", dev_SEP, sz);
     }
 
+    // Fill X and G with non-zero INT8 test data so MFMA produces visible results
+    {
+        size_t sz = (size_t)batch * dim * Bpp;
+        std::vector<int8_t> h_X(sz);
+        for (size_t i = 0; i < sz; i++)
+            h_X[i] = (int8_t)(1 + (i % 7));   // cycling 1..7
+        HIP_CHECK(hipMemcpy(dev_X, h_X.data(), sz, hipMemcpyHostToDevice));
+        printf("X filled with INT8 pattern (1..7)\n");
+    }
+    {
+        size_t sz = (size_t)eprt * hidden_dim * dim * Bpp;
+        std::vector<int8_t> h_G(sz);
+        for (size_t i = 0; i < sz; i++)
+            h_G[i] = (int8_t)(1 + (i % 3));   // cycling 1..3
+        HIP_CHECK(hipMemcpy(dev_G, h_G.data(), sz, hipMemcpyHostToDevice));
+        printf("G filled with INT8 pattern (1..3)\n");
+    }
+
+    // Fill XQ, GQ, GsmQ, DQ with 1.0f so dequantization doesn't zero out results
+    {
+        std::vector<float> ones(fallback_buf / sizeof(float), 1.0f);
+        HIP_CHECK(hipMemcpy(dev_XQ, ones.data(), fallback_buf, hipMemcpyHostToDevice));
+        HIP_CHECK(hipMemcpy(dev_GQ, ones.data(), fallback_buf, hipMemcpyHostToDevice));
+        HIP_CHECK(hipMemcpy(dev_GsmQ, ones.data(), fallback_buf, hipMemcpyHostToDevice));
+        HIP_CHECK(hipMemcpy(dev_DQ, ones.data(), fallback_buf, hipMemcpyHostToDevice));
+        printf("XQ/GQ/GsmQ/DQ filled with 1.0f\n");
+    }
+    // Fill D with non-zero INT8 pattern (down-projection weights)
+    {
+        size_t sz = (size_t)eprt * dim * hidden_dim * Bpp;
+        std::vector<int8_t> h_D(sz);
+        for (size_t i = 0; i < sz; i++)
+            h_D[i] = (int8_t)(1 + (i % 5));
+        HIP_CHECK(hipMemcpy(dev_D, h_D.data(), sz, hipMemcpyHostToDevice));
+        printf("D filled with INT8 pattern (1..5)\n");
+    }
+
+    // Verify uploaded X and G data
+    {
+        std::vector<int8_t> verify(64);
+        HIP_CHECK(hipMemcpy(verify.data(), dev_X, 64, hipMemcpyDeviceToHost));
+        printf("X verify[0..63]: ");
+        for (int i = 0; i < 64; i++) printf("%d ", (int)verify[i]);
+        printf("\n");
+        HIP_CHECK(hipMemcpy(verify.data(), dev_G, 64, hipMemcpyDeviceToHost));
+        printf("G verify[0..63]: ");
+        for (int i = 0; i < 64; i++) printf("%d ", (int)verify[i]);
+        printf("\n");
+    }
+
     // Upload routing data
     if (dev_STP && sz_stp > 0)
         HIP_CHECK(hipMemcpy(dev_STP, h_stp.data(), sz_stp * sizeof(uint32_t), hipMemcpyHostToDevice));
@@ -285,6 +335,14 @@ int main(int argc, char **argv) {
     if (dev_SEP && sz_sep > 0)
         HIP_CHECK(hipMemcpy(dev_SEP, h_sep.data(), sub_X_cnt * sizeof(uint32_t), hipMemcpyHostToDevice));
 
+    // Kernel reads dev_Xc[0] as the sorted token count for bounds checking.
+    // Without this, the kernel sees 0 and exits immediately, skipping all computation.
+    {
+        int32_t token_count = sub_X_cnt * SUB_X;
+        HIP_CHECK(hipMemcpy(dev_Xc, &token_count, sizeof(int32_t), hipMemcpyHostToDevice));
+        printf("Xc[0] = %d (sub_X_cnt=%d * SUB_X=%d) for kernel bounds check\n",
+               token_count, sub_X_cnt, SUB_X);
+    }
 
     // ---- Kernarg buffer assembly ----
     // Each parameter slot is 0x10 (16 bytes) wide.
@@ -368,6 +426,21 @@ int main(int argc, char **argv) {
     fflush(stdout);
     fflush(stderr);
 
+    // Readback output buffers to verify kernel produced non-zero results
+    {
+        const int peek = 32;
+        std::vector<uint8_t> h_R(peek);
+        HIP_CHECK(hipMemcpy(h_R.data(), dev_R, peek, hipMemcpyDeviceToHost));
+        printf("R[0..%d] (bf16 output): ", peek - 1);
+        for (int i = 0; i < peek; i++) printf("%02x ", h_R[i]);
+        printf("\n");
+
+        std::vector<int32_t> h_Xc(peek / 4);
+        HIP_CHECK(hipMemcpy(h_Xc.data(), dev_Xc, peek, hipMemcpyDeviceToHost));
+        printf("Xc[0..%d] (int32): ", peek / 4 - 1);
+        for (int i = 0; i < peek / 4; i++) printf("%d ", h_Xc[i]);
+        printf("\n");
+    }
 
     // ---- Cleanup ----
     if (dev_R) (void)hipFree(dev_R);
