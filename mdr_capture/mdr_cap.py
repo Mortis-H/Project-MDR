@@ -948,9 +948,10 @@ def compile_expression_to_isa(expr: str, result_type: str, target_reg: str,
         if op_seen == op_count:
             dest = target_reg
         else:
-            if not temp_pool:
-                raise ValueError("Complex expression needs temp VGPRs")
-            dest = temp_pool.pop(0)
+            if temp_pool:
+                dest = temp_pool.pop(0)
+            else:
+                dest = target_reg
         
         # 運算元格式化
         left_op = format_const(left_val) if left_type == 'NUM' else left_val
@@ -1391,13 +1392,6 @@ def update_isa_metadata(isa_text: str, new_vgpr_count: int,
                 isa_text
             )
         
-        if 'user_sgpr_count' in attrs:
-            isa_text = re.sub(
-                r'(\.amdhsa_user_sgpr_count)\s+\d+',
-                rf'\1 {attrs["user_sgpr_count"]}',
-                isa_text
-            )
-        
         if 'kernarg_segment_ptr' in attrs:
             isa_text = re.sub(
                 r'(\.amdhsa_user_sgpr_kernarg_segment_ptr)\s+\d+',
@@ -1460,6 +1454,20 @@ def update_isa_metadata(isa_text: str, new_vgpr_count: int,
                 rf'\1 {attrs["system_vgpr_workitem_id"]}',
                 isa_text
             )
+
+        # each enabled user SGPR feature occupies 2 SGPRs (64-bit pointers)
+        implied_user_sgpr_count = 0
+        for feature in ('dispatch_ptr', 'queue_ptr', 'kernarg_segment_ptr',
+                        'dispatch_id'):
+            if attrs.get(feature, 0):
+                implied_user_sgpr_count += 2
+        user_sgpr_count = max(attrs.get('user_sgpr_count', implied_user_sgpr_count),
+                              implied_user_sgpr_count)
+        isa_text = re.sub(
+            r'(\.amdhsa_user_sgpr_count)\s+\d+',
+            rf'\1 {user_sgpr_count}',
+            isa_text
+        )
     
     # 更新 YAML metadata
     yaml_match = re.search(r'\.amdgpu_metadata\s+---\s+(.*?)\.\.\.',
@@ -1547,12 +1555,19 @@ def allocate_temp_registers(directives: List[CaptureDirective],
     """
     為帶條件的 @CAPTURE 分配臨時暫存器。
     會從目前使用量之後開始分配，並回傳更新後的最終使用量。
+
+    對於 VGPR 表達式，因 compile_expression_to_isa 的最後一個運算直接寫入
+    target_reg，每個表達式實際只需 max(0, ops-1) 個暫存。此外，若分配後
+    會超出 256 VGPR 硬體上限，則跳過分配，改由 compile_expression_to_isa
+    的 target-as-temp fallback 處理（適用於線性鏈式表達式）。
     """
     temp_alloc: Dict[int, Dict[str, int]] = {}
     final_reg_info = base_reg_info.copy()
     
     next_vgpr = final_reg_info['vgpr']
     next_sgpr = max(final_reg_info['sgpr'], 4)  # 避免使用系統保留 s[0:3]
+    
+    VGPR_HW_LIMIT = 256
     
     for directive_id, directive in enumerate(directives):
         entry: Dict[str, int] = {}
@@ -1563,7 +1578,7 @@ def allocate_temp_registers(directives: List[CaptureDirective],
             next_vgpr += 1
             next_sgpr += 2
         
-        expr_op_count = 0
+        max_expr_temps = 0
         expr_sgpr_pairs_needed = 0
         ordered_values = directive.ordered_values
         if not ordered_values:
@@ -1576,11 +1591,16 @@ def allocate_temp_registers(directives: List[CaptureDirective],
             if typ == 'i64':
                 expr_sgpr_pairs_needed += count_i64_temp_pairs(value)
             else:
-                expr_op_count += count_ops_in_expression(value)
+                ops = count_ops_in_expression(value)
+                needed = max(0, ops - 1)
+                max_expr_temps = max(max_expr_temps, needed)
         
-        if expr_op_count > 0:
-            entry["expr_vgprs"] = list(range(next_vgpr, next_vgpr + expr_op_count))
-            next_vgpr += expr_op_count
+        if max_expr_temps > 0 and next_vgpr + max_expr_temps <= VGPR_HW_LIMIT:
+            entry["expr_vgprs"] = list(range(next_vgpr, next_vgpr + max_expr_temps))
+            next_vgpr += max_expr_temps
+        elif max_expr_temps > 0:
+            print(f"  [Info] Directive #{directive_id}: skipping {max_expr_temps} expr temp VGPR(s) "
+                  f"(would exceed {VGPR_HW_LIMIT}); using target-as-temp fallback")
         if expr_sgpr_pairs_needed > 0:
             entry["expr_sgpr_pairs"] = [
                 (lo, lo + 1) for lo in range(next_sgpr, next_sgpr + expr_sgpr_pairs_needed * 2, 2)
@@ -1818,6 +1838,11 @@ def main():
         action="store_true",
         help="只解析和顯示將執行的操作，不執行編譯"
     )
+    ap.add_argument(
+        "--inject-only",
+        action="store_true",
+        help="只做 capture ISA 注入（產生 injected.s + mapping），不執行 MLIR / HSACO 生成"
+    )
     
     args = ap.parse_args()
     
@@ -1905,6 +1930,13 @@ def main():
     injected_asm_path = workdir / f"{input_path.stem}_injected.s"
     injected_asm_path.write_text('\n'.join(modified_asm_lines))
     print(f"✓ Generated injected ASM: {injected_asm_path}")
+
+    if args.inject_only:
+        generate_mapping_file(workdir, directives, all_mappings, injected_asm_path)
+        print(f"\n=== Done (inject only) ===")
+        print(f"Injected ASM: {injected_asm_path}")
+        print(f"Mapping file: {workdir}/capture_mapping.txt")
+        return
     
     # 7. 轉換為 GPU MLIR
     gpumlir_path = translate_to_gpumlir(injected_asm_path, workdir)

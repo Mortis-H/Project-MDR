@@ -525,11 +525,86 @@ def parse_var_register_aliases(lines: List[str]) -> Dict[str, str]:
     return var_map
 
 
-def resolve_symbolic_registers(text: str, var_map: Dict[str, str]) -> str:
-    """Replace symbolic register names in {name:fmt} format placeholders with physical registers.
+_SP3_VAR_DECL_RE = re.compile(r'^\s*var\s+(\w+)\s*=\s*(.+?)(?://.*)?$')
+_SP3_TOKEN_RE = re.compile(r'0x[0-9a-fA-F]+|[A-Za-z_]\w*|\d+|[+\-*/()]')
 
-    Example: var_map = {"s_log2e": "s6"} turns '{s_log2e:x}' into '{s6:x}'.
+
+def parse_sp3_var_constants(lines: List[str]) -> Dict[str, int]:
+    """Evaluate all SP3 'var NAME = EXPR' declarations to numeric values.
+
+    Processes lines in order so that later vars can reference earlier ones.
+    Skips vars whose value is a physical register (handled by parse_var_register_aliases).
     """
+    constants: Dict[str, int] = {}
+    for line in lines:
+        m = _SP3_VAR_DECL_RE.match(line)
+        if not m:
+            continue
+        if VAR_REGISTER_RE.match(line):
+            continue
+        name, expr_str = m.group(1), m.group(2).strip()
+        try:
+            value = _eval_sp3_const_expr(expr_str, constants)
+            if isinstance(value, (int, float)):
+                constants[name] = int(value)
+        except Exception:
+            pass
+    return constants
+
+
+def _eval_sp3_const_expr(expr_str: str, constants: Dict[str, int]) -> int:
+    tokens = _SP3_TOKEN_RE.findall(expr_str)
+    parts: List[str] = []
+    for tok in tokens:
+        if tok in constants:
+            parts.append(str(constants[tok]))
+        elif tok in '+-*/()':
+            parts.append(tok)
+        elif re.match(r'^0x[0-9a-fA-F]+$', tok):
+            parts.append(str(int(tok, 16)))
+        elif re.match(r'^\d+$', tok):
+            parts.append(tok)
+        else:
+            raise ValueError(f"Unknown token: {tok}")
+    return int(eval(' '.join(parts), {"__builtins__": {}}, {}))  # noqa: S307
+
+
+_ARRAY_REG_RE = re.compile(r'(_[vs]_\w+)\[(\d+)\]')
+
+
+def resolve_sp3_array_registers(text: str, var_constants: Dict[str, int]) -> str:
+    r"""Replace _v_NAME[offset] with v<base+offset>, _s_NAME[offset] with s<base+offset>.
+
+    SP3 convention: _v_\* vars are VGPR offsets, _s_\* vars are SGPR offsets.
+    Example: _v_Z=128 → _v_Z[0] becomes v128, _v_Z[3] becomes v131.
+    """
+    if not var_constants:
+        return text
+
+    def _replace(m: re.Match) -> str:
+        name = m.group(1)
+        offset = int(m.group(2))
+        if name not in var_constants:
+            return m.group(0)
+        base = var_constants[name]
+        prefix = 'v' if name.startswith('_v_') else 's'
+        return f"{prefix}{base + offset}"
+
+    return _ARRAY_REG_RE.sub(_replace, text)
+
+
+def resolve_symbolic_registers(text: str, var_map: Dict[str, str],
+                               var_constants: Optional[Dict[str, int]] = None) -> str:
+    """Replace symbolic register names in format placeholders with physical registers.
+
+    Handles two forms:
+      {s_log2e:x}   → {s6:x}       (direct alias from var_map)
+      {_v_Z[0]:x}   → {v128:x}     (array indexing from var_constants)
+    Also resolves _v_NAME[N] / _s_NAME[N] outside of {} (for @CAPTURE expressions).
+    """
+    if var_constants:
+        text = resolve_sp3_array_registers(text, var_constants)
+
     if not var_map:
         return text
 
@@ -1288,10 +1363,11 @@ def main() -> int:
     expand_thin_functions(src_lines, line_infos, func_tokens, func_meta, directives)
 
     var_register_map = parse_var_register_aliases(src_lines)
-    if var_register_map:
-        print(f"Found {len(var_register_map)} register alias(es)")
+    var_constants = parse_sp3_var_constants(src_lines)
+    if var_register_map or var_constants:
+        print(f"Found {len(var_register_map)} register alias(es), {len(var_constants)} var constant(s)")
         for d in directives:
-            resolved = resolve_symbolic_registers(d.text, var_register_map)
+            resolved = resolve_symbolic_registers(d.text, var_register_map, var_constants)
             if resolved != d.text:
                 print(f"  [Resolve] L{d.line_no}: ...{d.text[-60:]}")
                 print(f"         -> ...{resolved[-60:]}")
