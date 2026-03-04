@@ -6,11 +6,11 @@ SP3 Combined Wrapper (@PRINT + @CAPTURE)
 同時處理 SP3 中的 @PRINT 與 @CAPTURE 標記，一次生成包含
 printf 輸出 + capture 計算的合併 HSACO。
 
-Pipeline:
+Pipeline (marker 模式，預設):
   1. 解析 SP3：收集 @PRINT 和 @CAPTURE 指令
-  2. SP3 -> Binary
-  3. Binary -> Disasm SP3
-  4. 將 @PRINT + @CAPTURE 統一注入反組譯結果
+  2. 在 SP3 source 中 directive 位置插入 s_nop marker
+  3. Marked SP3 -> Binary -> Disasm SP3
+  4. 在反組譯中搜尋 marker → 精準定位 → 注入 directive 註解
   5-7. SP3 -> .s（moe_cvt, fix_atomic, rename, normalize）
   8. mdr_cap.py --inject-only（注入 capture ISA，保留 @PRINT 註解）
   9. gpr_printf_tool.py（注入 printf ISA + 生成 HSACO）
@@ -30,7 +30,7 @@ import os
 import pathlib
 import re
 import sys
-from typing import List
+from typing import Dict, List, Optional, Tuple
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -46,6 +46,93 @@ DEFAULT_SP3_DIR = spw.DEFAULT_SP3_DIR
 DEFAULT_MOE_CVT = spw.DEFAULT_MOE_CVT
 DEFAULT_FIX_SCRIPT = spw.DEFAULT_FIX_SCRIPT
 DEFAULT_KERNEL_SYMBOL = spw.DEFAULT_KERNEL_SYMBOL
+
+
+# ── s_nop Marker-based Positioning ────────────────────────────────────
+#
+# 在 SP3 source 中每個 directive 位置插入 s_nop <MARKER_BASE + idx>，
+# 經 SP3 compiler 編譯 → 反組譯後，在 disasm 中搜尋 marker 即可
+# 精準定位每個 directive 的 ISA 位置，完全不需要 context matching。
+#
+# 迴圈內的 directive 會被 SP3 compiler 展開為多個 s_nop，
+# 自動對應到所有 unrolled loop body。
+
+MARKER_NOP_BASE = 100
+
+
+def _group_directives(
+    directives: List[spw.Directive],
+) -> List[List[spw.Directive]]:
+    """將相鄰的 directive（相距 ≤2 行、同 function）合併為同一定位群組。"""
+    if not directives:
+        return []
+    groups: List[List[spw.Directive]] = [[directives[0]]]
+    for d in directives[1:]:
+        prev = groups[-1][-1]
+        if d.line_no - prev.line_no <= 2 and d.func == prev.func:
+            groups[-1].append(d)
+        else:
+            groups.append([d])
+    return groups
+
+
+def insert_directive_markers(
+    sp3_path: pathlib.Path,
+    output_path: pathlib.Path,
+    directive_groups: List[List[spw.Directive]],
+) -> None:
+    """在每個 directive group 第一行之前插入 s_nop marker。"""
+    lines = sp3_path.read_text().splitlines()
+    for gidx in range(len(directive_groups) - 1, -1, -1):
+        group = directive_groups[gidx]
+        first_line = group[0].line_no - 1  # 0-based
+        indent = len(lines[first_line]) - len(lines[first_line].lstrip())
+        marker_val = MARKER_NOP_BASE + gidx
+        lines.insert(first_line, " " * indent + f"s_nop {marker_val}")
+    output_path.write_text("\n".join(lines) + "\n")
+
+
+_MARKER_NOP_RE = re.compile(r"s_nop\s+(0x[0-9a-fA-F]+|\d+)")
+
+
+def find_markers_in_disasm(
+    disasm_lines: List[str],
+    num_groups: int,
+) -> Dict[int, List[int]]:
+    """在反組譯中搜尋 s_nop marker。回傳 {group_idx: [disasm_line_indices]}。"""
+    markers: Dict[int, List[int]] = {}
+    for i, line in enumerate(disasm_lines):
+        m = _MARKER_NOP_RE.match(line.strip())
+        if m:
+            val_str = m.group(1)
+            val = int(val_str, 16) if val_str.startswith("0x") else int(val_str)
+            gidx = val - MARKER_NOP_BASE
+            if 0 <= gidx < num_groups:
+                markers.setdefault(gidx, []).append(i)
+    return markers
+
+
+def annotate_disasm_with_markers(
+    disasm_lines: List[str],
+    markers: Dict[int, List[int]],
+    directive_groups: List[List[spw.Directive]],
+) -> List[str]:
+    """在每個 marker 位置之前插入對應的 directive 註解。"""
+    marker_to_group: Dict[int, int] = {}
+    for gidx, line_indices in markers.items():
+        for li in line_indices:
+            marker_to_group[li] = gidx
+
+    result: List[str] = []
+    for i, line in enumerate(disasm_lines):
+        if i in marker_to_group:
+            gidx = marker_to_group[i]
+            group = directive_groups[gidx]
+            indent = re.match(r"^(\s*)", line).group(1)
+            for d in group:
+                result.append(f"{indent}// {d.text}")
+        result.append(line)
+    return result
 
 
 def normalize_all_directive_comments(input_path: pathlib.Path, output_path: pathlib.Path) -> None:
@@ -98,6 +185,8 @@ def reorder_prints_after_capture_isa(injected_s_path: pathlib.Path) -> int:
         search_floor = max(0, prev_block_end)
         for j in range(block["start"] - 1, search_floor - 1, -1):
             stripped = lines[j].strip()
+            if stripped.startswith("; === End @CAPTURE"):
+                break
             if stripped.startswith("; @PRINT") and f"{{{dst}:" in stripped:
                 to_remove_indices.append(j)
                 to_move_lines.insert(0, lines[j])
@@ -114,7 +203,19 @@ def reorder_prints_after_capture_isa(injected_s_path: pathlib.Path) -> int:
 
             moved += n_removed
 
-        prev_block_end = block["end"]
+        # Advance past the End marker and any @PRINT lines that
+        # already follow this capture block so that the next block's
+        # backward search won't accidentally grab them.
+        end_pos = block["end"]
+        while end_pos < len(lines):
+            s = lines[end_pos].strip()
+            if s.startswith("; === End @CAPTURE") or (
+                s.startswith("; @PRINT") and f"{{{dst}:" in s
+            ):
+                end_pos += 1
+            else:
+                break
+        prev_block_end = end_pos
 
     if moved:
         injected_s_path.write_text("\n".join(lines) + "\n")
@@ -128,12 +229,14 @@ def main() -> int:
         epilog="""
 使用範例：
   python3 sp3_combined_wrap.py input.sp3 --output-dir combined_out
-  python3 sp3_combined_wrap.py input.sp3 --output-dir combined_out --insert-mode all
 
   SP3 中標記範例（支援 SP3 符號名稱 _v_NAME[offset]）：
     // @PRINT if $tid == 0: f"Z0={_v_Z[0]:f} Z1={_v_Z[1]:f}"
     // @CAPTURE f"prod={(_v_Z[0]*_v_Z[1])}" dst=_v_tmp[0]
     // @PRINT if $tid == 0: f"result={_v_tmp[0]:f}"
+
+  預設使用 s_nop marker 精準定位（無需額外參數）。
+  若需使用舊版 context matching，加 --legacy-match。
         """,
     )
     ap.add_argument("input_sp3", help="含 @PRINT/@CAPTURE 的 SP3 原始檔")
@@ -159,16 +262,21 @@ def main() -> int:
     ap.add_argument("--keep-disasm", action="store_true", help="保留中間檔案")
 
     ap.add_argument(
-        "--insert-mode",
-        choices=("best", "all"),
-        default="best",
-        help="指令插入模式：best(選最佳位置) 或 all(插入所有匹配)",
+        "--legacy-match", action="store_true",
+        help="使用舊版 context matching 定位（預設使用 s_nop marker 精準定位）",
     )
-    ap.add_argument("--insert-all-score-margin", type=int, default=2)
-    ap.add_argument("--insert-all-max", type=int, default=20)
-    ap.add_argument("--debug-match", action="store_true")
-    ap.add_argument("--debug-max-patterns", type=int, default=200)
-    ap.add_argument("--debug-max-matches", type=int, default=50)
+    ap.add_argument("--insert-mode", default="all", help=argparse.SUPPRESS)
+    ap.add_argument(
+        "--insert-all-score-margin", type=int, default=2,
+        help=argparse.SUPPRESS,
+    )
+    ap.add_argument(
+        "--insert-all-max", type=int, default=20,
+        help=argparse.SUPPRESS,
+    )
+    ap.add_argument("--debug-match", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--debug-max-patterns", type=int, default=200, help=argparse.SUPPRESS)
+    ap.add_argument("--debug-max-matches", type=int, default=50, help=argparse.SUPPRESS)
 
     args, gpr_extra_args = ap.parse_known_args()
 
@@ -187,9 +295,12 @@ def main() -> int:
     fixed_s_path = output_dir / f"{prefix}_fixed.s"
     fixed_combined_s_path = output_dir / f"{prefix}_fixed_combined.s"
 
+    use_markers = not args.legacy_match
+
     # ── Parse SP3: collect BOTH @PRINT and @CAPTURE ─────────────────────
     print("=" * 60)
     print("SP3 Combined Wrapper (@PRINT + @CAPTURE)")
+    print(f"  Positioning mode: {'s_nop marker' if use_markers else 'legacy context-match'}")
     print("=" * 60)
 
     print("\n=== Parsing SP3 directives ===")
@@ -198,8 +309,11 @@ def main() -> int:
     capture_directives = scw.collect_capture_directives(src_lines, line_infos)
     print_directives = spw.collect_directives(src_lines, line_infos)
 
-    spw.expand_thin_functions(src_lines, line_infos, func_tokens, func_meta, capture_directives)
-    spw.expand_thin_functions(src_lines, line_infos, func_tokens, func_meta, print_directives)
+    if not use_markers:
+        spw.expand_thin_functions(
+            src_lines, line_infos, func_tokens, func_meta,
+            capture_directives + print_directives,
+        )
 
     var_register_map = spw.parse_var_register_aliases(src_lines)
     var_constants = spw.parse_sp3_var_constants(src_lines)
@@ -225,54 +339,108 @@ def main() -> int:
     all_directives = capture_directives + print_directives
     all_directives.sort(key=lambda d: d.line_no)
 
-    # ── Step 1: SP3 -> Binary ───────────────────────────────────────────
-    print("\n=== Step 1: SP3 -> Binary ===")
     sp3_bin = pathlib.Path(args.sp3_dir) / "sp3"
     env = os.environ.copy()
     existing_ld = env.get("LD_LIBRARY_PATH", "")
     env["LD_LIBRARY_PATH"] = f"{args.sp3_dir}:{existing_ld}" if existing_ld else args.sp3_dir
-    spw.run_cmd(
-        [str(sp3_bin), str(input_sp3), f"asic={args.asic}", "-binary", str(bin_path)],
-        env=env,
-    )
 
-    # ── Step 2: Binary -> Disasm SP3 ────────────────────────────────────
-    print("\n=== Step 2: Binary -> Disasm SP3 ===")
-    spw.run_cmd(
-        [
-            str(sp3_bin),
-            "-binary", str(bin_path),
-            f"asic={args.asic}",
-            "type=CS",
-            f"wave_size={args.wave_size}",
-            str(disasm_path),
-        ],
-        env=env,
-    )
+    if use_markers:
+        # ── Marker mode: insert s_nop markers → compile → find → annotate ──
+        directive_groups = _group_directives(all_directives)
+        if len(directive_groups) > 128:
+            print(f"[Error] Too many directive groups ({len(directive_groups)}), max 128.")
+            return 1
 
-    # ── Step 3: Inject ALL directives into disasm ───────────────────────
-    print("\n=== Step 3: Inject @PRINT + @CAPTURE into disasm ===")
-    disasm_lines, dis_tokens, op_index_to_line, line_to_op_index, dis_meta = spw.parse_disasm(
-        disasm_path
-    )
-    disasm_with_all = spw.insert_directives_into_disasm(
-        disasm_lines,
-        dis_tokens,
-        dis_meta,
-        line_to_op_index,
-        op_index_to_line,
-        all_directives,
-        func_tokens,
-        func_meta,
-        insert_mode=args.insert_mode,
-        insert_all_score_margin=args.insert_all_score_margin,
-        insert_all_max=args.insert_all_max,
-        debug_match=args.debug_match,
-        debug_max_patterns=args.debug_max_patterns,
-        debug_max_matches=args.debug_max_matches,
-    )
-    disasm_combined_path.write_text("\n".join(disasm_with_all) + "\n")
-    print(f"Annotated disasm: {disasm_combined_path}")
+        marked_sp3_path = output_dir / f"{prefix}_marked.sp3"
+        insert_directive_markers(input_sp3, marked_sp3_path, directive_groups)
+        print(f"\n  Inserted {len(directive_groups)} s_nop marker(s) into SP3 source")
+
+        # ── Step 1: Marked SP3 -> Binary ────────────────────────────────
+        print("\n=== Step 1: Marked SP3 -> Binary ===")
+        spw.run_cmd(
+            [str(sp3_bin), str(marked_sp3_path), f"asic={args.asic}", "-binary", str(bin_path)],
+            env=env,
+        )
+
+        # ── Step 2: Binary -> Disasm SP3 ────────────────────────────────
+        print("\n=== Step 2: Binary -> Disasm SP3 ===")
+        spw.run_cmd(
+            [
+                str(sp3_bin),
+                "-binary", str(bin_path),
+                f"asic={args.asic}",
+                "type=CS",
+                f"wave_size={args.wave_size}",
+                str(disasm_path),
+            ],
+            env=env,
+        )
+
+        # ── Step 3: Find markers → annotate disasm ──────────────────────
+        print("\n=== Step 3: Find markers -> annotate disasm ===")
+        raw_disasm_lines = disasm_path.read_text().splitlines()
+        markers = find_markers_in_disasm(raw_disasm_lines, len(directive_groups))
+        total_positions = sum(len(v) for v in markers.values())
+
+        for gidx, positions in sorted(markers.items()):
+            group = directive_groups[gidx]
+            kinds = "+".join(d.kind for d in group)
+            print(f"  Group {gidx} ({kinds}): {len(positions)} position(s)")
+
+        missing = [g for g in range(len(directive_groups)) if g not in markers]
+        if missing:
+            print(f"  [Warn] Markers not found for groups: {missing}")
+
+        disasm_with_all = annotate_disasm_with_markers(
+            raw_disasm_lines, markers, directive_groups,
+        )
+        disasm_combined_path.write_text("\n".join(disasm_with_all) + "\n")
+        print(f"  Total insertion positions: {total_positions}")
+        print(f"  Annotated disasm: {disasm_combined_path}")
+
+    else:
+        # ── Legacy mode: context matching ───────────────────────────────
+        print("\n=== Step 1: SP3 -> Binary ===")
+        spw.run_cmd(
+            [str(sp3_bin), str(input_sp3), f"asic={args.asic}", "-binary", str(bin_path)],
+            env=env,
+        )
+
+        print("\n=== Step 2: Binary -> Disasm SP3 ===")
+        spw.run_cmd(
+            [
+                str(sp3_bin),
+                "-binary", str(bin_path),
+                f"asic={args.asic}",
+                "type=CS",
+                f"wave_size={args.wave_size}",
+                str(disasm_path),
+            ],
+            env=env,
+        )
+
+        print("\n=== Step 3: Inject @PRINT + @CAPTURE into disasm (legacy) ===")
+        disasm_lines_l, dis_tokens, op_index_to_line, line_to_op_index, dis_meta = (
+            spw.parse_disasm(disasm_path)
+        )
+        disasm_with_all = spw.insert_directives_into_disasm(
+            disasm_lines_l,
+            dis_tokens,
+            dis_meta,
+            line_to_op_index,
+            op_index_to_line,
+            all_directives,
+            func_tokens,
+            func_meta,
+            insert_mode=args.insert_mode,
+            insert_all_score_margin=args.insert_all_score_margin,
+            insert_all_max=args.insert_all_max,
+            debug_match=args.debug_match,
+            debug_max_patterns=args.debug_max_patterns,
+            debug_max_matches=args.debug_max_matches,
+        )
+        disasm_combined_path.write_text("\n".join(disasm_with_all) + "\n")
+        print(f"  Annotated disasm: {disasm_combined_path}")
 
     # ── Step 4: SP3 -> LLVM Assembly ────────────────────────────────────
     print("\n=== Step 4: SP3 -> LLVM Assembly ===")

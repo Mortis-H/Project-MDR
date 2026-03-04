@@ -1122,12 +1122,33 @@ def generate_capture_isa_code(directive: CaptureDirective, unique_id: int,
     return lines, mappings
 
 
+def _prev_instruction_is_unconditional_branch(lines: List[str]) -> bool:
+    """Check if the most recent real instruction in *lines* is an unconditional branch."""
+    for j in range(len(lines) - 1, -1, -1):
+        stripped = lines[j].strip()
+        if not stripped or stripped.startswith(';') or stripped.startswith('//'):
+            continue
+        if stripped.startswith('.') or stripped.endswith(':'):
+            continue
+        if re.match(r's_branch\b', stripped) or re.match(r's_endpgm\b', stripped):
+            return True
+        return False
+    return False
+
+
+_LABEL_RE = re.compile(r'^[A-Za-z_]\w*\s*:')
+
+
 def inject_captures_into_asm(asm_lines: List[str], 
                              directives: List[CaptureDirective],
                              temp_alloc: Optional[Dict[int, Dict[str, int]]] = None
                              ) -> Tuple[List[str], List[CaptureMapping]]:
     """
-    在 .s 文件中直接插入 capture ISA 指令
+    在 .s 文件中直接插入 capture ISA 指令。
+
+    如果 @CAPTURE 位於 dead code zone（前一條指令為 s_branch 或
+    s_endpgm），則將注入的 ISA 延遲到下一個 label 之後，確保
+    指令在可到達的程式碼路徑上執行。
     
     Returns:
         (modified_lines, all_mappings): 修改後的行和所有映射
@@ -1140,8 +1161,20 @@ def inject_captures_into_asm(asm_lines: List[str],
     
     # 建立 line_number → directive 的映射
     directive_map = {d.line_number: d for d in directives}
+
+    # Deferred captures: ISA to insert after the next label
+    deferred: List[Tuple[List[str], List[CaptureMapping]]] = []
     
     for i, line in enumerate(asm_lines):
+        # Flush deferred captures right after a label line
+        if deferred and _LABEL_RE.match(line.strip()):
+            modified_lines.append(line)
+            for cap_lines, cap_maps in deferred:
+                modified_lines.extend(cap_lines)
+                all_mappings.extend(cap_maps)
+            deferred.clear()
+            continue
+
         # 先加入原始行
         modified_lines.append(line)
         
@@ -1151,8 +1184,17 @@ def inject_captures_into_asm(asm_lines: List[str],
             directive_id = directives.index(directive)
             
             capture_lines, mappings = generate_capture_isa_code(directive, directive_id, temp_alloc)
-            modified_lines.extend(capture_lines)
-            all_mappings.extend(mappings)
+
+            if _prev_instruction_is_unconditional_branch(modified_lines):
+                deferred.append((capture_lines, mappings))
+            else:
+                modified_lines.extend(capture_lines)
+                all_mappings.extend(mappings)
+
+    # Flush any remaining deferred captures at end of file
+    for cap_lines, cap_maps in deferred:
+        modified_lines.extend(cap_lines)
+        all_mappings.extend(cap_maps)
     
     return modified_lines, all_mappings
 

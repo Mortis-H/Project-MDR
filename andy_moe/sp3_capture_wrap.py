@@ -186,23 +186,14 @@ def main() -> int:
     ap.add_argument("--skip-cap", action="store_true", help="不執行 mdr_cap.py（僅產生 .s）")
     ap.add_argument("--dry-run", action="store_true", help="傳遞 --dry-run 至 mdr_cap.py")
     ap.add_argument("--keep-disasm", action="store_true", help="保留中間檔案")
+    ap.add_argument("--insert-mode", default="all", help=argparse.SUPPRESS)
     ap.add_argument(
-        "--insert-mode",
-        choices=("best", "all"),
-        default="best",
-        help="@CAPTURE 插入模式：best(選最佳位置) 或 all(插入所有匹配位置)",
+        "--insert-all-score-margin", type=int, default=2,
+        help="保留 >= (max_score - margin) 的候選位置",
     )
     ap.add_argument(
-        "--insert-all-score-margin",
-        type=int,
-        default=2,
-        help="insert-mode=all 時，保留 >= (max_score - margin) 的候選",
-    )
-    ap.add_argument(
-        "--insert-all-max",
-        type=int,
-        default=20,
-        help="insert-mode=all 時，每個 directive 最多插入幾個位置（0=不限）",
+        "--insert-all-max", type=int, default=20,
+        help="每個 directive 最多插入幾個位置 (0=不限)",
     )
     ap.add_argument("--debug-match", action="store_true", help="輸出匹配除錯資訊")
     ap.add_argument("--debug-max-patterns", type=int, default=200)

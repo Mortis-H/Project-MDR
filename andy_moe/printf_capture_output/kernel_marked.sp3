@@ -1236,6 +1236,7 @@ function cl_gemm0_withup(cl_p, pi)
 
          for var k = 0; k < 256/32; k++  //dim(K)--8
             v_mfma_i32_16x16x32_i8   v_regs(_v_Z, vZ_idx), acc_regs(_v_G+vG_off, k*vs_AB), v_regs(_v_X+vX_off, k*vs_AB), v_regs(_v_Z, vZ_idx)
+            s_nop 100
             // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"MFMA Z[4]={_v_Z[4]:d}"
 
             if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) < 2)

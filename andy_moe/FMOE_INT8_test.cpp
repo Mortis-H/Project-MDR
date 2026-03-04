@@ -277,22 +277,18 @@ int main(int argc, char **argv) {
         printf("SEP                 : %p  (%zu bytes)\n", dev_SEP, sz);
     }
 
-    // Fill X and G with non-zero INT8 test data so MFMA produces visible results
+    // Fill X and G with uniform INT8 value so each mfma dot-product gives a fixed increment
     {
         size_t sz = (size_t)batch * dim * Bpp;
-        std::vector<int8_t> h_X(sz);
-        for (size_t i = 0; i < sz; i++)
-            h_X[i] = (int8_t)(1 + (i % 7));   // cycling 1..7
+        std::vector<int8_t> h_X(sz, 1);
         HIP_CHECK(hipMemcpy(dev_X, h_X.data(), sz, hipMemcpyHostToDevice));
-        printf("X filled with INT8 pattern (1..7)\n");
+        printf("X filled with INT8 constant 1\n");
     }
     {
         size_t sz = (size_t)eprt * hidden_dim * dim * Bpp;
-        std::vector<int8_t> h_G(sz);
-        for (size_t i = 0; i < sz; i++)
-            h_G[i] = (int8_t)(1 + (i % 3));   // cycling 1..3
+        std::vector<int8_t> h_G(sz, 1);
         HIP_CHECK(hipMemcpy(dev_G, h_G.data(), sz, hipMemcpyHostToDevice));
-        printf("G filled with INT8 pattern (1..3)\n");
+        printf("G filled with INT8 constant 1\n");
     }
 
     // Fill XQ, GQ, GsmQ, DQ with 1.0f so dequantization doesn't zero out results

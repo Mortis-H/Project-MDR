@@ -477,6 +477,8 @@ def expand_thin_functions(
         original_tokens = list(func_tokens[func_name])
         expanded: List[str] = []
         anchor_remap: Dict[int, int] = {}
+        # Map source line (0-indexed) -> last expanded position for inlined calls
+        func_call_last_pos: Dict[int, int] = {}
 
         for idx, line in enumerate(lines):
             info = line_infos[idx]
@@ -490,6 +492,7 @@ def expand_thin_functions(
                 called = info.opcode.split("(")[0]
                 if called in func_tokens and called != func_name:
                     expanded.extend(func_tokens[called])
+                    func_call_last_pos[idx] = len(expanded) - 1
 
         if len(expanded) <= len(original_tokens):
             continue
@@ -506,7 +509,30 @@ def expand_thin_functions(
         }
 
         for d in directives:
-            if d.func == func_name and d.anchor_index in anchor_remap:
+            if d.func != func_name:
+                continue
+            # If the directive used forward search (insert_after=False),
+            # check if there's a function call between the directive
+            # and the anchor.  If so, anchor to the call's last token
+            # so the directive observes register state right after the
+            # preceding function returns.
+            if not d.insert_after and func_call_last_pos:
+                directive_line = d.line_no - 1  # 0-indexed
+                nearest_call_pos = None
+                for j in range(directive_line - 1, -1, -1):
+                    pinfo = line_infos[j]
+                    if pinfo.func != func_name:
+                        continue
+                    if j in func_call_last_pos:
+                        nearest_call_pos = func_call_last_pos[j]
+                        break
+                    if pinfo.instr_index is not None:
+                        break
+                if nearest_call_pos is not None:
+                    d.anchor_index = nearest_call_pos
+                    d.insert_after = True
+                    continue
+            if d.anchor_index in anchor_remap:
                 d.anchor_index = anchor_remap[d.anchor_index]
 
         print(
@@ -1036,12 +1062,12 @@ def insert_directives_into_disasm(
     directives: List[Directive],
     func_tokens: Dict[str, List[str]],
     func_meta: Dict[str, Dict[str, List]],
-    insert_mode: str = "best",
     insert_all_score_margin: int = 2,
     insert_all_max: int = 20,
     debug_match: bool = False,
     debug_max_patterns: int = 200,
     debug_max_matches: int = 50,
+    insert_mode: str = "all",  # deprecated, kept for backward compat
 ) -> List[str]:
     insertions: Dict[int, List[Tuple[str, bool]]] = {}
     if not directives:
@@ -1118,24 +1144,15 @@ def insert_directives_into_disasm(
                             "[DEBUG] main_map boost "
                             f"src_idx={d.anchor_index} dis_idx={mapped} score={cand_scores[mapped]}"
                         )
-            if insert_mode == "all" and cand_scores:
-                if 0 <= d.anchor_index < len(tokens):
-                    anchor_token = tokens[d.anchor_index]
-                    filtered = {
-                        idx: score
-                        for idx, score in cand_scores.items()
-                        if idx < len(dis_tokens) and dis_tokens[idx] == anchor_token
-                    }
-                    if filtered:
-                        cand_scores = filtered
-            if cand_scores and insert_mode == "best":
-                max_score = max(cand_scores.values())
-                if max_score >= 28:
-                    cand_scores = {
-                        idx: score
-                        for idx, score in cand_scores.items()
-                        if score >= max_score - 2
-                    }
+            if cand_scores and 0 <= d.anchor_index < len(tokens):
+                anchor_token = tokens[d.anchor_index]
+                filtered = {
+                    idx: score
+                    for idx, score in cand_scores.items()
+                    if idx < len(dis_tokens) and dis_tokens[idx] == anchor_token
+                }
+                if filtered:
+                    cand_scores = filtered
             if debug_match and cand_scores:
                 top = sorted(cand_scores.items(), key=lambda x: (-x[1], x[0]))[:10]
                 top_text = ", ".join(f"{idx}:{score}" for idx, score in top)
@@ -1149,84 +1166,145 @@ def insert_directives_into_disasm(
                     "placement may be ambiguous."
                 )
 
-        if insert_mode == "all":
-            for d, cand_scores in zip(sorted_dirs, cand_scores_list):
-                if not cand_scores:
-                    continue
-                candidates = list(cand_scores.items())
-                if not candidates:
-                    continue
-                max_score = max(score for _, score in candidates)
+        # Merge candidates for directives sharing the same anchor_index.
+        # This ensures co-located directives (e.g. @PRINT + @CAPTURE at
+        # the same SP3 source location) are placed at the same ISA
+        # address(es).
+        anchor_merged: Dict[int, Dict[int, int]] = {}
+        for d, cand in zip(sorted_dirs, cand_scores_list):
+            ai = d.anchor_index
+            if ai not in anchor_merged:
+                anchor_merged[ai] = dict(cand)
+            else:
+                for pos, score in cand.items():
+                    anchor_merged[ai][pos] = max(
+                        anchor_merged[ai].get(pos, 0), score
+                    )
+        merged_count = 0
+        for i, d in enumerate(sorted_dirs):
+            merged = anchor_merged[d.anchor_index]
+            if merged is not cand_scores_list[i]:
+                cand_scores_list[i] = merged
+                merged_count += 1
+        if merged_count:
+            print(
+                f"  [Info] Merged candidates for {merged_count} directive(s) "
+                f"sharing anchor_index within {func}"
+            )
 
-                if d.func == "__shader_main__":
-                    best_idx = max(candidates, key=lambda x: (x[1], -x[0]))[0]
+        # Group directives by anchor_index, then for each group:
+        #  - find the best candidate position
+        #  - expand using context matching to cover all loop iterations
+        #  - insert every directive in the group at every expanded position
+        anchor_groups: Dict[int, List[int]] = {}
+        for i, d in enumerate(sorted_dirs):
+            anchor_groups.setdefault(d.anchor_index, []).append(i)
+
+        for anchor_idx, grp_indices in anchor_groups.items():
+            rep_idx = grp_indices[0]
+            d_rep = sorted_dirs[rep_idx]
+            cand_scores = cand_scores_list[rep_idx]
+
+            if not cand_scores:
+                continue
+            candidates = list(cand_scores.items())
+            if not candidates:
+                continue
+            max_score = max(score for _, score in candidates)
+
+            if d_rep.func == "__shader_main__":
+                best_idx = max(candidates, key=lambda x: (x[1], -x[0]))[0]
+                for idx in grp_indices:
+                    d = sorted_dirs[idx]
                     insertions.setdefault(best_idx, []).append(
                         (d.text, d.insert_after, d.anchor_raw_operands))
-                    continue
+                continue
 
-                base_candidates = [
-                    (idx, score)
-                    for idx, score in candidates
-                    if score >= max_score - insert_all_score_margin
+            base_candidates = [
+                (idx, score)
+                for idx, score in candidates
+                if score >= max_score - insert_all_score_margin
+            ]
+            if not base_candidates:
+                continue
+
+            top_idx = max(base_candidates, key=lambda x: (x[1], -x[0]))[0]
+            anchor_token = (
+                tokens[d_rep.anchor_index]
+                if 0 <= d_rep.anchor_index < len(tokens)
+                else None
+            )
+
+            expanded = {idx for idx, _ in base_candidates}
+
+            if anchor_token:
+                best_ctx_positions: Optional[set] = None
+                best_ctx_count = 0
+                for ctx_w in range(6, 0, -1):
+                    ctx_start = max(0, top_idx - ctx_w)
+                    ctx_end = min(len(dis_tokens), top_idx + ctx_w + 1)
+                    ctx_pattern = dis_tokens[ctx_start:ctx_end]
+                    ctx_offset = top_idx - ctx_start
+                    ctx_matches = find_pattern_matches(dis_tokens, ctx_pattern)
+                    if not ctx_matches:
+                        continue
+                    new_positions = set()
+                    for m_start in ctx_matches:
+                        p = m_start + ctx_offset
+                        if 0 <= p < len(dis_tokens) and dis_tokens[p] == anchor_token:
+                            new_positions.add(p)
+                    if not new_positions:
+                        continue
+                    count = len(new_positions)
+                    if count > best_ctx_count:
+                        best_ctx_count = count
+                        best_ctx_positions = new_positions
+                if best_ctx_positions:
+                    expanded |= best_ctx_positions
+
+            # Deduplicate nearby positions: when the anchor token
+            # matches multiple times within ONE iteration (e.g. same
+            # v_mul_f32 repeated at k=0..3 within a single j/i body),
+            # keep only one representative.  Use the MEDIAN gap to set
+            # the threshold so that distinct loop iterations (which have
+            # larger gaps) are preserved.
+            expanded_list = sorted(expanded)
+            if len(expanded_list) > 2:
+                gaps = [
+                    expanded_list[i + 1] - expanded_list[i]
+                    for i in range(len(expanded_list) - 1)
                 ]
-                if not base_candidates:
-                    continue
+                sorted_gaps = sorted(gaps)
+                median_gap = sorted_gaps[len(sorted_gaps) // 2]
+                dedup_gap = max(5, median_gap // 2)
+                deduped: List[int] = [expanded_list[0]]
+                for pos in expanded_list[1:]:
+                    if pos - deduped[-1] >= dedup_gap:
+                        deduped.append(pos)
+                expanded_list = deduped
+            if insert_all_max and insert_all_max > 0:
+                expanded_list = expanded_list[:insert_all_max]
+            if not expanded_list:
+                for idx in grp_indices:
+                    d = sorted_dirs[idx]
+                    print(
+                        f"[Warn] No candidates after filtering for "
+                        f"directive (line {d.line_no}) from {d.func}."
+                    )
+                continue
 
-                top_idx = max(base_candidates, key=lambda x: (x[1], -x[0]))[0]
-                anchor_token = (
-                    tokens[d.anchor_index]
-                    if 0 <= d.anchor_index < len(tokens)
-                    else None
+            if len(grp_indices) > 1 or len(expanded_list) > 1:
+                print(
+                    f"  [Info] Anchor group ({len(grp_indices)} "
+                    f"directive(s)) -> {len(expanded_list)} "
+                    f"position(s)"
                 )
 
-                expanded = {idx for idx, _ in base_candidates}
-
-                if anchor_token:
-                    best_ctx_positions: Optional[set] = None
-                    best_ctx_count = 0
-                    for ctx_w in range(6, 0, -1):
-                        ctx_start = max(0, top_idx - ctx_w)
-                        ctx_end = min(len(dis_tokens), top_idx + ctx_w + 1)
-                        ctx_pattern = dis_tokens[ctx_start:ctx_end]
-                        ctx_offset = top_idx - ctx_start
-                        ctx_matches = find_pattern_matches(dis_tokens, ctx_pattern)
-                        if not ctx_matches:
-                            continue
-                        new_positions = set()
-                        for m_start in ctx_matches:
-                            p = m_start + ctx_offset
-                            if 0 <= p < len(dis_tokens) and dis_tokens[p] == anchor_token:
-                                new_positions.add(p)
-                        if not new_positions:
-                            continue
-                        count = len(new_positions)
-                        if insert_all_max > 0 and count > insert_all_max:
-                            continue
-                        if count > best_ctx_count:
-                            best_ctx_count = count
-                            best_ctx_positions = new_positions
-                    if best_ctx_positions:
-                        expanded |= best_ctx_positions
-
-                expanded_list = sorted(expanded)
-                if insert_all_max and insert_all_max > 0:
-                    expanded_list = expanded_list[:insert_all_max]
-                if not expanded_list:
-                    print(
-                        f"[Warn] No candidates after filtering for directive (line {d.line_no}) from {d.func}."
-                    )
-                    continue
-                for dis_idx in expanded_list:
+            for dis_idx in expanded_list:
+                for idx in grp_indices:
+                    d = sorted_dirs[idx]
                     insertions.setdefault(dis_idx, []).append(
                         (d.text, d.insert_after, d.anchor_raw_operands))
-        else:
-            positions = select_positions(sorted_dirs, cand_scores_list)
-            for d, dis_idx in zip(sorted_dirs, positions):
-                if dis_idx is None:
-                    print(f"[Warn] Cannot resolve directive (line {d.line_no}) from {d.func}.")
-                    continue
-                insertions.setdefault(dis_idx, []).append(
-                    (d.text, d.insert_after, d.anchor_raw_operands))
 
     new_lines: List[str] = []
     for line_idx, line in enumerate(disasm_lines):
@@ -1307,21 +1385,20 @@ def main() -> int:
     ap.add_argument("--keep-disasm", action="store_true", help="保留中間檔案")
     ap.add_argument(
         "--insert-mode",
-        choices=("best", "all"),
-        default="best",
-        help="PRINT/TIMESTAMP 插入模式：best(選最佳位置) 或 all(插入多個候選位置)",
+        default="all",
+        help=argparse.SUPPRESS,  # deprecated, kept for backward compat
     )
     ap.add_argument(
         "--insert-all-score-margin",
         type=int,
         default=2,
-        help="insert-mode=all 時，保留 >= (max_score - margin) 的候選",
+        help="保留 >= (max_score - margin) 的候選位置",
     )
     ap.add_argument(
         "--insert-all-max",
         type=int,
         default=20,
-        help="insert-mode=all 時，每個 directive 最多插入幾個位置 (0=不限)",
+        help="每個 directive 最多插入幾個位置 (0=不限)",
     )
     ap.add_argument(
         "--debug-match",
