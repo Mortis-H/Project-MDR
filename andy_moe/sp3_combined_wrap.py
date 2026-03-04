@@ -63,17 +63,12 @@ MARKER_NOP_BASE = 100
 def _group_directives(
     directives: List[spw.Directive],
 ) -> List[List[spw.Directive]]:
-    """將相鄰的 directive（相距 ≤2 行、同 function）合併為同一定位群組。"""
-    if not directives:
-        return []
-    groups: List[List[spw.Directive]] = [[directives[0]]]
-    for d in directives[1:]:
-        prev = groups[-1][-1]
-        if d.line_no - prev.line_no <= 2 and d.func == prev.func:
-            groups[-1].append(d)
-        else:
-            groups.append([d])
-    return groups
+    """每個 directive 獨立一組，各自擁有獨立的 s_nop marker。
+
+    獨立 marker 確保每個 @PRINT / @CAPTURE 都有精確的 snapshot 位置，
+    不需要手動插入 s_nop 分隔符，也不需要 reorder 後處理。
+    """
+    return [[d] for d in directives]
 
 
 def insert_directive_markers(
@@ -186,6 +181,8 @@ def reorder_prints_after_capture_isa(injected_s_path: pathlib.Path) -> int:
         for j in range(block["start"] - 1, search_floor - 1, -1):
             stripped = lines[j].strip()
             if stripped.startswith("; === End @CAPTURE"):
+                break
+            if stripped and not stripped.startswith(";") and not stripped.startswith("//"):
                 break
             if stripped.startswith("; @PRINT") and f"{{{dst}:" in stripped:
                 to_remove_indices.append(j)
@@ -347,8 +344,8 @@ def main() -> int:
     if use_markers:
         # ── Marker mode: insert s_nop markers → compile → find → annotate ──
         directive_groups = _group_directives(all_directives)
-        if len(directive_groups) > 128:
-            print(f"[Error] Too many directive groups ({len(directive_groups)}), max 128.")
+        if len(directive_groups) > 500:
+            print(f"[Error] Too many directive groups ({len(directive_groups)}), max 500.")
             return 1
 
         marked_sp3_path = output_dir / f"{prefix}_marked.sp3"
@@ -503,9 +500,12 @@ def main() -> int:
                 return 1
             print(f"  Capture ISA injected: {gpr_input_s}")
 
-            n_moved = reorder_prints_after_capture_isa(gpr_input_s)
-            if n_moved:
-                print(f"  Reordered {n_moved} @PRINT(s) to after capture ISA")
+            if use_markers:
+                print("  (Independent markers: reorder step skipped)")
+            else:
+                n_moved = reorder_prints_after_capture_isa(gpr_input_s)
+                if n_moved:
+                    print(f"  Reordered {n_moved} @PRINT(s) to after capture ISA")
 
     if has_print:
         # Step 9: gpr_printf_tool.py → printf ISA 注入 + HSACO 生成

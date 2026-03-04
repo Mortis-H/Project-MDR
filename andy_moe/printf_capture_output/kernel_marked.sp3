@@ -1073,28 +1073,83 @@ function R_cvt(pi, s, n)
 end
 
 function R_dqt_mwt_cvt(pi)
+
+   // ====== First tile (j=0, i=0, pi=0): CAPTURE pipeline tracing ======
+   if pi == 0
+      // Step 1: int32 -> f32
+      v_cvt_f32_i32 v_regs(_v_R, 0), v_regs(_v_R, 0)
+      v_cvt_f32_i32 v_regs(_v_R, 1), v_regs(_v_R, 1)
+      v_cvt_f32_i32 v_regs(_v_R, 2), v_regs(_v_R, 2)
+      v_cvt_f32_i32 v_regs(_v_R, 3), v_regs(_v_R, 3)
+      s_nop 100
+      // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"Step1_CvtF32+Ops: R[0]={_v_R[0]:f} R[1]={_v_R[1]:f} R[2]={_v_R[2]:f} R[3]={_v_R[3]:f} | ZdynQ={_v_ZdynQ[0]:f} W={_v_W[0]:f} DQ={_v_DQ[0]:f}"
+
+      // Step 2: R *= ZdynQ — CAP: replaced with CAPTURE
+      // CAP: v_mul_f32 v_regs(_v_R, 0), v_regs(_v_ZdynQ, 0), v_regs(_v_R, 0)
+      // CAP: v_mul_f32 v_regs(_v_R, 1), v_regs(_v_ZdynQ, 0), v_regs(_v_R, 1)
+      // CAP: v_mul_f32 v_regs(_v_R, 2), v_regs(_v_ZdynQ, 0), v_regs(_v_R, 2)
+      // CAP: v_mul_f32 v_regs(_v_R, 3), v_regs(_v_ZdynQ, 0), v_regs(_v_R, 3)
+      s_nop 101
+      // @CAPTURE f"R0_zdynq={(_v_R[0] * _v_ZdynQ[0])}" dst=_v_R[0]
+      s_nop 102
+      // @CAPTURE f"R1_zdynq={(_v_R[1] * _v_ZdynQ[0])}" dst=_v_R[1]
+      s_nop 103
+      // @CAPTURE f"R2_zdynq={(_v_R[2] * _v_ZdynQ[0])}" dst=_v_R[2]
+      s_nop 104
+      // @CAPTURE f"R3_zdynq={(_v_R[3] * _v_ZdynQ[0])}" dst=_v_R[3]
+      s_nop 105
+      // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"Step2_ZdynQ: R[0]={_v_R[0]:f} R[1]={_v_R[1]:f} R[2]={_v_R[2]:f} R[3]={_v_R[3]:f}"
+
+      // Step 3: R *= DQ (keep original, row_newbcast not supported in CAPTURE)
+      v_mul_f32 v_regs(_v_R, 0), v_regs(_v_DQ, 0), v_regs(_v_R, 0) row_newbcast:[0]
+      v_mul_f32 v_regs(_v_R, 1), v_regs(_v_DQ, 0), v_regs(_v_R, 1) row_newbcast:[1]
+      v_mul_f32 v_regs(_v_R, 2), v_regs(_v_DQ, 0), v_regs(_v_R, 2) row_newbcast:[2]
+      v_mul_f32 v_regs(_v_R, 3), v_regs(_v_DQ, 0), v_regs(_v_R, 3) row_newbcast:[3]
+      s_nop 106
+      // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"Step3_DQ: R[0]={_v_R[0]:f} R[1]={_v_R[1]:f} R[2]={_v_R[2]:f} R[3]={_v_R[3]:f} | W={_v_W[0]:f}"
+
+      // Step 4: R *= W — CAP: replaced with CAPTURE
+      // CAP: v_mul_f32 v_regs(_v_R, 0), v_regs(_v_W, 0), v_regs(_v_R, 0)
+      // CAP: v_mul_f32 v_regs(_v_R, 1), v_regs(_v_W, 0), v_regs(_v_R, 1)
+      // CAP: v_mul_f32 v_regs(_v_R, 2), v_regs(_v_W, 0), v_regs(_v_R, 2)
+      // CAP: v_mul_f32 v_regs(_v_R, 3), v_regs(_v_W, 0), v_regs(_v_R, 3)
+      s_nop 107
+      // @CAPTURE f"R0_weight={(_v_R[0] * _v_W[0])}" dst=_v_R[0]
+      s_nop 108
+      // @CAPTURE f"R1_weight={(_v_R[1] * _v_W[0])}" dst=_v_R[1]
+      s_nop 109
+      // @CAPTURE f"R2_weight={(_v_R[2] * _v_W[0])}" dst=_v_R[2]
+      s_nop 110
+      // @CAPTURE f"R3_weight={(_v_R[3] * _v_W[0])}" dst=_v_R[3]
+      s_nop 111
+      // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"Step4_Weight: R[0]={_v_R[0]:f} R[1]={_v_R[1]:f} R[2]={_v_R[2]:f} R[3]={_v_R[3]:f}"
+   end
+
+   // ====== Remaining tiles (skip j=0,i=0 when pi=0) ======
    for var j = 0; j < 256/64; j++  //h-dim(N)--4
       for var i = 0; i < 32/16; i++  //tokens(M)--2
-         var vR_idx = pi*sz_vR + (j*2+i)*vs_CD
-         var vDQ_idx = pi*sz_vDQ
+         if (pi >= 1) || (j >= 1) || (i >= 1)
+            var vR_idx = pi*sz_vR + (j*2+i)*vs_CD
+            var vDQ_idx = pi*sz_vDQ
 
-         //int32 cvt to f32
-         for var k = 0; k < vs_CD; k++
-            v_cvt_f32_i32 v_regs(_v_R, vR_idx+k), v_regs(_v_R, vR_idx+k)
-         end
-      
-         //dequant
-         for var k = 0; k < vs_CD; k++
-            v_mul_f32 v_regs(_v_R, vR_idx+k), v_regs(_v_ZdynQ, i), v_regs(_v_R, vR_idx+k)
-         end
- 
-         for var k = 0; k < vs_CD; k++
-            v_mul_f32 v_regs(_v_R, vR_idx+k), v_regs(_v_DQ+vDQ_idx, j/4), v_regs(_v_R, vR_idx+k) row_newbcast:[k+(j&3)*4]
-         end
+            //int32 cvt to f32
+            for var k = 0; k < vs_CD; k++
+               v_cvt_f32_i32 v_regs(_v_R, vR_idx+k), v_regs(_v_R, vR_idx+k)
+            end
 
-         //mul_weight
-         for var k = 0; k < vs_CD; k++
-            v_mul_f32 v_regs(_v_R, vR_idx+k), v_regs(_v_W, i), v_regs(_v_R, vR_idx+k)
+            //dequant
+            for var k = 0; k < vs_CD; k++
+               v_mul_f32 v_regs(_v_R, vR_idx+k), v_regs(_v_ZdynQ, i), v_regs(_v_R, vR_idx+k)
+            end
+
+            for var k = 0; k < vs_CD; k++
+               v_mul_f32 v_regs(_v_R, vR_idx+k), v_regs(_v_DQ+vDQ_idx, j/4), v_regs(_v_R, vR_idx+k) row_newbcast:[k+(j&3)*4]
+            end
+
+            //mul_weight
+            for var k = 0; k < vs_CD; k++
+               v_mul_f32 v_regs(_v_R, vR_idx+k), v_regs(_v_W, i), v_regs(_v_R, vR_idx+k)
+            end
          end
       end
    end
@@ -1236,8 +1291,7 @@ function cl_gemm0_withup(cl_p, pi)
 
          for var k = 0; k < 256/32; k++  //dim(K)--8
             v_mfma_i32_16x16x32_i8   v_regs(_v_Z, vZ_idx), acc_regs(_v_G+vG_off, k*vs_AB), v_regs(_v_X+vX_off, k*vs_AB), v_regs(_v_Z, vZ_idx)
-            s_nop 100
-            // @PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"MFMA Z[4]={_v_Z[4]:d}"
+            // _PRINT if $tgid_x == 0 && $tgid_y == 0 && $tgid_z == 0 && $tid == 0: f"MFMA Z[4]={_v_Z[4]:d}"
 
             if (cl_p ^ (XDL_idx&1)) && ((XDL_idx&3) < 2)
                 U_mem_load(1, U_ml_idx, 1) //mem_rd_b128*32
