@@ -1776,6 +1776,7 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         SGPR_KERNARG_BACKUP = snapshot_sgpr_start + total_snapshot_sgprs
     if SGPR_KERNARG_BACKUP < SGPR_SNAPSHOT_START_MIN:
         SGPR_KERNARG_BACKUP = SGPR_SNAPSHOT_START_MIN
+    SGPR_TS_TEMP = SGPR_KERNARG_BACKUP + 2
     SGPR_RESERVED_START = 4   # s[0:3] 是系統保留的，從 s4 開始保護
     
     original_agpr = reg_info.get('agpr', 0)
@@ -1808,6 +1809,12 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     else:
         sgpr_end_needed = snapshot_sgpr_start + total_snapshot_sgprs if total_snapshot_sgprs > 0 else max(original_sgpr, SGPR_SNAPSHOT_START_MIN)
     sgpr_end_needed = max(sgpr_end_needed, SGPR_KERNARG_BACKUP + 2)
+    if timestamp_directives:
+        has_atomic_ts = any(d.mode == "atomic" for d in timestamp_directives)
+        if has_atomic_ts:
+            sgpr_end_needed = max(sgpr_end_needed, SGPR_TS_TEMP + 6)
+        else:
+            sgpr_end_needed = max(sgpr_end_needed, SGPR_TS_TEMP + 2)
     sgpr_count_needed = sgpr_end_needed - sgpr_start
     
     total_sgpr = next_power_of_2(sgpr_count_needed) if sgpr_count_needed > 0 else 0
@@ -2108,8 +2115,8 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
     has_atomic_timestamp = any(d.mode == "atomic" for d in timestamp_directives)
     
     # Atomic 模式需要額外的 SGPR/VGPR 來存儲 buffer 地址
-    # SGPR_TS_BUFFER: 存儲 timestamp buffer 地址
-    SGPR_TS_BUFFER = 22  # s[22:23] 用於 timestamp buffer 地址
+    SGPR_TS_BUFFER = SGPR_TS_TEMP + 2
+    SGPR_TS_MATH = SGPR_TS_BUFFER + 2
     # VGPR for timestamp buffer address (for global addressing)
     VGPR_TS_ADDR_LO = None
     VGPR_TS_ADDR_HI = None
@@ -2308,8 +2315,8 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             # 重新計算 timestamp buffer 地址 (C + N * 4 + 8)
             printf_blocks.append(f'              // Atomic max: record end time BEFORE printf')
             printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_load_dwordx2 s[{SGPR_TS_BUFFER}:{SGPR_TS_BUFFER+1}], s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], 0x10\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
-            printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_load_dword s24, s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], 0x18\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
-            printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_lshl_b32 s24, s24, 2\\0As_add_u32 s{SGPR_TS_BUFFER}, s{SGPR_TS_BUFFER}, s24\\0As_addc_u32 s{SGPR_TS_BUFFER+1}, s{SGPR_TS_BUFFER+1}, 0\\0As_add_u32 s{SGPR_TS_BUFFER}, s{SGPR_TS_BUFFER}, 8\\0As_addc_u32 s{SGPR_TS_BUFFER+1}, s{SGPR_TS_BUFFER+1}, 0", ""  : () -> ()')
+            printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_load_dword s{SGPR_TS_MATH}, s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], 0x18\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
+            printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_lshl_b32 s{SGPR_TS_MATH}, s{SGPR_TS_MATH}, 2\\0As_add_u32 s{SGPR_TS_BUFFER}, s{SGPR_TS_BUFFER}, s{SGPR_TS_MATH}\\0As_addc_u32 s{SGPR_TS_BUFFER+1}, s{SGPR_TS_BUFFER+1}, 0\\0As_add_u32 s{SGPR_TS_BUFFER}, s{SGPR_TS_BUFFER}, 8\\0As_addc_u32 s{SGPR_TS_BUFFER+1}, s{SGPR_TS_BUFFER+1}, 0", ""  : () -> ()')
             # 查找這個 timestamp 的 VGPR 地址
             ts_info = timestamp_vgpr_map.get(label, {})
             ts_addr_lo = ts_info.get('ts_addr_lo')
@@ -2319,14 +2326,14 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             if ts_addr_lo is not None:
                 printf_blocks.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{ts_addr_lo}, s{SGPR_TS_BUFFER}\\0Av_mov_b32 v{ts_addr_hi}, s{SGPR_TS_BUFFER+1}", ""  : () -> ()')
                 # Atomic 模式使用 s_memrealtime（跨 workgroup 同步，~100 MHz）
-                printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_memrealtime s[20:21]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
-                printf_blocks.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{end_lo}, s20\\0Av_mov_b32 v{end_hi}, s21", ""  : () -> ()')
+                printf_blocks.append(f'              llvm.inline_asm has_side_effects "s_memrealtime s[{SGPR_TS_TEMP}:{SGPR_TS_TEMP+1}]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
+                printf_blocks.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{end_lo}, s{SGPR_TS_TEMP}\\0Av_mov_b32 v{end_hi}, s{SGPR_TS_TEMP+1}", ""  : () -> ()')
                 printf_blocks.append(f'              llvm.inline_asm has_side_effects "global_atomic_umax_x2 v[{ts_addr_lo}:{ts_addr_hi}], v[{end_lo}:{end_hi}], off", ""  : () -> ()')
             
             # === Printf 部分（用於保持 MLIR 代碼結構，但只輸出最少信息）===
             # 只讓 lane 0 輸出，進一步減少 printf 開銷
             printf_blocks.append(f'              %ts_elapsed_{label} = llvm.inline_asm has_side_effects asm_dialect = att')
-            printf_blocks.append(f'                "v_sub_u32 $0, s20, v{start_lo}", "=v": () -> i32')
+            printf_blocks.append(f'                "v_sub_u32 $0, s{SGPR_TS_TEMP}, v{start_lo}", "=v": () -> i32')
             # 無條件 printf（保持 MLIR 結構完整）
             printf_blocks.append(f'              gpu.printf ""')  # 空字串 printf 開銷最小
             printf_blocks.append(f'              // === End Timestamp ===')
@@ -2351,13 +2358,13 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             printf_blocks.append(f'              // Calculate elapsed using current time - start time')
             printf_blocks.append(f'              // Wallclock mode uses s_memrealtime (globally synchronized, ~100 MHz)')
             printf_blocks.append(f'              %ts_elapsed_{label} = llvm.inline_asm has_side_effects asm_dialect = att')
-            printf_blocks.append(f'                "s_memrealtime s[20:21]\\0As_waitcnt lgkmcnt(0)\\0Av_sub_u32 $0, s20, v{start_lo}", "=v": () -> i32')
+            printf_blocks.append(f'                "s_memrealtime s[{SGPR_TS_TEMP}:{SGPR_TS_TEMP+1}]\\0As_waitcnt lgkmcnt(0)\\0Av_sub_u32 $0, s{SGPR_TS_TEMP}, v{start_lo}", "=v": () -> i32')
         else:
             # 普通模式（local）：只輸出 elapsed，使用 s_memtime（高精度，1.7 GHz）
             printf_blocks.append(f'              // Calculate elapsed time using GPU ISA directly')
             printf_blocks.append(f'              // Local mode uses s_memtime (high precision, ~1.7 GHz)')
             printf_blocks.append(f'              %ts_elapsed_{label} = llvm.inline_asm has_side_effects asm_dialect = att')
-            printf_blocks.append(f'                "s_memtime s[20:21]\\0As_waitcnt lgkmcnt(0)\\0Av_sub_u32 $0, s20, v{start_lo}", "=v": () -> i32')
+            printf_blocks.append(f'                "s_memtime s[{SGPR_TS_TEMP}:{SGPR_TS_TEMP+1}]\\0As_waitcnt lgkmcnt(0)\\0Av_sub_u32 $0, s{SGPR_TS_TEMP}, v{start_lo}", "=v": () -> i32')
         
         # 生成 printf 格式字串
         if is_wallclock:
@@ -2685,22 +2692,22 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
             # - local: s_memtime（高精度，~1.7 GHz，單 wavefront 內使用）
             if is_atomic or is_wallclock:
                 ts_lines.append(f'              // Using s_memrealtime (globally synchronized, ~100 MHz)')
-                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_memrealtime s[20:21]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_memrealtime s[{SGPR_TS_TEMP}:{SGPR_TS_TEMP+1}]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
             else:
                 ts_lines.append(f'              // Using s_memtime (high precision, ~1.7 GHz)')
-                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_memtime s[20:21]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_memtime s[{SGPR_TS_TEMP}:{SGPR_TS_TEMP+1}]\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')
             # 備份到 VGPR
-            ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{start_lo}, s20", ""  : () -> ()')
-            ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{start_hi}, s21", ""  : () -> ()')
+            ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{start_lo}, s{SGPR_TS_TEMP}", ""  : () -> ()')
+            ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{start_hi}, s{SGPR_TS_TEMP+1}", ""  : () -> ()')
             
             if is_atomic and ts_addr_lo is not None:
                 # 完整 Atomic 模式：計算地址 + 執行 global_atomic_umin_x2 更新 min_start
                 ts_lines.append(f'              // === Atomic: compute address and update min_start ===')
                 # 計算 timestamp buffer 地址: C + N * 4
                 ts_lines.append(f'              llvm.inline_asm has_side_effects "s_load_dwordx2 s[{SGPR_TS_BUFFER}:{SGPR_TS_BUFFER+1}], s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], 0x10\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')  # C
-                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_load_dword s24, s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], 0x18\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')  # N
-                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_lshl_b32 s24, s24, 2", ""  : () -> ()')  # N * 4
-                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_add_u32 s{SGPR_TS_BUFFER}, s{SGPR_TS_BUFFER}, s24", ""  : () -> ()')  # C + N*4
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_load_dword s{SGPR_TS_MATH}, s[{SGPR_KERNARG_BACKUP}:{SGPR_KERNARG_BACKUP+1}], 0x18\\0As_waitcnt lgkmcnt(0)", ""  : () -> ()')  # N
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_lshl_b32 s{SGPR_TS_MATH}, s{SGPR_TS_MATH}, 2", ""  : () -> ()')  # N * 4
+                ts_lines.append(f'              llvm.inline_asm has_side_effects "s_add_u32 s{SGPR_TS_BUFFER}, s{SGPR_TS_BUFFER}, s{SGPR_TS_MATH}", ""  : () -> ()')  # C + N*4
                 ts_lines.append(f'              llvm.inline_asm has_side_effects "s_addc_u32 s{SGPR_TS_BUFFER+1}, s{SGPR_TS_BUFFER+1}, 0", ""  : () -> ()')
                 ts_lines.append(f'              // Copy to VGPR for global addressing')
                 ts_lines.append(f'              llvm.inline_asm has_side_effects "v_mov_b32 v{ts_addr_lo}, s{SGPR_TS_BUFFER}", ""  : () -> ()')
@@ -2803,6 +2810,11 @@ def inject_printf_into_mlir(gpumlir_text: str, directives: List[PrintDirective],
         required_sgpr = SGPR_KERNARG_BACKUP + 2
     else:
         required_sgpr = max(snapshot_sgpr_start + total_snapshot_sgprs, SGPR_KERNARG_BACKUP + 2)
+    if timestamp_directives:
+        ts_sgpr_end = SGPR_TS_TEMP + 2
+        if has_atomic_timestamp:
+            ts_sgpr_end = SGPR_TS_MATH + 1
+        required_sgpr = max(required_sgpr, ts_sgpr_end)
     
     # Calculate required private segment size for scratch snapshots
     required_private_size = 0
